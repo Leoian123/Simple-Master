@@ -1,4 +1,4 @@
-"""Test senza rete: classi file, glossario, ciclo motore e costruttore di schede con un client finto."""
+"""Test senza rete: classi file, glossario, ciclo a conversazione e costruttore di schede con un client finto."""
 
 from __future__ import annotations
 
@@ -13,8 +13,16 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from master import Campaign, CampaignFile, GlossaryEntry, MasterEngine  # noqa: E402
+from master import Campaign, CampaignFile, ConversationEngine, GlossaryEntry, MasterEngine  # noqa: E402
 from master.character import CharacterBuilder  # noqa: E402
+
+
+PROMPT = "Sei il master di prova. Le regole stanno in `meccanica/`."
+
+
+def conversation(camp, **kw) -> ConversationEngine:
+    """Il ciclo a conversazione con tutti gli strumenti: quello che usa il costruttore di schede."""
+    return ConversationEngine(camp, prompt=PROMPT, **kw)
 
 
 class TempCampaign(unittest.TestCase):
@@ -103,12 +111,12 @@ class TestGlossaryTwoLevels(TempCampaign):
         self.assertEqual(g.lookup("frenesia")[0].description, "Perdita di controllo della Bestia")
         self.assertEqual(g.lookup("bestia controllo")[0].term, "Frenesia")  # cerca anche nelle descrizioni
         self.assertEqual(g.lookup("zzz"), [])
-        # il tool restituisce le righe complete, e il motore usa l'indice compatto
+        # il tool restituisce le righe complete, e il ciclo a conversazione usa l'indice compatto
         from master.tools import ToolExecutor
         text, err = ToolExecutor(self.camp).execute("lookup_glossary", {"query": "Frenesia"})
         self.assertFalse(err)
         self.assertIn("Frenesia | regola | Perdita di controllo della Bestia | meccanica/regole.md", text)
-        engine = MasterEngine(self.camp, client=FakeClient())
+        engine = conversation(self.camp, client=FakeClient())
         self.assertEqual(engine.system_blocks()[1]["text"], "# GLOSSARIO (primo riferimento)\n\n" + compact)
 
 
@@ -148,13 +156,13 @@ class TestTokenHygiene(TempCampaign):
             g.upsert(GlossaryEntry(f"Luogo {i}", "luogo", "Un luogo del mondo con una descrizione abbastanza lunga", "ambientazione/mondo.md"))
         g.upsert(GlossaryEntry("Clan Ventrue", "regola", "Discipline e debolezza del clan", "meccanica/creazione-pg.md"))
         builder = CharacterBuilder(self.camp, client=FakeBuilderClient())
-        master = MasterEngine(self.camp, client=FakeClient())
+        master = conversation(self.camp, client=FakeClient())  # lo stesso ciclo, senza filtro
         b_gloss, m_gloss = builder.system_blocks()[1]["text"], master.system_blocks()[1]["text"]
         self.assertIn("Clan Ventrue", b_gloss)
         self.assertIn("Kael", b_gloss)  # le schede restano
         self.assertNotIn("Luogo 42", b_gloss)
         self.assertIn("lookup_glossary", b_gloss)
-        self.assertIn("Luogo 42", m_gloss)  # il master ha l'indice completo
+        self.assertIn("Luogo 42", m_gloss)  # senza filtro l'indice e' completo
         self.assertLess(len(b_gloss), len(m_gloss) / 3)
         self.assertNotIn("ambientazione/", builder.system_blocks()[2]["text"])
         self.assertIn("meccanica/creazione-pg.md", builder.system_blocks()[2]["text"])
@@ -234,7 +242,7 @@ class FakeClient:
 class TestEngine(TempCampaign):
     def test_turn_reads_then_writes_then_narrates(self) -> None:
         client = FakeClient()
-        engine = MasterEngine(self.camp, client=client, effort="medium")
+        engine = conversation(self.camp, client=client, effort="medium")
         result = engine.play("Entro alla Lanterna Blu e cerco Mira Sol.")
 
         self.assertEqual(result.text, "Mira ti guarda a lungo. Cosa le chiedi?")
@@ -280,17 +288,17 @@ class TestEngine(TempCampaign):
         # cache di tutta la conversazione); la voce nuova entra alla prossima fotografia
         self.assertEqual(client.calls[0]["system"], client.calls[2]["system"])
         self.assertNotIn("Locanda del porto", client.calls[2]["system"][1]["text"])
-        self.assertIn("Locanda del porto", MasterEngine(self.camp, client=FakeClient()).system_blocks()[1]["text"])
+        self.assertIn("Locanda del porto", conversation(self.camp, client=FakeClient()).system_blocks()[1]["text"])
         # il giocato: un solo archivio per personaggio, trascrizione e ripresa insieme
         self.assertEqual(sorted(p.name for p in (self.root / "sessioni").iterdir()), ["kael.jsonl", "spese.jsonl"])  # il giocato e il registro delle spese, nient'altro
         turns = self.camp.read_turns("kael")
         self.assertEqual(len(turns), 1)
-        self.assertEqual((turns[0]["pg"], turns[0]["player"]), ("Kael", "Entro alla Lanterna Blu e cerco Mira Sol."))
+        self.assertEqual(turns[0]["player"], "Entro alla Lanterna Blu e cerco Mira Sol.")
         self.assertIn("Cosa le chiedi?", turns[0]["master"])
         self.assertEqual(turns[0]["changed"], ["ambientazione/diario.md", "glossario.md"])
 
     def test_history_trim_keeps_pairs_intact(self) -> None:
-        engine = MasterEngine(self.camp, client=FakeClient(), max_history=4)
+        engine = conversation(self.camp, client=FakeClient(), max_history=4)
         engine.play("Primo turno.")
         engine.play("Secondo turno.")
         msgs = engine.messages
@@ -352,11 +360,11 @@ class TestCharacterBuilder(TempCampaign):
 
 class TestPersistence(TempCampaign):
     def test_a_new_process_resumes_the_conversation(self) -> None:
-        first = MasterEngine(self.camp, client=FakeClient())
+        first = conversation(self.camp, client=FakeClient())
         first.play("Entro alla Lanterna Blu.")
         # "riavvio": un motore nuovo, memoria vuota, stessa campagna
         client = FakeClient()
-        second = MasterEngine(self.camp, client=client)
+        second = conversation(self.camp, client=client)
         self.assertEqual(second.messages, [])
         self.assertEqual([t["player"] for t in second.history()], ["Entro alla Lanterna Blu."])
         second.play("Le chiedo della taglia.")
@@ -367,13 +375,11 @@ class TestPersistence(TempCampaign):
         self.assertEqual(sent[2]["content"][0]["text"], "Le chiedo della taglia.")
         self.assertEqual(second.turns, 2)
         self.assertEqual(len(self.camp.read_turns("kael")), 2)
-        # il prompt dice al master che la storia continua
-        self.assertIn("continua da una sessione all'altra", client.calls[0]["system"][0]["text"])
 
     def test_resume_keeps_only_the_last_turns_in_context(self) -> None:
         for i in range(20):
             self.camp.append_turn("kael", f"azione {i}", f"esito {i}")
-        engine = MasterEngine(self.camp, client=FakeClient(), resume_turns=5)
+        engine = conversation(self.camp, client=FakeClient(), resume_turns=5)
         self.assertEqual(engine.resume(), 5)
         self.assertEqual(engine.messages[0]["content"], "azione 15")
         self.assertEqual(len(engine.history(limit=None)), 20)  # l'archivio resta intero
@@ -381,7 +387,7 @@ class TestPersistence(TempCampaign):
     def test_each_character_has_its_own_conversation(self) -> None:
         self.camp.file("schede/sera-vel.md").write("# Sera Vel\n\n## Stato\n\nOk.\n")
         self.camp.set_active_pg("kael")
-        engine = MasterEngine(self.camp, client=FakeClient())
+        engine = conversation(self.camp, client=FakeClient())
         engine.play("Kael entra.")
         self.camp.set_active_pg("sera-vel")
         engine.reset_session()
@@ -392,7 +398,7 @@ class TestPersistence(TempCampaign):
         self.assertEqual([t["player"] for t in self.camp.read_turns("kael")], ["Kael entra."])
 
     def test_new_session_archives_and_truncated_line_is_tolerated(self) -> None:
-        engine = MasterEngine(self.camp, client=FakeClient())
+        engine = conversation(self.camp, client=FakeClient())
         engine.play("Primo.")
         with open(self.camp.save_path("kael"), "a", encoding="utf-8") as fh:
             fh.write('{"t": "2026-09-18T10:00:00", "player": "riga tronca')  # chiusura forzata a meta' scrittura
@@ -407,10 +413,10 @@ class TestPersistence(TempCampaign):
         class Boom:
             messages = SimpleNamespace(create=lambda **kw: (_ for _ in ()).throw(ConnectionError("giu'")))
 
-        engine = MasterEngine(self.camp, client=Boom())
-        with self.assertRaises(ConnectionError):
-            engine.play("Ciao.")
-        self.assertEqual(self.camp.read_turns("kael"), [])
+        for engine in (conversation(self.camp, client=Boom()), MasterEngine(self.camp, client=Boom())):
+            with self.assertRaises(ConnectionError):
+                engine.play("Ciao.")  # nel gioco cade anche l'instradatore: il turno va avanti, poi cade il narratore
+            self.assertEqual(self.camp.read_turns("kael"), [])
 
 
 if __name__ == "__main__":

@@ -204,7 +204,7 @@ def _run(args: argparse.Namespace, log: logging.Logger) -> int:
         return 0
 
     if args.cli:
-        run_cli(MasterEngine(Campaign(args.campaign), model=args.model, effort=args.effort, scribe=True, memory=True, fast=True))
+        run_cli(MasterEngine(Campaign(args.campaign), model=args.model, effort=args.effort))
         return 0
 
     from master.ui import App, serve

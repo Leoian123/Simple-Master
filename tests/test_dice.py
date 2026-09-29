@@ -144,23 +144,31 @@ class TestClocks(Base):
         self.assertEqual(self.camp.clocks_line(), "Indagine dello Sceriffo 3/4")
         self.assertTrue(ex.execute("tick_clock", {"name": "Inesistente"})[1])
         # il narratore li riceve in testa al messaggio del turno, non nel prompt (che resta in cache)
-        client = ScriptedClient([[_b(type="text", text=NARRATION + "\n<appunti>\n- orologio: \"Indagine dello Sceriffo\" +1\n</appunti>")],
+        router = [_b(type="text", text="nessuna")]
+        quiet = [_b(type="text", text=NARRATION + "\n<appunti>nulla</appunti>")]
+        client = ScriptedClient([router, [_b(type="text", text=NARRATION + "\n<appunti>\n- orologio: \"Indagine dello Sceriffo\" +1\n</appunti>")],
                                  [_b(type="tool_use", id="c1", name="tick_clock", input={"name": "Indagine dello Sceriffo", "amount": 1})]])
-        engine = MasterEngine(self.camp, client=client, scribe=True)
+        engine = MasterEngine(self.camp, client=client)
+
+        def narrator() -> dict:
+            return [c for c in client.calls if "Sei il master" in str(c.get("system"))][-1]
+
         engine.play("Esco dal retro.")
-        sent = client.calls[0]["messages"][-1]["content"][-1]["text"]
-        self.assertEqual(sent, "[Orologi: Indagine dello Sceriffo 3/4]\nEsco dal retro.")
+        sent = narrator()["messages"][-1]["content"]
+        self.assertIn("[FINE DEL CONTESTO. Qui sotto, il turno a cui rispondere.]\n\n[Orologi: Indagine dello Sceriffo 3/4]\nGIOCATORE: Esco dal retro.", sent)
         self.assertEqual(self.camp.read_turns("kael")[0]["player"], "Esco dal retro.")  # nel salvataggio solo le parole del giocatore
-        self.assertIn("OROLOGI ATTIVI: Indagine dello Sceriffo 3/4", client.calls[1]["messages"][0]["content"])
-        self.assertNotIn("Sceriffo", json.dumps(client.calls[0]["system"], ensure_ascii=False))
+        scribe = [c for c in client.calls if "Sei lo scriba" in str(c.get("system"))][-1]
+        self.assertIn("OROLOGI ATTIVI: Indagine dello Sceriffo 3/4", scribe["messages"][0]["content"])
+        self.assertNotIn("Sceriffo", json.dumps(narrator()["system"], ensure_ascii=False))
         # pieno: la conseguenza arriva al turno dopo, una volta sola, e l'orologio sparisce
-        client.script = [[_b(type="text", text=NARRATION + "\n<appunti>nulla</appunti>")]] * 2
+        client.script = [router, quiet, [_b(type="text", text="fatto")]]
         engine.play("Torno a casa.")
-        sent = client.calls[-1]["messages"][-1]["content"][-1]["text"]
-        self.assertTrue(sent.startswith("[OROLOGIO PIENO: Indagine dello Sceriffo: Lo Sceriffo bussa alla porta."))
+        self.assertIn("[OROLOGIO PIENO: Indagine dello Sceriffo: Lo Sceriffo bussa alla porta.", narrator()["messages"][-1]["content"])
         self.assertEqual(self.camp.clocks(), {})
+        client.script = [router, quiet, [_b(type="text", text="fatto")]]
         engine.play("Apro.")
-        self.assertEqual(client.calls[-1]["messages"][-1]["content"][-1]["text"], "Apro.")
+        self.assertNotIn("Orologi", narrator()["messages"][-1]["content"])
+        self.assertNotIn("OROLOGIO", narrator()["messages"][-1]["content"])
 
 
 if __name__ == "__main__":

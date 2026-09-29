@@ -23,13 +23,17 @@ def tool(id_: str, name: str, **args):
 
 class TestSheetData(Base):
     def test_master_gets_numbers_not_sentences(self) -> None:
+        from master.context import compose
+
+        def data_in(text: str) -> dict:
+            return json.loads(text[text.index("```json\n") + 8:text.index("\n```", text.index("```json\n"))])
+
         engine = MasterEngine(self.camp, client=ScriptedClient([]))
-        block = engine.system_blocks()[-1]["text"]
-        data = json.loads(block[block.index("```json\n") + 8:block.rindex("\n```")])
-        self.assertEqual(data["tratti"]["caratteristiche"]["agilita"], 3)
-        self.assertEqual(data["stato"]["punti_ferita"], {"attuale": 12, "massimo": 12})
-        self.assertEqual(data["esperienza"], {"guadagnati": 0, "spesi": 0, "disponibili": 0, "ultimi_movimenti": []})
-        self.assertIn("update_sheet", block)
+        stable = data_in(engine.system_blocks()[1]["text"])  # tratti e storia: nel prompt, in cache
+        self.assertEqual(stable["tratti"]["caratteristiche"]["agilita"], 3)
+        volatile = data_in(compose(self.camp, "", "kael").text)  # stato ed esperienza: nel contesto del turno
+        self.assertEqual(volatile["stato"]["punti_ferita"], {"attuale": 12, "massimo": 12})
+        self.assertEqual(volatile["esperienza"], {"guadagnati": 0, "spesi": 0, "disponibili": 0, "ultimi_movimenti": []})
 
     def test_update_by_path_and_view_follows(self) -> None:
         ex = ToolExecutor(self.camp)
@@ -129,8 +133,9 @@ class TestExperience(Base):
 
 class TestSessionRoute(Base):
     def _closing(self):
-        return [_b(type="text", text=NARRATION), write("d1", "## Sessione 1 — riepilogo\n\nKael ha trovato Mira."),
-                tool("x1", "award_xp", amount=1, route="sessione", reason="Una sessione giocata")]
+        """La chiusura: il narratore mette i punti negli appunti, lo scriba li registra."""
+        return [[_b(type="text", text=NARRATION + "\n<appunti>\n- pe: 1, via sessione, una sessione giocata\n</appunti>")],
+                [tool("x1", "award_xp", amount=1, route="sessione", reason="Una sessione giocata")]]
 
     def test_closing_a_session_awards_experience_and_advances(self) -> None:
         client = ScriptedClient([])
@@ -140,13 +145,12 @@ class TestSessionRoute(Base):
         for i in range(MIN_TURNS_TO_CLOSE):
             engine.play(f"Azione {i}.")
         self.assertTrue(engine.can_close())
-        client.script = [self._closing()]
+        client.script = self._closing()
         calls = len(client.calls)
-        result = engine.close_session()
-        self.assertEqual(len(client.calls), calls + 1)  # una chiamata sola
-        brief = client.calls[-1]["messages"][-1]["content"]
-        brief = brief if isinstance(brief, str) else brief[-1]["text"]
-        for piece in ("CHIUSURA DELLA SESSIONE 1", "award_xp", "`sessione`", "Fili aperti di Kael"):
+        result = engine.close_session(consolidate=False)
+        self.assertEqual(len(client.calls), calls + 2)  # narratore e scriba, niente instradatore
+        brief = client.calls[calls]["messages"][-1]["content"]
+        for piece in ("CHIUSURA DELLA SESSIONE 1", 'riga "pe"', "`sessione`", "consolidato in memoria"):
             self.assertIn(piece, brief)
         # il totale lo aggiunge il codice, dal registro
         self.assertEqual(result.text, NARRATION + "\n\n*Esperienza di Kael: 1 disponibili (1 guadagnati, 0 spesi).*")
@@ -158,13 +162,13 @@ class TestSessionRoute(Base):
         self.assertEqual(len(archived), 1)
         self.assertIn(CLOSING_MARK, archived[0].read_text(encoding="utf-8"))
         # la sessione dopo non rinasce dal background: riparte da diario e fili aperti
+        calls = len(client.calls)
         engine.prelude("riprendiamo con calma")
-        opening = client.calls[-1]["messages"][-1]["content"]
-        opening = opening if isinstance(opening, str) else opening[-1]["text"]
+        opening = client.calls[calls]["messages"][-1]["content"]
         self.assertIn("APERTURA DELLA SESSIONE 2", opening)
         self.assertNotIn("ROTTURA", opening)
+        self.assertIn("## Personaggio del giocatore: Kael (sessione 2)", opening)
         self.assertTrue(self.camp.read_turns("kael")[0]["player"].startswith(OPENING_MARK))
-        self.assertIn("Sessione in corso: 2", client.calls[-1]["system"][-1]["text"])
 
     def test_a_few_turns_are_a_restart_not_a_session(self) -> None:
         client = ScriptedClient([])
@@ -192,7 +196,7 @@ class TestSessionRoute(Base):
         for i in range(MIN_TURNS_TO_CLOSE):
             app.play(f"Azione {i}.")
         self.assertTrue(app.state()["can_close"])
-        client.script = [self._closing()]
+        client.script = self._closing()
         out = app.new_session("play")
         self.assertTrue(out["closing"]["text"].endswith("1 disponibili (1 guadagnati, 0 spesi).*"))
         self.assertEqual((out["xp"]["disponibili"], out["session"]), (1, 2))

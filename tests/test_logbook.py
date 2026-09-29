@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from master import Campaign, MasterEngine, logbook  # noqa: E402
 from master.prepare import Preparer  # noqa: E402
-from test_master import FakeClient  # noqa: E402
+from test_master import FakeClient, conversation  # noqa: E402
 from test_prepare import make_pdf  # noqa: E402
 
 
@@ -57,13 +57,13 @@ class TestLogbook(unittest.TestCase):
         self.assertRegex(self.text(), r"AVVIO test \| pid=\d+ \| campagna=camp \| python")
 
     def test_turn_is_traced(self) -> None:
-        MasterEngine(self.camp, client=FakeClient()).play("Entro alla Lanterna Blu.")
+        conversation(self.camp, client=FakeClient()).play("Entro alla Lanterna Blu.")  # il ciclo a conversazione, per intero
         t = self.text()
-        self.assertIn("master.gioco: turno 1 | giocatore: Entro alla Lanterna Blu.", t)
+        self.assertIn("master.scheda: turno 1 | giocatore: Entro alla Lanterna Blu.", t)
         self.assertIn("turno 1 api #1 -> claude-opus-5", t)
         self.assertIn("turno 1 api #1 <- stop=tool_use in=10 out=5", t)
         self.assertIn('tool read_file({"name": "ambientazione/npc.md"', t)
-        self.assertIn("WARNING master.gioco: turno 1 tool read_file", t)  # manca.md -> errore segnalato
+        self.assertIn("WARNING master.scheda: turno 1 tool read_file", t)  # manca.md -> errore segnalato
         self.assertRegex(t, r"turno 1 fine \| chiamate=3 token in/out=30/15 cache letti/scritti=0/0 costo~\$\d\.\d+ \| uscita: narrazione \d+ car, tool \d+ car \| letti=ambientazione/npc\.md")
 
     def test_api_failure_says_where(self) -> None:

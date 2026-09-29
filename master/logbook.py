@@ -545,7 +545,8 @@ def mark_examined(files: Iterable[str] = (), everything: bool = False, log_dir: 
         if not (everything or info.name in wanted):
             continue
         try:
-            n = sum(1 for _ in open(info.path, encoding="utf-8", errors="replace"))
+            with open(info.path, encoding="utf-8", errors="replace") as fh:
+                n = sum(1 for _ in fh)
         except OSError:
             continue
         examined[info.name] = n

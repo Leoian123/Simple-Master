@@ -10,7 +10,7 @@ generata). Da quel momento il master la ha nel prompt e la aggiorna per percorso
 from __future__ import annotations
 
 from .campaign import MECHANICS_DIR, SHEETS_DIR, Campaign
-from .engine import MasterEngine
+from .conversation import ConversationEngine
 from .tools import BUILDER_TOOLS
 
 BUILDER_PROMPT = """\
@@ -64,14 +64,14 @@ Sii concreto e breve. Non narrare: qui si compila una scheda.
 """
 
 
-class CharacterBuilder(MasterEngine):
-    """Stesso ciclo API <-> file del master, con prompt e strumenti da costruttore."""
+class CharacterBuilder(ConversationEngine):
+    """Il ciclo a conversazione, con prompt e strumenti da costruttore."""
 
     def __init__(self, campaign: Campaign, **kwargs):
         # anche la creazione di una scheda si riprende: un personaggio a meta' non va rifatto da capo
         super().__init__(
             campaign, prompt=BUILDER_PROMPT, tools=BUILDER_TOOLS, log_session=True,
-            logger_name="master.scheda", with_active_pg=False, save_name="_scheda", **kwargs,
+            logger_name="master.scheda", save_name="_scheda", **kwargs,
         )
 
     # il costruttore lavora sulle regole di creazione: niente indice del mondo a ogni chiamata

@@ -17,6 +17,18 @@ from master.memory import NPC_MEMORY, SCENE, Consolidator  # noqa: E402
 from test_economy import NARRATION, Base, ScriptedClient, _b, write  # noqa: E402
 
 QUIET = NARRATION + "\n<appunti>nulla</appunti>"
+ROUTER = [_b(type="text", text="nessuna")]  # l'instradatore delle regole: la prima chiamata di un turno di gioco
+
+
+def play_quietly(engine, client, n: int) -> None:
+    """n turni di gioco: instradatore, narratore senza appunti, scriba che aggiorna la scena."""
+    for i in range(n):
+        client.script = [ROUTER, [_b(type="text", text=QUIET)], [_b(type="text", text="fatto")]]
+        engine.play(f"Azione {i}.")
+
+
+def narrator_calls(client) -> list[dict]:
+    return [c for c in client.calls if "Sei il master" in str(c.get("system"))]
 
 
 def memory_json(first: int, **extra):
@@ -36,13 +48,11 @@ def memory_json(first: int, **extra):
 
 class TestSlowMemory(Base):
     def _play(self, engine, client, n):
-        for i in range(n):
-            client.script = [[_b(type="text", text=QUIET)]]
-            engine.play(f"Azione {i}.")
+        play_quietly(engine, client, n)
 
     def test_raw_play_becomes_event_units_with_their_turn(self) -> None:
         client = ScriptedClient([])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True)
+        engine = MasterEngine(self.camp, client=client)
         self._play(engine, client, 2)
         client.script = [memory_json(1)]
         report = engine.consolidate()
@@ -77,9 +87,9 @@ class TestSlowMemory(Base):
         self.assertIn("[t3]", chronicle)
 
     def test_scribe_notes_are_provisional_and_replaced(self) -> None:
-        client = ScriptedClient([[_b(type="text", text=NARRATION + "\n<appunti>\n- diario: Kael passa il molo\n</appunti>")],
+        client = ScriptedClient([ROUTER, [_b(type="text", text=NARRATION + "\n<appunti>\n- diario: Kael passa il molo\n</appunti>")],
                                  [write("s1", "## Turno\n- Kael passa il molo.")]])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True)
+        engine = MasterEngine(self.camp, client=client)
         engine.play("Passo il controllo.")
         diary = self.camp.file("ambientazione/diario.md")
         self.assertIn("Kael passa il molo", diary.get_section("Appunti"))
@@ -91,7 +101,7 @@ class TestSlowMemory(Base):
 
     def test_failure_leaves_the_raw_play_pending(self) -> None:
         client = ScriptedClient([])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True)
+        engine = MasterEngine(self.camp, client=client)
         self._play(engine, client, 2)
         client.script = [[_b(type="text", text="non e' json")]]
         with self.assertRaises(ValueError):
@@ -101,14 +111,14 @@ class TestSlowMemory(Base):
 
     def test_closing_a_session_consolidates_and_next_opening_gets_the_scene(self) -> None:
         client = ScriptedClient([])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True)
+        engine = MasterEngine(self.camp, client=client)
         self._play(engine, client, MIN_TURNS_TO_CLOSE)
         closing = NARRATION + "\n<appunti>\n- pe: 1, via sessione, una sessione giocata\n</appunti>"
         client.script = [[_b(type="text", text=closing)],
                          [_b(type="tool_use", id="x1", name="award_xp", input={"amount": 1, "route": "sessione", "reason": "Una sessione giocata"})],
                          memory_json(1, incoerenze=[{"descrizione": "Nel diario Mira e' al Faro, nel giocato e' alla Lanterna Blu", "correzione": "Mira e' alla Lanterna Blu"}])]
         result = engine.close_session()
-        brief = client.calls[-3]["messages"][-1]["content"][-1]["text"]
+        brief = narrator_calls(client)[-1]["messages"][-1]["content"]
         self.assertIn("Niente riepilogo e niente fili aperti", brief)  # il riepilogo non lo paga due volte
         self.assertIn("Memoria consolidata: 4 turni", result.text)
         self.assertIn("1 incoerenze sanate", result.text)
@@ -118,13 +128,13 @@ class TestSlowMemory(Base):
         # la sessione dopo si apre con la scena lasciata dalla memoria, senza doverla leggere
         client.script = [[_b(type="text", text=QUIET)]]
         engine.prelude()
-        opening = client.calls[-1]["messages"][-1]["content"][-1]["text"]
+        opening = narrator_calls(client)[-1]["messages"][-1]["content"]
         for piece in ("APERTURA DELLA SESSIONE 2", "Molo di Velmora", "sigillo sbavato", "La Gilda cerca un certo Doran"):
             self.assertIn(piece, opening)
 
     def test_a_redone_start_is_not_campaign_history(self) -> None:
         client = ScriptedClient([])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True)
+        engine = MasterEngine(self.camp, client=client)
         self._play(engine, client, 1)
         self.assertIsNone(engine.close_session())  # troppo poco per una sessione: si rifa' da capo
         self.assertEqual(self.camp.all_turns("kael"), [])
@@ -137,9 +147,8 @@ class TestSlowMemory(Base):
         shutil.copytree(self.tmp / "camp", camps / "esempio")
         client = ScriptedClient([])
         app = App(camps, "esempio", client=client)
-        self.assertTrue(app.engine.memory)
         for i in range(3):
-            client.script = [[_b(type="text", text=QUIET)]]
+            client.script = [ROUTER, [_b(type="text", text=QUIET)], [_b(type="text", text="fatto")]]
             app.play(f"Azione {i}.")
         self.assertEqual(app.state()["memory_pending"], 3)
         app.update_settings({"model": "claude-opus-5", "model_memory": "claude-opus-5"})
@@ -162,10 +171,8 @@ class TestTruncatedConsolidation(Base):
         from master.memory import MAX_OUTPUT_TOKENS
 
         client = ScriptedClient([])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True)
-        for i in range(3):
-            client.script = [[_b(type="text", text=QUIET)]]
-            engine.play(f"Azione {i}.")
+        engine = MasterEngine(self.camp, client=client)
+        play_quietly(engine, client, 3)
         seen = {}
 
         def truncated(**kwargs):
@@ -185,10 +192,8 @@ class TestTruncatedConsolidation(Base):
 
     def test_turns_consolidated_after_closing_belong_to_the_closed_session(self) -> None:
         client = ScriptedClient([])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True)
-        for i in range(MIN_TURNS_TO_CLOSE):
-            client.script = [[_b(type="text", text=QUIET)]]
-            engine.play(f"Azione {i}.")
+        engine = MasterEngine(self.camp, client=client)
+        play_quietly(engine, client, MIN_TURNS_TO_CLOSE)
         client.script = [[_b(type="text", text=QUIET)]]
         engine.close_session(consolidate=False)  # come fa la pagina: chiude subito, consolida a parte
         self.assertEqual((self.camp.session_number, self.camp.consolidated("kael")), (2, 0))

@@ -78,7 +78,7 @@ class TestContext(Base):
 class TestFastTurn(Base):
     def test_one_stateless_call_per_turn(self) -> None:
         client = ScriptedClient([])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True, fast=True)
+        engine = MasterEngine(self.camp, client=client)
         for i in range(4):
             client.script = [[_b(type="text", text="nessuna")], [_b(type="text", text=QUIET)], [scene_tool()]]
             engine.play(f"Azione {i}.")
@@ -104,7 +104,7 @@ class TestFastTurn(Base):
 
     def test_scribe_keeps_the_scene_document_alive_every_turn(self) -> None:
         client = ScriptedClient([[_b(type="text", text="nessuna")], [_b(type="text", text=QUIET)], [scene_tool()]])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True, fast=True)
+        engine = MasterEngine(self.camp, client=client)
         result = engine.play("Chiedo a Mira della taglia.")
         scribe = next(c for c in client.calls if "Sei lo scriba" in str(c.get("system")))
         self.assertIn("chiama SEMPRE `set_scene`", scribe["system"])  # anche con appunti "nulla"
@@ -120,7 +120,7 @@ class TestFastTurn(Base):
     def test_reserve_read_still_works_and_is_logged(self) -> None:
         read = _b(type="tool_use", id="r1", name="read_file", input={"name": "ambientazione/mondo.md", "section": "Faro Spento"})
         client = ScriptedClient([[_b(type="text", text="nessuna")], [read], [_b(type="text", text=QUIET)], [scene_tool()]])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True, fast=True)
+        engine = MasterEngine(self.camp, client=client)
         with self.assertLogs("master.gioco", level="INFO") as logs:
             result = engine.play("Vado al Faro Spento.")
         self.assertEqual(len(narrator_calls(client)), 2)
@@ -130,7 +130,7 @@ class TestFastTurn(Base):
 
     def test_table_briefs_and_rolls_are_not_routed(self) -> None:
         client = ScriptedClient([[_b(type="text", text=QUIET)], [scene_tool()]])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True, fast=True)
+        engine = MasterEngine(self.camp, client=client)
         engine.prelude("tono cupo")
         self.assertFalse(any("Scegli le sezioni" in str(c.get("system")) for c in client.calls))
         brief = narrator_calls(client)[0]["messages"][0]["content"]
@@ -151,7 +151,7 @@ class TestSheetCacheLayers(Base):
         from master.sheet import Sheet
         from master.tools import ToolExecutor
 
-        engine = MasterEngine(self.camp, client=ScriptedClient([]), scribe=True, memory=True, fast=True)
+        engine = MasterEngine(self.camp, client=ScriptedClient([]))
         before = engine._system()
         ex = ToolExecutor(self.camp)
         ex.execute("update_sheet", {"changes": [{"path": "stato.punti_ferita.attuale", "value": 5}]})
@@ -179,7 +179,7 @@ class TestOpeningWithoutWastedCalls(Base):
         self.camp.file("ambientazione/avventura.md").set_section("Fili aperti di Kael", "- La Gilda cerca un certo Doran.")
         self.camp.next_session()
         client = ScriptedClient([[_b(type="text", text=QUIET)], [scene_tool()]])
-        engine = MasterEngine(self.camp, client=client, scribe=True, memory=True, fast=True)
+        engine = MasterEngine(self.camp, client=client)
         engine.prelude()
         brief = narrator_calls(client)[0]["messages"][0]["content"]
         self.assertIn("APERTURA DELLA SESSIONE 2", brief)

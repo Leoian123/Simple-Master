@@ -111,9 +111,8 @@ class App:
         with self.lock:
             self.campaign = Campaign(path)
             # narrazione e scrittura sono due chiamate separate: il narratore narra, lo scriba trascrive
-            self.engine = MasterEngine(self.campaign, client=self.client, model=self.settings.model, scribe=True,
-                                       scribe_model=self.settings.model_scribe, memory=True, fast=True,
-                                       memory_model=self.settings.model_memory)
+            self.engine = MasterEngine(self.campaign, client=self.client, model=self.settings.model,
+                                       scribe_model=self.settings.model_scribe, memory_model=self.settings.model_memory)
             self.builder = CharacterBuilder(self.campaign, client=self.client, model=self.settings.model)
             self.apply_settings()
             # l'unica scheda presente e' il personaggio della campagna: lo si fissa, cosi' una
@@ -322,8 +321,6 @@ class App:
         with self.lock:
             profile = dice.extract_profile(camp, self.client or self.engine.client, self.settings.model_for("prepare"),
                                            sheet.prompt_json() if sheet is not None and sheet.exists else "")
-            if self.engine is not None:
-                self.engine.reset_snapshot()
         if profile is None:
             raise ValueError("Nelle regole di questa campagna non ho trovato sezioni che parlino di tiri")
         return {"kinds": [k["nome"] for k in profile["tiri"]]}
