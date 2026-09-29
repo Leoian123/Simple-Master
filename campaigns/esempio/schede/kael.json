@@ -1,0 +1,52 @@
+{
+ "nome": "Kael",
+ "identita": {
+  "concetto": "Cacciatore di taglie",
+  "eta": 30,
+  "segni": "Cicatrice sulla mano sinistra",
+  "obiettivo": "Trovare chi ha messo una taglia sulla sua testa"
+ },
+ "tratti": {
+  "caratteristiche": {
+   "forza": 2,
+   "agilita": 3,
+   "mente": 1,
+   "presenza": 0
+  },
+  "abilita": [
+   {
+    "nome": "Traccia",
+    "origine": "Cacciatore di taglie",
+    "regola": "Una volta per scena ritrova la pista di chi insegue"
+   }
+  ]
+ },
+ "equipaggiamento": [
+  {
+   "nome": "Spada corta",
+   "danno": "1d6"
+  },
+  {
+   "nome": "Balestra leggera",
+   "danno": "1d6"
+  },
+  {
+   "nome": "Mantello cerato"
+  }
+ ],
+ "stato": {
+  "punti_ferita": {
+   "attuale": 12,
+   "massimo": 12
+  },
+  "monete": 12,
+  "condizioni": []
+ },
+ "legami": [
+  {
+   "nome": "Mira Sol",
+   "rapporto": "Il nome che lo ha portato a Velmora"
+  }
+ ],
+ "storia": "Arrivato a Velmora al tramonto seguendo un nome sussurrato in una taverna lontana: \"Mira Sol, Lanterna Blu\"."
+}

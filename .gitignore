@@ -1,0 +1,10 @@
+.venv/
+.env
+.ultima_campagna
+impostazioni.json
+cache/
+__pycache__/
+*.pyc
+log/
+campaigns/*/sessioni/
+campaigns/*/preparazione/

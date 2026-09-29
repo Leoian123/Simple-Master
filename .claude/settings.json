@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PY=.venv/Scripts/python.exe; [ -x \"$PY\" ] || PY=python; \"$PY\" main.py --logs diagnose 2>/dev/null || true",
+            "timeout": 20,
+            "statusMessage": "Diagnosi dei registri di Simple Master..."
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PY=.venv/Scripts/python.exe; [ -x \"$PY\" ] || PY=python; \"$PY\" main.py --logs clean >/dev/null 2>&1 || true",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

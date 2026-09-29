@@ -1,0 +1,20 @@
+{
+ "sistema": "Sistema leggero dell'esempio",
+ "note": "Difficolta': facile 10, media 15, difficile 20. Il bonus e' il modificatore della caratteristica sulla scheda.",
+ "tiri": [
+  {
+   "nome": "d20",
+   "uso": "ogni azione dall'esito incerto: d20 + modificatore contro una difficolta'",
+   "tipo": "somma",
+   "dado": 20,
+   "dadi_fissi": 1,
+   "successo_da": null,
+   "vantaggio": false,
+   "nome_zero_successi": "",
+   "coppie": null,
+   "speciali": null,
+   "eventi": []
+  }
+ ],
+ "fonte": "ricavato da meccanica/regole.md: Sistema"
+}
