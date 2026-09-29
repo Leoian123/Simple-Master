@@ -1,34 +1,44 @@
 # Simple Master
 
 Master minimalista per campagne di gioco di ruolo, guidato da Claude.
-Python puro, nessuna dipendenza oltre all'SDK `anthropic`. Lo stato della
-storia vive in file Markdown; l'AI li legge e li modifica tramite strumenti.
+Python puro, dipendenze minime (l'SDK `anthropic` e `pypdf` per i manuali). Lo
+stato della storia vive in file Markdown e JSON; il programma compone da quei
+file il contesto di ogni turno, e un modello economico li aggiorna.
 
 ## Il ciclo di un turno
 
 ```
-giocatore ──▶ MasterEngine ──▶ API (system prompt = regole + GLOSSARIO)
-                                 │  "mi serve npc.md, sezione Mira Sol"   ◀── tool read_file
-                                 │  "aggiungi al diario", "aggiorna glossario" ◀── tool append/set/upsert
+giocatore ──▶ MasterEngine ──▶ context.py compone il CONTESTO DEL TURNO dai documenti
+                                 (scheda, scena, fili aperti, chi e cosa e' nominato,
+                                  regole pertinenti, ultimi 3 scambi parola per parola)
+                                 │
                                  ▼
-giocatore ◀── narrazione ◀───── API
+                              narratore (1 chiamata, solo strumenti di lettura, di riserva)
+                                 │  narrazione + <appunti> che il giocatore non vede
+                                 ▼
+                              scriba (modello economico): diario, scheda, glossario, scena
+                                 │
+giocatore ◀── narrazione ◀───────┘   turno salvato in sessioni/<personaggio>.jsonl
 ```
 
-1. Il testo del giocatore va all'API insieme al **glossario** (sempre presente).
-2. L'API decide **quali file leggere** e li chiede con `read_file`.
-3. L'API **aggiorna** diario, schede e glossario con strumenti mirati.
+1. Il programma compone il contesto del turno dai documenti della campagna
+   (`master/context.py`). Il **glossario** fa da tabella di collegamento: dice in
+   quale file e sezione sta ogni termine nominato, e quella sezione entra nel contesto.
+2. Il narratore risponde in una chiamata. Se gli manca qualcosa di indispensabile
+   lo legge con `read_file` / `lookup_glossary` (lettura di riserva, una chiamata in piu').
+3. Lo scriba trascrive gli appunti del narratore negli archivi e aggiorna la scena.
 4. Torna la narrazione; il turno viene salvato in `sessioni/<personaggio>.jsonl`.
 
-Il glossario e' il primo riferimento: una tabella con una riga per entita'
-(chi/cosa e', in una frase, e in quale file stanno i dettagli). Cosi' il
-contesto resta piccolo e i file vengono aperti solo quando servono.
+Il glossario e' una tabella con una riga per entita' (chi/cosa e', in una frase,
+e in quale file stanno i dettagli): cosi' il contesto resta piccolo e i file
+entrano solo quando servono.
 
-**Glossario a due livelli.** Finche' e' piccolo (sotto gli 8.000 caratteri) entra
-intero nel prompt. Quando un manuale lo porta a centinaia di voci, nel prompt va
-solo un indice compatto, i termini raggruppati per tipo e file senza descrizioni,
-e il master chiede le descrizioni con lo strumento `lookup_glossary` e i
-dettagli con `read_file(file, sezione)`. Sul manuale di Vampiri: da circa 21.600
-a circa 2.500 token a ogni turno. Il file `glossario.md` resta completo.
+**Glossario a due livelli.** Dove il glossario viaggia nel prompt (il costruttore
+di schede) vale questa regola: finche' e' piccolo (sotto gli 8.000 caratteri) entra
+intero; quando un manuale lo porta a centinaia di voci entra solo un indice compatto,
+i termini raggruppati per tipo e file senza descrizioni, e le descrizioni si chiedono
+con `lookup_glossary`, i dettagli con `read_file(file, sezione)`. Sul manuale di
+Vampiri: da circa 21.600 a circa 2.500 token. Il file `glossario.md` resta completo.
 
 ## Meccanica, ambientazione, schede
 
@@ -71,15 +81,16 @@ personaggio attivo in `stato.json`: la prima scheda creata lo diventa da sola,
 l'unica scheda presente viene fissata all'ingresso, e con piu' schede si sceglie
 con "Gioca con questo" (la conversazione riparte, lo stato resta nei file).
 Senza un personaggio attivo la sezione Gioca e' disattivata e la campagna si
-apre sulla creazione. Durante il gioco il master riceve a ogni turno la scheda
-completa del personaggio attivo, senza doverla rileggere, e la trascrizione
-della sessione porta il suo nome.
+apre sulla creazione. Durante il gioco il master ha sempre la scheda del
+personaggio attivo senza doverla rileggere: tratti, identita' e storia nel prompt
+(in cache), stato ed esperienza nel contesto di ogni turno. La trascrizione della
+sessione porta il suo nome.
 
 **La scheda e' fatta di dati, non di frasi.** `schede/<nome>.json` e' l'unica
 fonte: ogni valore di gioco e' un numero (`tratti.attributi.mentali.fermezza: 4`,
 `stato.salute: {attuale, massimo}`), cosi' il master non deve interpretare
 "Salute: 9 / 9 — nessun danno" per sapere quanti dadi tirare, e non deve
-ritrovare e riscrivere una frase per togliere un punto. La modifica con
+ritrovare e riscrivere una frase per togliere un punto. Lo scriba la modifica con
 `update_sheet`, per percorso (`stato.fame` -> 3), tutte le modifiche del turno in
 una chiamata, o tutte o nessuna. `schede/<nome>.md` resta come vista leggibile
 (e' cio' che mostra "Vedi scheda"), rigenerata dai dati a ogni salvataggio: non
@@ -109,13 +120,15 @@ Escono solo con `spend_xp`: costo calcolato dalle regole del manuale, controllo
 che i punti bastino, tratto aumentato e spesa registrata insieme, o niente.
 
 **Chiudi sessione.** Dopo almeno tre turni giocati il pulsante "Nuova sessione"
-diventa "Chiudi sessione": una chiamata in cui il master ferma la scena, scrive
-il riepilogo nel diario, aggiorna i fili aperti e assegna i punti per la via
-`sessione` (le regole sull'esperienza trovate in `meccanica/` viaggiano gia' nel
-messaggio, senza giri di lettura: misurato, una chiamata da 11 centesimi). Il
-totale in coda lo scrive il programma dal registro. Poi la conversazione viene
-archiviata e il numero di sessione (in `stato.json`) avanza: la sessione dopo non
-si apre con il preludio ma con "Sessione N", che riparte da diario e fili aperti.
+diventa "Chiudi sessione": il narratore ferma la scena e mette negli appunti i
+punti per la via `sessione` (le regole sull'esperienza trovate in `meccanica/`
+viaggiano gia' nel messaggio, senza giri di lettura), lo scriba li registra con
+`award_xp`. Il totale in coda lo scrive il programma dal registro. Riepilogo e
+fili aperti non li scrive il narratore: subito dopo la pagina chiede il
+consolidamento della memoria (vedi sotto, livello lento). Poi la conversazione
+viene archiviata e il numero di sessione (in `stato.json`) avanza: la sessione
+dopo non si apre con il preludio ma con "Sessione N", che riparte da scena,
+diario e fili aperti.
 Con meno di tre turni e' un rifare da capo: si archivia e basta, senza chiamate,
 senza punti e senza far avanzare la sessione.
 
@@ -145,14 +158,16 @@ gioco e' diviso in due chiamate che non si parlano:
    diario, cambi di stato con i numeri, PNG e luoghi nuovi, segreti, punti
    esperienza. Il giocatore non lo vede e nel salvataggio non finisce.
 2. **Lo scriba** (Haiku 4.5, cinque volte meno caro in uscita; si cambia nelle
-   impostazioni) riceve narrazione, appunti, scheda JSON e fili aperti, e fa tutte
-   le scritture in un messaggio solo. Non porta con se' ne' la conversazione ne' il
-   glossario: poche migliaia di token, frazioni di centesimo.
+   impostazioni) riceve narrazione, appunti, la parte della scheda JSON che cambia
+   in gioco (stato, equipaggiamento, esperienza), la scena precedente, gli orologi e
+   i fili aperti, e fa tutte le scritture in un messaggio solo. Non porta con se' ne'
+   la conversazione ne' il glossario: poche migliaia di token, circa un centesimo.
 
-Se gli appunti dicono `nulla` la seconda chiamata non parte. Se lo scriba fallisce
-il turno resta valido e gli appunti partono con quelli del turno dopo. Sotto ogni
-risposta il costo riporta la quota dello scriba. Il costruttore di schede non usa
-lo scriba: salva lui, alla conferma del giocatore.
+Lo scriba parte a ogni turno, anche quando gli appunti dicono `nulla`: aggiorna
+comunque `scena.md` (`set_scene`), il documento da cui riparte il turno dopo. Se
+fallisce il turno resta valido e gli appunti partono con quelli del turno dopo.
+Sotto ogni risposta il costo riporta la quota dello scriba. Il costruttore di schede
+non usa lo scriba: salva lui, alla conferma del giocatore.
 
 ## Due livelli di narrazione: il veloce gioca, il lento ricorda
 
@@ -236,38 +251,47 @@ narratore al turno dopo, una volta sola, e l'orologio sparisce.
 
 ## Quanto costa un turno, e perche' costa poco
 
-Ogni chiamata porta con se' strumenti, prompt, glossario, indice dei file e la
-conversazione; dentro un turno i giri di tool la rimandano per intero. Quattro
-accorgimenti tengono basso il conto, misurati sul manuale di Vampiri:
+Un turno di gioco e' una chiamata del narratore su un contesto composto dal
+codice, piu' lo scriba e, quasi sempre, l'instradatore delle regole. Niente
+conversazione che cresce: il costo non dipende da quanto e' lunga la sessione.
 
-- **Cache di un'ora** su prompt, glossario e indice, e un punto di cache
-  sull'ultimo messaggio della conversazione. Un giocatore impiega minuti tra un
-  turno e l'altro: con i 5 minuti predefiniti la cache scadeva e si ripagava
-  tutto a prezzo pieno piu' la riscrittura. Ora dal secondo turno quasi tutto
-  l'ingresso costa un decimo (verificato: 2 token a prezzo pieno su 4.600).
-- **Il costruttore di schede non porta l'indice del mondo**: solo le voci di
-  `meccanica/creazione-pg.md` e le schede, il resto a portata di
-  `lookup_glossary`. Prefisso fisso da circa 9.100 a 3.500 token.
+- **Cache di un'ora sul prefisso fisso.** Il prompt del narratore (con le regole
+  dei dadi) e la parte stabile della scheda sono due blocchi in cache: tra un
+  turno e l'altro un giocatore impiega minuti, e con i 5 minuti predefiniti la
+  cache scadeva. Il blocco della scheda si riscrive solo quando il personaggio
+  cresce; ferite ed esperienza stanno nel contesto del turno e non lo toccano.
+- **Il contesto del turno non va in cache**: cambia a ogni turno, scriverlo
+  costerebbe il doppio per nulla. E' piccolo per costruzione: al massimo 3 regole
+  (2.500 caratteri l'una), 8 entita' (700), gli ultimi 3 scambi.
 - **Un file grande non si legge mai intero.** Oltre 24.000 caratteri `read_file`
   senza sezione restituisce l'elenco delle sezioni: un `regole.md` da manuale
-  letto intero sarebbero 130.000 token, oltre 60 centesimi a ogni giro del turno.
+  letto intero sarebbero 130.000 token.
 - **Il costo reale di ogni turno** compare sotto la risposta e nel registro, con
   token a prezzo pieno, letti dalla cache e scritti in cache.
-- **Il prompt resta fermo per 8 turni.** Glossario, indice e scheda entrano nel
-  prompt come fotografia (`SNAPSHOT_TURNS`): se il master aggiorna glossario o
-  scheda a meta' turno, il prompt non cambia e la cache della conversazione non
-  si invalida. Prima ogni scrittura faceva riscrivere in cache decine di migliaia
-  di token a prezzo doppio (40.000 nella prima scena da un euro).
-- **Narrazione e scritture nello stesso messaggio.** Se il master narra e insieme
-  aggiorna diario, scheda o glossario, il turno si chiude li': l'esito delle
-  scritture apre il messaggio del turno dopo. Niente giro in piu' solo per dire
-  "fatto". Un turno tipico e' una chiamata, due se serve leggere una regola.
-- **Lo storico si dimezza, non si lima.** Togliere un messaggio a turno
-  invalidava la cache a ogni turno; dimezzando, succede una volta ogni tanto.
-  Le letture lunghe dei turni passati diventano una riga ("rileggilo se serve").
 
-Misurato sulla campagna di Vampiri con Opus: preludio 30 centesimi di dollaro
-(tre chiamate, quattro file scritti), turno successivo 12 centesimi (una chiamata).
+Misurato sulla campagna di Vampiri con Opus (`sessioni/spese.jsonl`, 2026-09-18):
+un turno di narrazione costa da 8 a 17 centesimi di dollaro (17 quando serve una
+lettura di riserva), lo scriba circa 1 centesimo, l'instradatore circa 0,2.
+
+### Il costruttore di schede: il ciclo a conversazione
+
+La creazione della scheda e' un dialogo, e usa il ciclo a conversazione
+(`master/conversation.py`): il modello chiede le regole con `read_file`, le legge
+e salva con `save_sheet`. Li' la conversazione cresce, e tre accorgimenti tengono
+fermo il prefisso in cache:
+
+- **Il prompt resta fermo per 8 turni** (`SNAPSHOT_TURNS`): se una scrittura cambia
+  glossario o schede a meta' turno, il prompt non cambia e la cache della
+  conversazione non si invalida. Prima ogni scrittura faceva riscrivere in cache
+  decine di migliaia di token a prezzo doppio.
+- **Risposta e scritture nello stesso messaggio** chiudono il turno: l'esito delle
+  scritture apre il messaggio del turno dopo. Niente giro in piu' solo per dire "fatto".
+- **Lo storico si dimezza, non si lima**, e le letture lunghe dei turni passati
+  diventano una riga ("rileggilo se serve").
+
+Il costruttore non porta l'indice del mondo: solo le voci di
+`meccanica/creazione-pg.md` e le schede, il resto a portata di `lookup_glossary`.
+Prefisso fisso da circa 9.100 a 3.500 token.
 
 ## Preludio: la prima scena nasce dal background
 
@@ -279,10 +303,10 @@ tono e desideri. Il master non riceve una scena da copiare ma un metodo
 d'ingresso** piu' carico subito dopo, renderlo **concreto** (luogo, ora, corpo,
 oggetti, nomi presi dalla scheda), rispettare **regole e mondo** del manuale,
 lasciare in scena un **motore** (almeno due pressioni che costringono a
-scegliere) e **scrivere** tutto: diario, stato sulla scheda, e in
-`ambientazione/avventura.md` la sezione "Fili aperti di <personaggio>" con cio'
-che e' successo davvero e chi si muovera', cosi' i turni successivi hanno una
-direzione invece di improvvisare dal nulla. Lo stesso principio vale per ogni
+scegliere) e **annotare** tutto negli appunti: diario, stato della scheda e i
+"Fili aperti di <personaggio>" con cio' che e' successo davvero e chi si muovera'.
+Lo scriba li registra (i fili in `ambientazione/avventura.md`), cosi' i turni
+successivi hanno una direzione invece di improvvisare dal nulla. Lo stesso principio vale per ogni
 scena successiva: nasce dall'ultima, dai fili aperti o dal background.
 
 ## Persistenza: la campagna continua da dove era
@@ -293,10 +317,13 @@ seconda copia in Markdown. Chiudendo il programma, tornando al menu o riavviando
 il PC non si perde nulla:
 
 - al rientro in una campagna la conversazione ricompare nella pagina (ultimi 40
-  turni, con il totale in archivio) e gli ultimi 12 turni tornano nel contesto
-  del master come testo semplice. Niente tool ne' ragionamenti dei turni
-  passati: non servono, perche' lo stato vive nei file, e legherebbero il
-  salvataggio a un modello o a una versione;
+  turni, con il totale in archivio). Nel gioco il narratore non ha conversazione
+  da ricaricare: dal primo turno dopo il rientro il contesto contiene, come
+  sempre, scena, fili aperti e gli ultimi 3 scambi parola per parola. Il
+  costruttore di schede, che e' un dialogo, ricarica invece gli ultimi 12 turni
+  come testo semplice. In nessuno dei due casi tornano tool o ragionamenti dei
+  turni passati: lo stato vive nei file, e legherebbero il salvataggio a un
+  modello o a una versione;
 - ogni personaggio ha la sua conversazione: cambiando personaggio si riprende la sua;
 - anche la creazione di una scheda si riprende a meta' (`sessioni/_scheda.jsonl`),
   e riparte pulita dopo il salvataggio della scheda;
@@ -514,21 +541,27 @@ cancella l'archivio (`--log-days N` solo la parte piu' vecchia di N giorni,
 
 ```
 master/
-  files.py     CampaignFile: lettura, scrittura atomica, append, sezioni "## Titolo", replace
-  glossary.py  Glossary: tabella Markdown con upsert/remove per voce
-  campaign.py  Campaign: cartella sandbox, indice file, trascrizione sessione, creazione
-  tools.py     definizione dei tool per l'API e ToolExecutor che li esegue sui file
-  engine.py    MasterEngine: system prompt (con cache), ciclo tool_use, storico turni
-  character.py CharacterBuilder: stesso ciclo, prompt e strumenti per compilare schede da meccanica/
-  prepare.py   Preparer: manuale -> blocchi -> JSON strutturato -> file di campagna + glossario
-  tidy.py      GlossaryTidier: allinea il glossario ai file, poi lo pulisce e ordina con una chiamata veloce
-  logbook.py   registro con marca temporale in log/: chiamate API, tool, blocchi, errori con traceback
-  ui.py        pagina web minimale (http.server) e API JSON
-main.py        avvio, .env, CLI
-campaigns/esempio/   glossario.md + meccanica/, ambientazione/, schede/kael.md
-tests/test_master.py  test senza rete con un client finto
-tests/test_prepare.py test della preparazione (PDF minimale generato a mano)
-tests/test_tidy.py    test del riordino glossario
+  files.py        CampaignFile: lettura, scrittura atomica, append, sezioni "## Titolo", replace
+  glossary.py     Glossary: tabella Markdown con upsert/remove per voce, indice compatto, lookup
+  campaign.py     Campaign: cartella sandbox, indice file, giocato, stato.json, spese, orologi
+  tools.py        definizione dei tool per l'API e ToolExecutor che li esegue sui file
+  sheet.py        Sheet: la scheda come dati JSON, modifiche per percorso, registro dell'esperienza
+  conversation.py ConversationEngine: il ciclo a conversazione (tool_use, cache, storico, ripresa)
+  character.py    CharacterBuilder: il ciclo a conversazione con prompt e strumenti da costruttore
+  engine.py       MasterEngine: il gioco (narratore, scriba, instradatore, preludio, chiusura)
+  context.py      compose(): il contesto di ogni turno di gioco, composto dai documenti
+  memory.py       Consolidator: il livello lento (cronaca, fili aperti, memoria dei PNG, scena)
+  dice.py         tiri e profilo dei dadi ricavato dal manuale
+  prepare.py      Preparer: manuale -> blocchi -> JSON strutturato -> file di campagna + glossario
+  sanitize.py     Sanitizer: fusione dei doppioni, gratuita e approfondita
+  tidy.py         GlossaryTidier: allinea il glossario ai file, poi lo pulisce e ordina con una chiamata veloce
+  models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
+  explorer.py     scelta del PDF da Esplora risorse o dalla pagina
+  logbook.py      registro con marca temporale in log/: chiamate API, tool, blocchi, errori con traceback
+  ui.py           pagina web minimale (http.server) e API JSON
+main.py           avvio, .env, CLI
+campaigns/esempio/   glossario.md + meccanica/, ambientazione/, schede/kael.json
+tests/               un file per area, tutti senza rete (client finto o risposte preparate)
 ```
 
 ## Test
