@@ -433,23 +433,32 @@ Come funziona (map -> reduce -> consolida):
    infinita. I blocchi validi lasciati da versioni precedenti nella cartella
    `preparazione/` di una campagna vengono importati nella cache condivisa
    abbinandoli per pagine.
-3. **Unione.** Le sezioni entrano nei file con le classi di `files.py` (sezioni con
-   lo stesso titolo si accodano), le voci nel glossario. Nasce anche
+3. **Unione, nello spazio del manuale.** Le sezioni entrano con le classi di
+   `files.py` (sezioni con lo stesso titolo si accodano) e le voci nel glossario,
+   ma non nella campagna: ogni manuale ha il suo spazio di lavoro in
+   `preparazione/fonti/<manuale>/`, dove il suo testo resta separato da quello
+   degli altri. Un blocco gia' fuso non si accoda una seconda volta. Nasce anche
    `fonte-<nome>.md`: indice per pagine del manuale, per tornare all'originale.
 4. **Consolidamento per sezioni.** Solo le sezioni il cui titolo compare in piu'
    blocchi hanno testo accodato da ripulire: vengono inviate a gruppi di circa
    45.000 caratteri (in batch quando i gruppi sono almeno due), e l'esito
-   sostituisce solo quelle sezioni. Il resto del file non viaggia e non si paga:
+   sostituisce solo quelle sezioni. Il resto non viaggia e non si paga:
    sul manuale di Vampiri sono 20 sezioni su 355, circa 82.000 caratteri invece
-   di 877.000. Ogni sezione ripulita deve conservare almeno un terzo della
-   lunghezza, altrimenti resta com'era. Esito in cache per contenuto
-   (`cache/manuali/consolidati/`). `--no-consolidate` per saltarlo del tutto.
-   La fusione e' ripetibile: rilanciando sulla stessa campagna il testo gia'
-   presente non si accoda di nuovo. I titoli `#` e `##` dentro il testo di una
-   sezione vengono abbassati a `###`, perche' la sezione e' l'unita' che il
-   master legge e aggiorna.
+   di 877.000. Si ripulisce solo il testo del manuale in corso: cio' che la
+   campagna aveva gia' e cio' che viene da altri manuali non passa dal modello.
+   Ogni sezione ripulita deve conservare almeno un terzo della lunghezza,
+   altrimenti resta com'era. Esito in cache per contenuto
+   (`cache/manuali/consolidati/`); una sezione gia' ripulita e non piu' toccata
+   non viene rimandata al modello. `--no-consolidate` per saltarlo del tutto.
+   I titoli `#` e `##` dentro il testo di una sezione vengono abbassati a `###`,
+   perche' la sezione e' l'unita' che il master legge e aggiorna.
+5. **Composizione della campagna.** Le sezioni della campagna si compongono dagli
+   spazi di tutti i manuali in ordine canonico: prima il testo che la campagna
+   aveva gia', poi i manuali dal piu' vecchio al piu' recente. Preparare base ed
+   espansione in un ordine o nell'altro da' lo stesso risultato, e una corsa
+   interrotta lascia la campagna com'era. Vedi "Paternita' del dato" qui sotto.
 
-5. **Riordino del glossario.** Un sotto-tool parte alla fine (o da solo con
+6. **Riordino del glossario.** Un sotto-tool parte alla fine (o da solo con
    `--tidy-glossary`). Prima, senza API: aggiunge una voce per ogni file della
    campagna che non ne ha una, aggiorna quelle dei file gia' indicizzati, toglie
    le voci che puntano a file spariti e segnala quelle il cui termine non compare
@@ -462,6 +471,38 @@ Come funziona (map -> reduce -> consolida):
 
 Opzioni: `--pages 10-120` per una parte del manuale, `--effort low` per
 risparmiare. A fine corsa stampa blocchi, chiamate e token usati.
+
+### Paternita' del dato
+
+Ogni sezione, voce di glossario e profilo dei dadi conosce i suoi genitori. Il
+registro `preparazione/paternita.json` (modulo `lineage.py`) tiene per ogni dato
+l'impronta del testo e da dove viene: quale manuale, quali pagine, oppure la
+campagna stessa.
+
+- **Niente da dichiarare.** Non si dice al programma quale manuale e' il base e
+  quale l'espansione: l'ordine canonico viene dalla data di pubblicazione
+  registrata per il manuale, e un manuale senza data conta come il piu' vecchio.
+  La lettura della data dal PDF non c'e' ancora: fino ad allora i manuali veri
+  si ordinano per impronta, in modo stabile ma non cronologico.
+- **Il testo scritto fuori dalla preparazione non si riscrive.** Una sezione che
+  c'era gia', o che il master o il giocatore hanno cambiato, si riconosce
+  dall'impronta diversa: quel testo diventa la prima parte della sezione
+  (`preparazione/fonti/_campagna/`) e i manuali si accodano dopo. Una sezione
+  tolta non rinasce rilanciando lo stesso manuale.
+- **Glossario.** Una voce definita da piu' manuali tiene la descrizione e il file
+  del piu' vecchio: un'espansione che cita di passaggio un personaggio non
+  sposta la sua voce lontano dalla sua sezione. Le voci che c'erano gia', o
+  corrette in gioco, restano com'erano.
+- **Dadi.** Con piu' manuali il profilo dei tiri e' in cache per contenuto delle
+  regole che parlano di tiri: si rifa' solo se un manuale le cambia.
+- **Campagne gia' preparate.** Alla prima corsa i manuali gia' fusi si
+  riconoscono dagli indici `fonte-*.md`; se i loro blocchi sono ancora nella
+  cache condivisa, da li' si ricava senza chiamate quali sezioni e quali pagine
+  vengono da ciascuno. Rilanciare un manuale adottato non lo duplica.
+
+La paternita' oggi mette in ordine e tiene traccia: due versioni della stessa
+regola restano ancora una dopo l'altra, la piu' vecchia per prima. Decidere
+quale vale e' il passo successivo, e si misura sul golden dataset.
 
 ## Registri (log): dove e perche' si ferma qualcosa
 
@@ -552,7 +593,8 @@ master/
   context.py      compose(): il contesto di ogni turno di gioco, composto dai documenti
   memory.py       Consolidator: il livello lento (cronaca, fili aperti, memoria dei PNG, scena)
   dice.py         tiri e profilo dei dadi ricavato dal manuale
-  prepare.py      Preparer: manuale -> blocchi -> JSON strutturato -> file di campagna + glossario
+  prepare.py      Preparer: manuale -> blocchi -> JSON strutturato -> spazio del manuale -> campagna
+  lineage.py      Lineage: paternita' del dato, uno spazio per manuale, composizione in ordine canonico
   sanitize.py     Sanitizer: fusione dei doppioni, gratuita e approfondita
   tidy.py         GlossaryTidier: allinea il glossario ai file, poi lo pulisce e ordina con una chiamata veloce
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate

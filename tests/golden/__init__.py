@@ -187,13 +187,23 @@ def snapshot(campaign: Campaign) -> dict[str, Any]:
     return {"file": files, "glossario": glossary}
 
 
-# --- la preparazione di oggi, senza chiamate ---------------------------------------
+# --- gli stadi della preparazione, senza chiamate -----------------------------------
+
+
+def apply_staged(campaign: Campaign, manual: dict[str, Any]) -> None:
+    """Fonde un manuale del dataset con la preparazione vera, dal punto in cui l'estrazione ha
+    gia' prodotto i blocchi: spazio di lavoro del manuale, composizione della campagna, paternita'."""
+    from master.prepare import Preparer, PrepReport
+
+    meta = manual["meta"]
+    blocks = [(f"blocco_{i:03d}_p{b['pagine'][0]}-{b['pagine'][1]}.json", f"pagine {b['pagine'][0]}-{b['pagine'][1]}", b)
+              for i, b in enumerate(manual["blocchi"], start=1)]
+    Preparer(campaign).assimilate(meta["chiave"], manual["nome"] + ".md", blocks, PrepReport(source=meta["titolo"]), meta=meta)
 
 
 def apply_today(campaign: Campaign, manual: dict[str, Any]) -> None:
-    """Fonde un manuale del dataset con il codice attuale: `merge` blocco per blocco, poi la
-    sanificazione gratuita. Manca solo il consolidamento a pagamento, che ripulisce le ripetizioni
-    dentro lo stesso manuale e non decide nulla tra manuali diversi."""
+    """La fusione com'era prima della paternita': `merge` blocco per blocco direttamente nella
+    campagna, poi la sanificazione gratuita. Resta come termine di confronto: e' il punto di partenza."""
     from master.prepare import Preparer, PrepReport
     from master.sanitize import Sanitizer
 
