@@ -11,6 +11,8 @@ map-reduce:
                 dall'API (unisce doppioni, toglie ripetizioni), sempre dentro il manuale
     componi     la campagna si compone dagli spazi di tutti i manuali, in ordine
                 canonico, e ogni dato registra i suoi genitori (vedi lineage.py)
+    risolvi     dove due manuali si toccano, una chiamata dice quale testo vale e il
+                codice applica e controlla le modifiche (vedi resolve.py)
 
 ## Precisione e costo (pratiche documentate da Anthropic)
 - Batch API per l'estrazione: i blocchi mancanti partono in un unico batch a
@@ -253,6 +255,7 @@ class PrepReport:
     consolidated_sections: list[tuple[str, str]] = field(default_factory=list)  # (file, titolo) ripuliti in questa corsa
     composition: str = ""
     clashes: str = ""
+    resolution: Any = None  # ResolveReport: cosa si e' deciso dove due manuali si toccano
 
     def summary(self) -> str:
         lines = [
@@ -269,6 +272,10 @@ class PrepReport:
             lines.append("Campagna: " + self.composition)
         if self.clashes:
             lines.append("Scontri possibili: " + self.clashes)
+        if self.resolution is not None and self.resolution.steps:
+            lines.append(self.resolution.summary().capitalize())
+            lines += [f"  in quarantena: {s['file']} § {s['titolo']} <- {s['sezione']}: {s.get('perche', '')}"
+                      for s in self.resolution.steps if s["esito"] == "quarantena"]
         if self.pages_skipped:
             lines.append(f"Pagine scartate perche' senza valore (vuote, immagini, indici): {self.pages_skipped}")
         if self.estimate:
@@ -516,6 +523,7 @@ class Preparer:
         batch: bool | None = None,
         progress: Callable[[str], None] = print,
         other_edition: bool = False,
+        resolve: bool = True,
     ) -> PrepReport:
         use_batch = self.batch if batch is None else batch
         log.info("preparazione: fonte=%s campagna=%s modalita'=%s pagine=%s modello=%s effort=%s batch=%s",
@@ -539,14 +547,14 @@ class Preparer:
             progress(f"  paternita': riconosciuti {len(adopted)} manuali gia' presenti nella campagna")
         try:
             return self._run(path, key, cache_dir, lineage, report, mode, pages, consolidate, tidy, tidy_effort, use_batch,
-                             progress, other_edition)
+                             progress, other_edition, resolve)
         finally:
             self._stage = None
             lineage.save()
 
     def _run(self, path: Path, key: str, cache_dir: Path, lineage: Lineage, report: PrepReport, mode: str, pages: str | None,
              consolidate: bool, tidy: bool, tidy_effort: str | None, use_batch: bool, progress: Callable[[str], None],
-             other_edition: bool = False) -> PrepReport:
+             other_edition: bool = False, resolve: bool = True) -> PrepReport:
         meta = self._manual_meta(path, key, report, progress)
         self._check_edition(lineage, key, meta, other_edition)  # prima di spendere per l'estrazione
         stager = self._stager(lineage, key, path.name, cache_dir.name, meta)
@@ -661,7 +669,7 @@ class Preparer:
                     raise
                 lineage.mark_consolidated(key, stage, report.consolidated_sections)
 
-        self._compose(lineage, report, progress, clean)
+        self._compose(lineage, report, progress, clean, resolve=resolve, use_batch=use_batch, state_dir=cache_dir)
 
         if tidy:
             from .tidy import GlossaryTidier
@@ -711,6 +719,29 @@ class Preparer:
                  report.chunks, report.chunks_from_cache, report.chunks_batched, report.calls, report.input_tokens,
                  report.output_tokens, ", ".join(report.files_touched) or "-", len(report.warnings))
         return report
+
+    # --- invio di piu' richieste indipendenti ------------------------------------------
+
+    def _send(self, requests: dict[str, dict[str, Any]], state_file: Path, report: PrepReport,
+              progress: Callable[[str], None], use_batch: bool) -> dict[str, Any]:
+        """Manda richieste che non dipendono l'una dall'altra: in batch a meta' prezzo quando si puo',
+        altrimenti poche alla volta in parallelo. Ritorna solo le risposte riuscite."""
+        if use_batch and supports_batches(self.client) and len(requests) >= 2:
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            return self._run_batch(requests, state_file, report, progress, "confronti tra testi")
+        from concurrent.futures import ThreadPoolExecutor
+
+        def one(item: tuple[str, dict[str, Any]]) -> tuple[str, Any]:
+            try:
+                return item[0], create_message(self.client, max_seconds=self.block_timeout, **item[1])
+            except Exception as exc:  # una richiesta fallita non ferma le altre: quel confronto resta da fare
+                log.warning("richiesta %s non riuscita: %s", item[0], describe_error(exc))
+                return item[0], None
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            answers = dict(pool.map(one, requests.items()))
+        report.calls += sum(1 for message in answers.values() if message is not None)
+        return {cid: message for cid, message in answers.items() if message is not None}
 
     # --- dati della pubblicazione ---------------------------------------------------
 
@@ -766,20 +797,33 @@ class Preparer:
         return Preparer(self._stage, client=self._client, model=self.model, effort=self.effort, max_tokens=self.max_tokens,
                         cache_root=self.cache_root, batch=self.batch, poll_seconds=self.poll_seconds, block_timeout=self.block_timeout)
 
-    def _compose(self, lineage: Lineage, report: PrepReport, progress: Callable[[str], None], clean: Any = None) -> ComposeReport:
-        """Compone la campagna da tutti i manuali, poi toglie i doppioni che la campagna aveva gia' di suo."""
+    def _compose(self, lineage: Lineage, report: PrepReport, progress: Callable[[str], None], clean: Any = None,
+                 resolve: bool = False, use_batch: bool = False, state_dir: Path | None = None) -> ComposeReport:
+        """Compone la campagna da tutti i manuali, decide quale testo vale dove due manuali si toccano, poi
+        toglie i doppioni che la campagna aveva gia' di suo."""
         from .sanitize import Sanitizer
 
         composed = lineage.compose(TARGET_FILES)
         report.composition = composed.summary().split(": ", 1)[1]
+        report.warnings += composed.warnings
+        progress("  " + composed.summary())
         clashes = [c for c in lineage.candidates(TARGET_FILES) if c.manual == self._stage_key]
         if clashes:
             by_title = sum(1 for c in clashes if c.why == "titolo")
             report.clashes = (f"{len(clashes)} punti in cui questo manuale tocca testo di altra origine "
-                              f"({by_title} per titolo, {len(clashes) - by_title} per termini nominati): per ora restano uno dopo l'altro")
+                              f"({by_title} per titolo, {len(clashes) - by_title} per termini nominati)")
             progress("  scontri possibili: " + report.clashes)
-        report.warnings += composed.warnings
-        progress("  " + composed.summary())
+        if resolve:
+            from .resolve import Resolver
+
+            state = (state_dir or self.cache_root) / "batch-risoluzione.json"
+            solved = Resolver(self.campaign, lineage, lambda requests: self._send(requests, state, report, progress, use_batch),
+                              self.model, self.effort, self.cache_root, TARGET_FILES).run(progress)
+            report.input_tokens += solved.input_tokens
+            report.output_tokens += solved.output_tokens
+            report.resolution = solved
+            if solved.steps:
+                progress("  " + solved.summary())
         after = Sanitizer(self.campaign).run_free()
         merged = len(after.merged_sections) + len(clean.merged_sections if clean else [])
         blocks = after.removed_blocks + (clean.removed_blocks if clean else 0)
@@ -791,7 +835,8 @@ class Preparer:
 
     def assimilate(self, key: str, name: str, blocks: list[tuple[str, str, dict[str, Any]]], report: PrepReport,
                    meta: dict[str, Any] | None = None, variant: str = "diretto",
-                   progress: Callable[[str], None] = lambda text: None, other_edition: bool = False) -> ComposeReport:
+                   progress: Callable[[str], None] = lambda text: None, other_edition: bool = False,
+                   resolve: bool = False) -> ComposeReport:
         """Fonde blocchi gia' estratti (nome del blocco, pagine, dati) senza chiamate: e' il tratto della
         preparazione che viene dopo l'estrazione, lo stesso di `run`. Lo usano i test e la misura sul golden dataset."""
         from .sanitize import Sanitizer
@@ -805,7 +850,7 @@ class Preparer:
                 if lineage.take_block(key, block, pages, data):
                     stager.merge(data, report)
             clean = Sanitizer(stager.campaign).run_free()
-            return self._compose(lineage, report, progress, clean)
+            return self._compose(lineage, report, progress, clean, resolve=resolve)
         finally:
             self._stage = None
             lineage.save()

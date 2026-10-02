@@ -8,6 +8,9 @@ Tutti gli stadi qui sono gratuiti (nessuna chiamata). Ogni fase del lavoro aggiu
     paternita'   uno spazio di lavoro per manuale, campagna composta in ordine canonico,
                  manuale di un'altra edizione rifiutato all'ingresso
 
+Con `--vero` si aggiunge lo stadio a pagamento: la risoluzione con il modello vero (pochi centesimi; le
+decisioni gia' prese stanno in cache e non si ripagano finche' il prompt non cambia).
+
 In fondo, la ricerca dei candidati allo scontro: quante coppie da confrontare trova tra quelle attese, e
 quante in piu' (ognuna costera' un confronto).
 """
@@ -25,7 +28,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from golden import (  # noqa: E402
-    apply_staged, apply_today, found_candidates, load_cases, load_manual, score_candidates, score_state, snapshot,
+    apply_staged, apply_today, found_candidates, load_cases, load_manual, predicted_relations, score_candidates,
+    score_declared, score_relations, score_state, snapshot,
 )
 from master import Campaign  # noqa: E402
 from master.prepare import EditionMismatch  # noqa: E402
@@ -56,6 +60,60 @@ def measure(apply: Callable, base: dict, expansion: dict, cases: dict) -> tuple[
         return result, same
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def live(base: dict, expansion: dict, cases: dict, category: dict[str, str]) -> None:
+    """Lo stadio a pagamento: la risoluzione con il modello vero. Le decisioni gia' prese stanno in cache."""
+    import os
+
+    import anthropic
+
+    from master.models import Settings, cost_usd
+    from master.prepare import Preparer
+
+    for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines() if (ROOT / ".env").exists() else []:
+        key, sep, value = line.partition("=")
+        if sep and not line.strip().startswith("#"):
+            os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+    settings = Settings.load(ROOT / "impostazioni.json")
+    model, effort = settings.model_for("prepare"), settings.effort_for("prepare")
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        campaign = Campaign.create(tmp / "vero")
+        preparer = Preparer(campaign, client=anthropic.Anthropic(), model=model, effort=effort, batch=False)
+        apply_staged(campaign, base, preparer, resolve=True)
+        report = apply_staged(campaign, expansion, preparer, resolve=True)
+        solved = report.resolution
+        result = score_state(campaign, cases, base)
+        predicted = predicted_relations(campaign, solved.steps, cases, expansion)
+        relations = score_relations({i: p.get("rapporto") for i, p in predicted.items()}, cases)
+        declared = score_declared(predicted, cases)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    print(f"\nStadio a pagamento: risoluzione con {model} (effort {effort or 'predefinito'})")
+    names = list(dict.fromkeys(category.values()))
+    width = max(len(n) for n in names)
+    for name in names:
+        ids = [i for i, c in category.items() if c == name and i in result]
+        if ids:
+            print(f"  {name.ljust(width)}  {sum(1 for i in ids if not result[i])}/{len(ids)}")
+    print(f"  {'TOTALE'.ljust(width)}  {sum(1 for why in result.values() if not why)}/{len(result)}")
+    print(f"  rapporti classificati bene: {relations['giusti']}/{relations['casi']}"
+          + (f" (sbagliati: {relations['sbagliati']})" if relations["sbagliati"] else ""))
+    print(f"  correzioni dichiarate o no, riconosciute: {declared['giusti']}/{declared['casi']}"
+          + (f" (sbagliati: {', '.join(declared['sbagliati'])})" if declared["sbagliati"] else "")
+          + (f"; spareggi non segnati: {', '.join(declared['spareggi_non_segnati'])}" if declared["spareggi_non_segnati"] else ""))
+    print("  " + solved.summary())
+    print(f"  chiamate {solved.calls}, token in/out {solved.input_tokens}/{solved.output_tokens}, "
+          f"costo ~${cost_usd(model, solved.input_tokens, solved.output_tokens):.2f} a tariffa piena")
+    for step in solved.steps:
+        if step["esito"] == "quarantena":
+            print(f"  QUARANTENA {step['titolo']} <- {step['sezione']}: {step.get('perche')}")
+    print("  casi che non passano:")
+    for case_id, why in result.items():
+        if why:
+            print(f"    {case_id} ({category[case_id]}): " + "; ".join(why))
 
 
 def main() -> int:
@@ -90,6 +148,8 @@ def main() -> int:
     for case_id, why in result.items():
         if why:
             print(f"  {case_id} ({category[case_id]}): " + "; ".join(why))
+    if "--vero" in sys.argv:
+        live(base, expansion, cases, category)
     return 0
 
 

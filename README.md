@@ -514,10 +514,48 @@ campagna stessa.
   specifici. E' una ricerca larga: sul golden dataset trova tutti i 21 scontri
   piantati e 5 coppie in piu'.
 
-La paternita' oggi mette in ordine, tiene traccia e dice dove guardare: due
-versioni della stessa regola restano ancora una dopo l'altra, la piu' vecchia
-per prima. Decidere quale vale e' il passo successivo, e si misura sul golden
-dataset.
+### Quale testo vale
+
+Mettere le parti in ordine non basta quando la parte nuova corregge la vecchia:
+il master legge una sezione sola, spesso solo l'inizio, e troverebbe prima la
+regola superata. Per ogni punto in cui un manuale tocca testo di un'altra
+origine, una chiamata (modulo `resolve.py`) stabilisce il rapporto tra i due
+testi, e il codice agisce di conseguenza:
+
+| Rapporto | Cosa succede |
+|---|---|
+| `nessuno`, `estende`, `variante` | il testo nuovo si accoda, la regola standard resta per prima |
+| `identica` | il testo nuovo non entra: non porta nulla |
+| `sostituisce`, `contraddice` | le modifiche si applicano al testo in vigore: vince il piu' recente |
+
+Il modello non riscrive la sezione. Cita il passo da cambiare, dice che cosa
+diventa e cita la fonte nel testo nuovo; se il testo nuovo ripresenta
+l'argomento per intero, prende il posto del vecchio parola per parola. Tutto
+cio' che non e' toccato resta identico, anche in una tabella di trenta righe.
+
+- **Controlli fatti dal codice.** Il passo da cambiare deve comparire una volta
+  sola nella sezione, la fonte deve esistere nel testo nuovo, e nel testo che
+  subentra non puo' nascere un numero che non sia in uno dei due. Un piano che
+  non supera i controlli non entra: resta la composizione semplice e il caso
+  finisce nel registro e nel resoconto come quarantena. Nessuno viene
+  interpellato.
+- **Spareggio.** Se il testo nuovo corregge senza dichiararlo, vince comunque
+  il piu' recente, e la decisione resta segnata nel registro.
+- **Chi puo' correggere chi.** Un manuale piu' vecchio non corregge uno piu'
+  recente. Il testo scritto dal giocatore o nato in gioco non viene corretto
+  da nessun manuale: i manuali vi si accodano.
+- **Una decisione si paga una volta.** Ogni decisione sta nel registro della
+  campagna e in una cache condivisa per contenuto (`cache/manuali/risoluzioni/`):
+  rilanciare, o preparare gli stessi manuali in un'altra campagna, non costa. I
+  confronti partono in batch a meta' prezzo come l'estrazione.
+- `--no-resolve` lascia le versioni una dopo l'altra, come nella sola
+  composizione.
+
+Sul golden dataset, con Opus 5 a effort `medium`: 28 casi su 28, nessuna
+quarantena, 25 confronti per circa 0,22 dollari a tariffa piena. Il dataset e'
+inventato e il prompt e' stato messo a punto guardandolo: su un'espansione vera
+il risultato sara' peggiore, e i casi che finiranno in quarantena vanno aggiunti
+al dataset.
 
 ## Registri (log): dove e perche' si ferma qualcosa
 
@@ -610,6 +648,7 @@ master/
   dice.py         tiri e profilo dei dadi ricavato dal manuale
   prepare.py      Preparer: manuale -> blocchi -> JSON strutturato -> spazio del manuale -> campagna
   lineage.py      Lineage: paternita' del dato, uno spazio per manuale, composizione in ordine canonico
+  resolve.py      Resolver: quale testo vale dove due manuali si toccano; controlli e quarantena
   sanitize.py     Sanitizer: fusione dei doppioni, gratuita e approfondita
   tidy.py         GlossaryTidier: allinea il glossario ai file, poi lo pulisce e ordina con una chiamata veloce
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
@@ -639,4 +678,12 @@ per categoria:
 
 ```bash
 .venv/Scripts/python tests/misura_golden.py
+```
+
+Con `--vero` aggiunge lo stadio a pagamento, la risoluzione con il modello delle
+impostazioni (circa 0,22 dollari la prima volta, poi le decisioni stanno in cache
+finche' il prompt non cambia):
+
+```bash
+.venv/Scripts/python tests/misura_golden.py --vero
 ```

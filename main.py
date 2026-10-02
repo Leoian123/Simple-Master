@@ -73,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     prep.add_argument("--no-consolidate", action="store_true", help="salta il riordino finale dei file")
     prep.add_argument("--no-batch", action="store_true", help="estrazione immediata a prezzo pieno invece del Batch API a meta' prezzo")
     prep.add_argument("--no-tidy", action="store_true", help="salta il riordino del glossario dopo la preparazione")
+    prep.add_argument("--no-resolve", action="store_true",
+                      help="non decide quale testo vale dove due manuali si toccano: le versioni restano una dopo l'altra")
     prep.add_argument("--altra-edizione", action="store_true",
                       help="fonde il manuale anche se e' di un'edizione diversa da quella della campagna (di norma viene rifiutato)")
     prep.add_argument("--tidy-glossary", action="store_true",
@@ -188,7 +190,7 @@ def _run(args: argparse.Namespace, log: logging.Logger) -> int:
 
         try:
             report = preparer.run(args.prepare, mode=args.mode, pages=args.pages, consolidate=not args.no_consolidate,
-                                  tidy=not args.no_tidy, other_edition=args.altra_edizione)
+                                  tidy=not args.no_tidy, other_edition=args.altra_edizione, resolve=not args.no_resolve)
         except EditionMismatch as exc:
             print(f"\n{exc}")
             return 2

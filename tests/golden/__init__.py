@@ -190,15 +190,51 @@ def snapshot(campaign: Campaign) -> dict[str, Any]:
 # --- gli stadi della preparazione, senza chiamate -----------------------------------
 
 
-def apply_staged(campaign: Campaign, manual: dict[str, Any]) -> None:
+def apply_staged(campaign: Campaign, manual: dict[str, Any], preparer: Any = None, resolve: bool = False) -> Any:
     """Fonde un manuale del dataset con la preparazione vera, dal punto in cui l'estrazione ha
-    gia' prodotto i blocchi: spazio di lavoro del manuale, composizione della campagna, paternita'."""
+    gia' prodotto i blocchi: spazio di lavoro del manuale, composizione della campagna, paternita'.
+    Con `resolve` decide anche quale testo vale dove due manuali si toccano: servono un `preparer`
+    con un client, e si paga. Ritorna il resoconto della preparazione."""
     from master.prepare import Preparer, PrepReport
 
     meta = manual["meta"]
     blocks = [(f"blocco_{i:03d}_p{b['pagine'][0]}-{b['pagine'][1]}.json", f"pagine {b['pagine'][0]}-{b['pagine'][1]}", b)
               for i, b in enumerate(manual["blocchi"], start=1)]
-    Preparer(campaign).assimilate(meta["chiave"], manual["nome"] + ".md", blocks, PrepReport(source=meta["titolo"]), meta=meta)
+    report = PrepReport(source=meta["titolo"])
+    (preparer or Preparer(campaign)).assimilate(meta["chiave"], manual["nome"] + ".md", blocks, report, meta=meta, resolve=resolve)
+    return report
+
+
+def predicted_relations(campaign: Campaign, steps: list[dict[str, Any]], cases: dict[str, Any],
+                        manual: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Dagli incontri decisi dalla risoluzione a cio' che si e' concluso per ogni caso: `rapporto` (nella forma
+    di `score_relations`), `dichiarato`, `spareggio`. Una sezione nuova e' tale se nessuno dei suoi incontri con
+    altre sezioni ha trovato un rapporto; una ripresa parola per parola la riconosce gia' la composizione."""
+    from master.lineage import Lineage
+
+    key = manual["meta"]["chiave"]
+    mine = [s for s in steps if s["manuale"] == key]
+    lineage = Lineage(campaign)
+    out: dict[str, dict[str, Any]] = {}
+    for case in cases["casi"]:
+        source = case["nuova"]["titolo"]
+        if case["esistente"]:
+            hit = next((s for s in mine if s["sezione"] == source and (s["file"], s["titolo"]) == key_of(case["esistente"])), None)
+            reprise = any(p.get("manuale") == key and p.get("ripresa") for p in lineage.parents(*key_of(case["esistente"])))
+            out[case["id"]] = hit or {"rapporto": "identica" if reprise else "-"}
+        else:
+            touched = [s for s in mine if s["sezione"] == source and s["trasversale"] and s["rapporto"] != "nessuno"]
+            out[case["id"]] = touched[0] if touched else {"rapporto": "nuova"}
+    return out
+
+
+def score_declared(predicted: dict[str, dict[str, Any]], cases: dict[str, Any]) -> dict[str, Any]:
+    """Dove il dataset dice se la correzione e' dichiarata o no: quante volte la risoluzione concorda, e se
+    ogni correzione non dichiarata e' rimasta segnata come spareggio."""
+    known = [c for c in cases["casi"] if isinstance(c.get("dichiarato"), bool)]
+    wrong = sorted(c["id"] for c in known if bool(predicted.get(c["id"], {}).get("dichiarato")) != c["dichiarato"])
+    unmarked = sorted(c["id"] for c in cases["casi"] if c.get("spareggio") and not predicted.get(c["id"], {}).get("spareggio"))
+    return {"casi": len(known), "giusti": len(known) - len(wrong), "sbagliati": wrong, "spareggi_non_segnati": unmarked}
 
 
 def found_candidates(campaign: Campaign, manual: dict[str, Any]) -> set[tuple[Key, Key]]:

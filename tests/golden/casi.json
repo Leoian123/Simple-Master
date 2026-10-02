@@ -1,228 +1,757 @@
 {
  "nota": "Casi piantati nell'espansione finta. Ogni caso dice che rapporto c'e' tra una sezione dell'espansione (`nuova`) e una del manuale base (`esistente`), e come deve presentarsi la sezione in vigore (`vigente`) a preparazione finita. `deve` e `non_deve` sono espressioni regolari cercate nel testo normalizzato (minuscole, − come -, × come x). Con `entro_taglio` il testo deve stare nella parte che il master legge davvero (2.500 caratteri per le regole, 700 per l'ambientazione). `non_deve` vale su tutta la sezione per la meccanica e solo entro il taglio per l'ambientazione, dove la storia passata puo' restare piu' sotto. I casi veri finiti in quarantena vanno aggiunti qui: un dataset solo inventato misura solo cio' che chi l'ha scritto ha immaginato.",
- "spareggio": "Quando due testi sono incompatibili e nessuno dichiara il rapporto: prevale il piu' specifico, a parita' il piu' recente. Il caso resta segnato nel registro.",
+ "spareggio": "Quando il testo nuovo corregge o contraddice quello in vigore senza dichiararlo, prevale il piu' recente e la decisione resta segnata nel registro. Tra `sostituisce` non dichiarato e `contraddice` il confine e' sottile (una regola riscritta con altri numeri, un numero diverso detto di passaggio): l'azione e' la stessa, quindi per questi casi valgono entrambe le etichette.",
  "casi": [
   {
-   "id": "A1", "categoria": "nuova", "tipi": ["nuova"],
-   "nuova": {"file": "meccanica/regole.md", "titolo": "Vapori tossici"}, "esistente": null,
-   "vigente": {"file": "meccanica/regole.md", "titolo": "Vapori tossici"},
-   "deve": ["prova di tempra", "intossicato"]
+   "id": "A1",
+   "categoria": "nuova",
+   "tipi": [
+    "nuova"
+   ],
+   "nuova": {
+    "file": "meccanica/regole.md",
+    "titolo": "Vapori tossici"
+   },
+   "esistente": null,
+   "vigente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Vapori tossici"
+   },
+   "deve": [
+    "prova di tempra",
+    "intossicato"
+   ]
   },
   {
-   "id": "A2", "categoria": "nuova", "tipi": ["nuova"],
-   "nuova": {"file": "ambientazione/mondo.md", "titolo": "Fornaci Basse"}, "esistente": null,
-   "vigente": {"file": "ambientazione/mondo.md", "titolo": "Fornaci Basse"},
-   "deve": ["livelli sotterranei"]
+   "id": "A2",
+   "categoria": "nuova",
+   "tipi": [
+    "nuova"
+   ],
+   "nuova": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Fornaci Basse"
+   },
+   "esistente": null,
+   "vigente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Fornaci Basse"
+   },
+   "deve": [
+    "livelli sotterranei"
+   ]
   },
   {
-   "id": "A3", "categoria": "nuova", "tipi": ["nuova"],
-   "nuova": {"file": "meccanica/creature.md", "titolo": "Verme di scoria"}, "esistente": null,
-   "vigente": {"file": "meccanica/creature.md", "titolo": "Verme di scoria"},
-   "deve": ["punti ferita 9", "1d6\\+1"]
+   "id": "A3",
+   "categoria": "nuova",
+   "tipi": [
+    "nuova"
+   ],
+   "nuova": {
+    "file": "meccanica/creature.md",
+    "titolo": "Verme di scoria"
+   },
+   "esistente": null,
+   "vigente": {
+    "file": "meccanica/creature.md",
+    "titolo": "Verme di scoria"
+   },
+   "deve": [
+    "punti ferita 9",
+    "1d6\\+1"
+   ]
   },
   {
-   "id": "B1", "categoria": "identica", "tipi": ["identica"],
-   "nuova": {"file": "meccanica/regole.md", "titolo": "Prove"},
-   "esistente": {"file": "meccanica/regole.md", "titolo": "Prove"},
-   "vigente": {"file": "meccanica/regole.md", "titolo": "Prove"},
-   "deve": ["2d6", "doppio 6"], "non_cresce": true,
+   "id": "B1",
+   "categoria": "identica",
+   "tipi": [
+    "identica"
+   ],
+   "nuova": {
+    "file": "meccanica/regole.md",
+    "titolo": "Prove"
+   },
+   "esistente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Prove"
+   },
+   "vigente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Prove"
+   },
+   "deve": [
+    "2d6",
+    "doppio 6"
+   ],
+   "non_cresce": true,
    "nota": "Ripresa parola per parola."
   },
   {
-   "id": "B2", "categoria": "identica", "tipi": ["identica"],
-   "nuova": {"file": "meccanica/creazione-pg.md", "titolo": "Caratteristiche"},
-   "esistente": {"file": "meccanica/creazione-pg.md", "titolo": "Caratteristiche"},
-   "vigente": {"file": "meccanica/creazione-pg.md", "titolo": "Caratteristiche"},
-   "deve": ["riflessi", "tempra", "ingegno", "presenza"], "non_cresce": true,
+   "id": "B2",
+   "categoria": "identica",
+   "tipi": [
+    "identica"
+   ],
+   "nuova": {
+    "file": "meccanica/creazione-pg.md",
+    "titolo": "Caratteristiche"
+   },
+   "esistente": {
+    "file": "meccanica/creazione-pg.md",
+    "titolo": "Caratteristiche"
+   },
+   "vigente": {
+    "file": "meccanica/creazione-pg.md",
+    "titolo": "Caratteristiche"
+   },
+   "deve": [
+    "riflessi",
+    "tempra",
+    "ingegno",
+    "presenza"
+   ],
+   "non_cresce": true,
    "nota": "Stesso contenuto con altre parole: non deve raddoppiare la sezione."
   },
   {
-   "id": "C1", "categoria": "estende", "tipi": ["estende"],
-   "nuova": {"file": "meccanica/regole.md", "titolo": "Condizioni"},
-   "esistente": {"file": "meccanica/regole.md", "titolo": "Condizioni"},
-   "vigente": {"file": "meccanica/regole.md", "titolo": "Condizioni"},
-   "deve": ["intossicato", "stordito", "ustionato", "assordato"]
+   "id": "C1",
+   "categoria": "estende",
+   "tipi": [
+    "estende"
+   ],
+   "nuova": {
+    "file": "meccanica/regole.md",
+    "titolo": "Condizioni"
+   },
+   "esistente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Condizioni"
+   },
+   "vigente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Condizioni"
+   },
+   "deve": [
+    "intossicato",
+    "stordito",
+    "ustionato",
+    "assordato"
+   ]
   },
   {
-   "id": "C2", "categoria": "estende", "tipi": ["estende"],
-   "nuova": {"file": "meccanica/creazione-pg.md", "titolo": "Mestieri"},
-   "esistente": {"file": "meccanica/creazione-pg.md", "titolo": "Mestieri"},
-   "vigente": {"file": "meccanica/creazione-pg.md", "titolo": "Mestieri"},
-   "deve": ["scafandrista", "fuochista", "meccanico", "contrabbandiere", "cronista"]
+   "id": "C2",
+   "categoria": "estende",
+   "tipi": [
+    "estende"
+   ],
+   "nuova": {
+    "file": "meccanica/creazione-pg.md",
+    "titolo": "Mestieri"
+   },
+   "esistente": {
+    "file": "meccanica/creazione-pg.md",
+    "titolo": "Mestieri"
+   },
+   "vigente": {
+    "file": "meccanica/creazione-pg.md",
+    "titolo": "Mestieri"
+   },
+   "deve": [
+    "scafandrista",
+    "fuochista",
+    "meccanico",
+    "contrabbandiere",
+    "cronista"
+   ]
   },
   {
-   "id": "C3", "categoria": "estende", "tipi": ["estende"],
-   "nuova": {"file": "ambientazione/mondo.md", "titolo": "Gilda dei Fuochisti"},
-   "esistente": {"file": "ambientazione/mondo.md", "titolo": "Gilda dei Fuochisti"},
-   "vigente": {"file": "ambientazione/mondo.md", "titolo": "Gilda dei Fuochisti"},
-   "deve": ["seconda sede", "irma vossel", "vedove"]
+   "id": "C3",
+   "categoria": "estende",
+   "tipi": [
+    "estende"
+   ],
+   "nuova": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Gilda dei Fuochisti"
+   },
+   "esistente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Gilda dei Fuochisti"
+   },
+   "vigente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Gilda dei Fuochisti"
+   },
+   "deve": [
+    "seconda sede",
+    "irma vossel",
+    "vedove"
+   ]
   },
   {
-   "id": "C4", "categoria": "estende", "tipi": ["estende"],
-   "nuova": {"file": "ambientazione/npc.md", "titolo": "Irma Vossel"},
-   "esistente": {"file": "ambientazione/npc.md", "titolo": "Irma Vossel"},
-   "vigente": {"file": "ambientazione/npc.md", "titolo": "Irma Vossel"},
-   "deve": ["canale nero", "58 anni"]
+   "id": "C4",
+   "categoria": "estende",
+   "tipi": [
+    "estende"
+   ],
+   "nuova": {
+    "file": "ambientazione/npc.md",
+    "titolo": "Irma Vossel"
+   },
+   "esistente": {
+    "file": "ambientazione/npc.md",
+    "titolo": "Irma Vossel"
+   },
+   "vigente": {
+    "file": "ambientazione/npc.md",
+    "titolo": "Irma Vossel"
+   },
+   "deve": [
+    "canale nero",
+    "58 anni"
+   ]
   },
   {
-   "id": "D1", "categoria": "sostituzione dichiarata", "tipi": ["sostituisce"], "dichiarato": true,
-   "nuova": {"file": "meccanica/regole.md", "titolo": "Iniziativa"},
-   "esistente": {"file": "meccanica/regole.md", "titolo": "Iniziativa"},
-   "vigente": {"file": "meccanica/regole.md", "titolo": "Iniziativa"},
-   "deve": ["2d6 \\+ riflessi", "simultaneamente"],
-   "non_deve": ["1d6 \\+ riflessi", "si ritira"],
+   "id": "D1",
+   "categoria": "sostituzione dichiarata",
+   "tipi": [
+    "sostituisce"
+   ],
+   "dichiarato": true,
+   "nuova": {
+    "file": "meccanica/regole.md",
+    "titolo": "Iniziativa"
+   },
+   "esistente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Iniziativa"
+   },
+   "vigente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Iniziativa"
+   },
+   "deve": [
+    "2d6 \\+ riflessi",
+    "simultaneamente"
+   ],
+   "non_deve": [
+    "1d6 \\+ riflessi",
+    "si ritira"
+   ],
    "tocca_dadi": true
   },
   {
-   "id": "D2", "categoria": "sostituzione dichiarata", "tipi": ["sostituisce"], "dichiarato": true,
-   "nuova": {"file": "meccanica/oggetti.md", "titolo": "Armature"},
-   "esistente": {"file": "meccanica/oggetti.md", "titolo": "Armature"},
-   "vigente": {"file": "meccanica/oggetti.md", "titolo": "Armature"},
-   "deve": ["(armatura\\s+|\\|\\s*)4\\b", "giacca di cuoio", "grembiule"],
-   "non_deve": ["(armatura\\s+|\\|\\s*)5\\b"],
+   "id": "D2",
+   "categoria": "sostituzione dichiarata",
+   "tipi": [
+    "sostituisce"
+   ],
+   "dichiarato": true,
+   "nuova": {
+    "file": "meccanica/oggetti.md",
+    "titolo": "Armature"
+   },
+   "esistente": {
+    "file": "meccanica/oggetti.md",
+    "titolo": "Armature"
+   },
+   "vigente": {
+    "file": "meccanica/oggetti.md",
+    "titolo": "Armature"
+   },
+   "deve": [
+    "(armatura\\s+|\\|\\s*)4\\b",
+    "giacca di cuoio",
+    "grembiule"
+   ],
+   "non_deve": [
+    "(armatura\\s+|\\|\\s*)5\\b"
+   ],
    "nota": "Errata su una riga di tabella: le altre righe devono restare."
   },
   {
-   "id": "D3", "categoria": "sostituzione dichiarata", "tipi": ["sostituisce"], "dichiarato": true,
-   "nuova": {"file": "meccanica/regole.md", "titolo": "Avanzamento"},
-   "esistente": {"file": "meccanica/regole.md", "titolo": "Avanzamento"},
-   "vigente": {"file": "meccanica/regole.md", "titolo": "Avanzamento"},
-   "deve": ["nuovo valore x 4", "nuovo valore x 2", "3 punti esperienza"],
-   "non_deve": ["nuovo valore x 5"]
+   "id": "D3",
+   "categoria": "sostituzione dichiarata",
+   "tipi": [
+    "sostituisce"
+   ],
+   "dichiarato": true,
+   "nuova": {
+    "file": "meccanica/regole.md",
+    "titolo": "Avanzamento"
+   },
+   "esistente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Avanzamento"
+   },
+   "vigente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Avanzamento"
+   },
+   "deve": [
+    "nuovo valore x 4",
+    "nuovo valore x 2",
+    "3 punti esperienza"
+   ],
+   "non_deve": [
+    "nuovo valore x 5"
+   ]
   },
   {
-   "id": "E1", "categoria": "sostituzione non dichiarata", "tipi": ["sostituisce"], "dichiarato": false,
-   "nuova": {"file": "meccanica/regole.md", "titolo": "Ferite e guarigione"},
-   "esistente": {"file": "meccanica/regole.md", "titolo": "Ferite e guarigione"},
-   "vigente": {"file": "meccanica/regole.md", "titolo": "Ferite e guarigione"},
-   "deve": ["12 \\+ tempra", "2 punti ferita per giorno", "fuori combattimento"],
-   "non_deve": ["10 \\+ tempra", "1 punto ferita per giorno"],
-   "nota": "La regola intera riscritta con numeri diversi, senza dire che sostituisce."
+   "id": "E1",
+   "categoria": "sostituzione non dichiarata",
+   "tipi": [
+    "sostituisce",
+    "contraddice"
+   ],
+   "dichiarato": false,
+   "nuova": {
+    "file": "meccanica/regole.md",
+    "titolo": "Ferite e guarigione"
+   },
+   "esistente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Ferite e guarigione"
+   },
+   "vigente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Ferite e guarigione"
+   },
+   "deve": [
+    "12 \\+ tempra",
+    "2 punti ferita per giorno",
+    "fuori combattimento"
+   ],
+   "non_deve": [
+    "10 \\+ tempra",
+    "1 punto ferita per giorno"
+   ],
+   "nota": "La regola intera riscritta con numeri diversi, senza dire che sostituisce.",
+   "spareggio": true
   },
   {
-   "id": "E2", "categoria": "sostituzione non dichiarata", "tipi": ["sostituisce"], "dichiarato": false,
-   "nuova": {"file": "meccanica/creature.md", "titolo": "Automa di guardia"},
-   "esistente": {"file": "meccanica/creature.md", "titolo": "Automa di guardia"},
-   "vigente": {"file": "meccanica/creature.md", "titolo": "Automa di guardia"},
-   "deve": ["\\b22\\b", "armatura 3", "sirena"],
-   "non_deve": ["\\b18\\b", "armatura 2"]
+   "id": "E2",
+   "categoria": "sostituzione non dichiarata",
+   "tipi": [
+    "sostituisce",
+    "contraddice"
+   ],
+   "dichiarato": false,
+   "nuova": {
+    "file": "meccanica/creature.md",
+    "titolo": "Automa di guardia"
+   },
+   "esistente": {
+    "file": "meccanica/creature.md",
+    "titolo": "Automa di guardia"
+   },
+   "vigente": {
+    "file": "meccanica/creature.md",
+    "titolo": "Automa di guardia"
+   },
+   "deve": [
+    "\\b22\\b",
+    "armatura 3",
+    "sirena"
+   ],
+   "non_deve": [
+    "\\b18\\b",
+    "armatura 2"
+   ],
+   "spareggio": true
   },
   {
-   "id": "E3", "categoria": "sostituzione non dichiarata", "tipi": ["sostituisce"], "dichiarato": false,
-   "nuova": {"file": "ambientazione/mondo.md", "titolo": "Consiglio delle Valvole"},
-   "esistente": {"file": "ambientazione/mondo.md", "titolo": "Consiglio delle Valvole"},
-   "vigente": {"file": "ambientazione/mondo.md", "titolo": "Consiglio delle Valvole"},
-   "deve": ["nove consiglieri"], "entro_taglio": true,
-   "non_deve": ["sette consiglieri"],
+   "id": "E3",
+   "categoria": "sostituzione non dichiarata",
+   "tipi": [
+    "sostituisce",
+    "contraddice"
+   ],
+   "dichiarato": null,
+   "nuova": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Consiglio delle Valvole"
+   },
+   "esistente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Consiglio delle Valvole"
+   },
+   "vigente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Consiglio delle Valvole"
+   },
+   "deve": [
+    "nove consiglieri"
+   ],
+   "entro_taglio": true,
+   "non_deve": [
+    "sette consiglieri"
+   ],
    "nota": "Il mondo e' andato avanti: lo stato attuale deve stare in cima."
   },
   {
-   "id": "F1", "categoria": "variante opzionale", "tipi": ["variante"],
-   "nuova": {"file": "meccanica/regole.md", "titolo": "Combattimento"},
-   "esistente": {"file": "meccanica/regole.md", "titolo": "Combattimento"},
-   "vigente": {"file": "meccanica/regole.md", "titolo": "Combattimento"},
-   "deve": ["colp\\w+ mirat\\w+", "opzional", "margine di successo", "copertura"],
-   "ordine": [["margine di successo", "mirat"]]
+   "id": "F1",
+   "categoria": "variante opzionale",
+   "tipi": [
+    "variante"
+   ],
+   "nuova": {
+    "file": "meccanica/regole.md",
+    "titolo": "Combattimento"
+   },
+   "esistente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Combattimento"
+   },
+   "vigente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Combattimento"
+   },
+   "deve": [
+    "colp\\w+ mirat\\w+",
+    "opzional",
+    "margine di successo",
+    "copertura"
+   ],
+   "ordine": [
+    [
+     "margine di successo",
+     "mirat"
+    ]
+   ]
   },
   {
-   "id": "F2", "categoria": "variante opzionale", "tipi": ["variante"],
-   "nuova": {"file": "meccanica/regole.md", "titolo": "Pressione"},
-   "esistente": {"file": "meccanica/regole.md", "titolo": "Pressione"},
-   "vigente": {"file": "meccanica/regole.md", "titolo": "Pressione"},
-   "deve": ["2d6", "3d6", "opzional"],
-   "ordine": [["2d6", "3d6"]],
+   "id": "F2",
+   "categoria": "variante opzionale",
+   "tipi": [
+    "variante"
+   ],
+   "nuova": {
+    "file": "meccanica/regole.md",
+    "titolo": "Pressione"
+   },
+   "esistente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Pressione"
+   },
+   "vigente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Pressione"
+   },
+   "deve": [
+    "2d6",
+    "3d6",
+    "opzional"
+   ],
+   "ordine": [
+    [
+     "2d6",
+     "3d6"
+    ]
+   ],
    "nota": "La variante non sostituisce: la regola standard resta in vigore e viene prima."
   },
   {
-   "id": "F3", "categoria": "variante opzionale", "tipi": ["variante"],
-   "nuova": {"file": "meccanica/creazione-pg.md", "titolo": "Punti iniziali"},
-   "esistente": {"file": "meccanica/creazione-pg.md", "titolo": "Punti iniziali"},
-   "vigente": {"file": "meccanica/creazione-pg.md", "titolo": "Punti iniziali"},
-   "deve": ["8 punti", "12 punti", "veterani"],
-   "ordine": [["8 punti", "12 punti"]]
+   "id": "F3",
+   "categoria": "variante opzionale",
+   "tipi": [
+    "variante"
+   ],
+   "nuova": {
+    "file": "meccanica/creazione-pg.md",
+    "titolo": "Punti iniziali"
+   },
+   "esistente": {
+    "file": "meccanica/creazione-pg.md",
+    "titolo": "Punti iniziali"
+   },
+   "vigente": {
+    "file": "meccanica/creazione-pg.md",
+    "titolo": "Punti iniziali"
+   },
+   "deve": [
+    "8 punti",
+    "12 punti",
+    "veterani"
+   ],
+   "ordine": [
+    [
+     "8 punti",
+     "12 punti"
+    ]
+   ]
   },
   {
-   "id": "G1", "categoria": "contraddizione senza segnale", "tipi": ["contraddice"], "spareggio": true,
-   "nuova": {"file": "ambientazione/mondo.md", "titolo": "Calderaia"},
-   "esistente": {"file": "ambientazione/mondo.md", "titolo": "Calderaia"},
-   "vigente": {"file": "ambientazione/mondo.md", "titolo": "Calderaia"},
-   "deve": ["60\\.000"], "entro_taglio": true,
-   "non_deve": ["40\\.000"],
-   "nota": "Un numero diverso detto di passaggio. Vince il piu' recente, per spareggio."
+   "id": "G1",
+   "categoria": "contraddizione senza segnale",
+   "tipi": [
+    "contraddice",
+    "sostituisce"
+   ],
+   "spareggio": true,
+   "nuova": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Calderaia"
+   },
+   "esistente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Calderaia"
+   },
+   "vigente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Calderaia"
+   },
+   "deve": [
+    "60\\.000"
+   ],
+   "entro_taglio": true,
+   "non_deve": [
+    "40\\.000"
+   ],
+   "nota": "Un numero diverso detto di passaggio. Vince il piu' recente, per spareggio.",
+   "dichiarato": false
   },
   {
-   "id": "G2", "categoria": "contraddizione senza segnale", "tipi": ["contraddice"], "spareggio": true,
-   "nuova": {"file": "ambientazione/npc.md", "titolo": "Tobia Renn"},
-   "esistente": {"file": "ambientazione/npc.md", "titolo": "Tobia Renn"},
-   "vigente": {"file": "ambientazione/npc.md", "titolo": "Tobia Renn"},
-   "deve": ["fratello"], "entro_taglio": true,
-   "non_deve": ["figlio unico"]
+   "id": "G2",
+   "categoria": "contraddizione senza segnale",
+   "tipi": [
+    "contraddice",
+    "sostituisce"
+   ],
+   "spareggio": true,
+   "nuova": {
+    "file": "ambientazione/npc.md",
+    "titolo": "Tobia Renn"
+   },
+   "esistente": {
+    "file": "ambientazione/npc.md",
+    "titolo": "Tobia Renn"
+   },
+   "vigente": {
+    "file": "ambientazione/npc.md",
+    "titolo": "Tobia Renn"
+   },
+   "deve": [
+    "fratello"
+   ],
+   "entro_taglio": true,
+   "non_deve": [
+    "figlio unico"
+   ],
+   "dichiarato": false
   },
   {
-   "id": "G3", "categoria": "contraddizione senza segnale", "tipi": ["contraddice"], "spareggio": true,
-   "nuova": {"file": "ambientazione/mondo.md", "titolo": "Quartiere delle Fornaci"},
-   "esistente": {"file": "ambientazione/mondo.md", "titolo": "Quartiere delle Fornaci"},
-   "vigente": {"file": "ambientazione/mondo.md", "titolo": "Quartiere delle Fornaci"},
-   "deve": ["amministrato dalla gilda"], "entro_taglio": true,
-   "non_deve": ["amministrato direttamente dal consiglio"]
+   "id": "G3",
+   "categoria": "contraddizione senza segnale",
+   "tipi": [
+    "contraddice",
+    "sostituisce"
+   ],
+   "spareggio": true,
+   "nuova": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Quartiere delle Fornaci"
+   },
+   "esistente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Quartiere delle Fornaci"
+   },
+   "vigente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Quartiere delle Fornaci"
+   },
+   "deve": [
+    "amministrato dalla gilda"
+   ],
+   "entro_taglio": true,
+   "non_deve": [
+    "amministrato direttamente dal consiglio"
+   ],
+   "dichiarato": false
   },
   {
-   "id": "H1", "categoria": "titolo diverso", "tipi": ["sostituisce"], "dichiarato": true,
-   "nuova": {"file": "meccanica/regole.md", "titolo": "Nuove regole per le officine"},
-   "esistente": {"file": "meccanica/regole.md", "titolo": "Riparazioni"},
-   "vigente": {"file": "meccanica/regole.md", "titolo": "Riparazioni"},
-   "deve": ["difficile \\(11\\)", "pezzi di ricambio"],
-   "non_deve": ["media \\(9\\)"],
+   "id": "H1",
+   "categoria": "titolo diverso",
+   "tipi": [
+    "sostituisce"
+   ],
+   "dichiarato": true,
+   "nuova": {
+    "file": "meccanica/regole.md",
+    "titolo": "Nuove regole per le officine"
+   },
+   "esistente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Riparazioni"
+   },
+   "vigente": {
+    "file": "meccanica/regole.md",
+    "titolo": "Riparazioni"
+   },
+   "deve": [
+    "difficile \\(11\\)",
+    "pezzi di ricambio"
+   ],
+   "non_deve": [
+    "media \\(9\\)"
+   ],
    "nota": "L'errata sta dentro una sezione che parla d'altro e ha un altro titolo."
   },
   {
-   "id": "H2", "categoria": "titolo diverso", "tipi": ["sostituisce", "estende"], "dichiarato": false,
-   "nuova": {"file": "ambientazione/mondo.md", "titolo": "Le gilde dopo il 1888"},
-   "esistente": {"file": "ambientazione/mondo.md", "titolo": "Gilda dei Meccanici"},
-   "vigente": {"file": "ambientazione/mondo.md", "titolo": "Gilda dei Meccanici"},
-   "deve": ["lena faur"], "entro_taglio": true,
-   "non_deve": ["guidata dal maestro aldo brenn"]
+   "id": "H2",
+   "categoria": "titolo diverso",
+   "tipi": [
+    "sostituisce",
+    "estende"
+   ],
+   "dichiarato": null,
+   "nuova": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Le gilde dopo il 1888"
+   },
+   "esistente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Gilda dei Meccanici"
+   },
+   "vigente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Gilda dei Meccanici"
+   },
+   "deve": [
+    "lena faur"
+   ],
+   "entro_taglio": true,
+   "non_deve": [
+    "guidata dal maestro aldo brenn"
+   ]
   },
   {
-   "id": "I1", "categoria": "oltre il taglio", "tipi": ["sostituisce"], "dichiarato": true,
-   "nuova": {"file": "meccanica/oggetti.md", "titolo": "Armi"},
-   "esistente": {"file": "meccanica/oggetti.md", "titolo": "Armi"},
-   "vigente": {"file": "meccanica/oggetti.md", "titolo": "Armi"},
-   "deve": ["2d6\\+1"], "entro_taglio": true,
-   "non_deve": ["2d6\\+3"],
+   "id": "I1",
+   "categoria": "oltre il taglio",
+   "tipi": [
+    "sostituisce"
+   ],
+   "dichiarato": true,
+   "nuova": {
+    "file": "meccanica/oggetti.md",
+    "titolo": "Armi"
+   },
+   "esistente": {
+    "file": "meccanica/oggetti.md",
+    "titolo": "Armi"
+   },
+   "vigente": {
+    "file": "meccanica/oggetti.md",
+    "titolo": "Armi"
+   },
+   "deve": [
+    "2d6\\+1"
+   ],
+   "entro_taglio": true,
+   "non_deve": [
+    "2d6\\+3"
+   ],
    "nota": "La sezione base supera il taglio: una correzione accodata in fondo il master non la legge."
   },
   {
-   "id": "L1", "categoria": "falso allarme", "tipi": ["nuova"],
-   "nuova": {"file": "ambientazione/mondo.md", "titolo": "Valvola Rossa"}, "esistente": null,
-   "vigente": {"file": "ambientazione/mondo.md", "titolo": "Valvola Rossa"},
-   "deve": ["berta malm"],
-   "candidati_falsi": [{"file": "ambientazione/mondo.md", "titolo": "Consiglio delle Valvole"}],
-   "altrove": [{"file": "ambientazione/mondo.md", "titolo": "Consiglio delle Valvole", "non_deve": ["berta malm"]}],
+   "id": "L1",
+   "categoria": "falso allarme",
+   "tipi": [
+    "nuova"
+   ],
+   "nuova": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Valvola Rossa"
+   },
+   "esistente": null,
+   "vigente": {
+    "file": "ambientazione/mondo.md",
+    "titolo": "Valvola Rossa"
+   },
+   "deve": [
+    "berta malm"
+   ],
+   "candidati_falsi": [
+    {
+     "file": "ambientazione/mondo.md",
+     "titolo": "Consiglio delle Valvole"
+    }
+   ],
+   "altrove": [
+    {
+     "file": "ambientazione/mondo.md",
+     "titolo": "Consiglio delle Valvole",
+     "non_deve": [
+      "berta malm"
+     ]
+    }
+   ],
    "nota": "Nome simile, soggetto diverso: una taverna, non il governo."
   },
   {
-   "id": "L2", "categoria": "falso allarme", "tipi": ["nuova"],
-   "nuova": {"file": "meccanica/oggetti.md", "titolo": "Manometro da tasca"}, "esistente": null,
-   "vigente": {"file": "meccanica/oggetti.md", "titolo": "Manometro da tasca"},
-   "deve": ["12 scellini"],
-   "candidati_falsi": [{"file": "meccanica/regole.md", "titolo": "Pressione"}, {"file": "meccanica/regole.md", "titolo": "Riparazioni"}],
+   "id": "L2",
+   "categoria": "falso allarme",
+   "tipi": [
+    "nuova"
+   ],
+   "nuova": {
+    "file": "meccanica/oggetti.md",
+    "titolo": "Manometro da tasca"
+   },
+   "esistente": null,
+   "vigente": {
+    "file": "meccanica/oggetti.md",
+    "titolo": "Manometro da tasca"
+   },
+   "deve": [
+    "12 scellini"
+   ],
+   "candidati_falsi": [
+    {
+     "file": "meccanica/regole.md",
+     "titolo": "Pressione"
+    },
+    {
+     "file": "meccanica/regole.md",
+     "titolo": "Riparazioni"
+    }
+   ],
    "altrove": [
-    {"file": "meccanica/regole.md", "titolo": "Pressione", "non_deve": ["manometro"]},
-    {"file": "meccanica/regole.md", "titolo": "Riparazioni", "non_deve": ["manometro"]}
+    {
+     "file": "meccanica/regole.md",
+     "titolo": "Pressione",
+     "non_deve": [
+      "manometro"
+     ]
+    },
+    {
+     "file": "meccanica/regole.md",
+     "titolo": "Riparazioni",
+     "non_deve": [
+      "manometro"
+     ]
+    }
    ],
    "nota": "Un oggetto che nomina due regole senza modificarle."
   }
  ],
  "glossario": [
   {
-   "id": "J1", "term": "Irma Vossel", "file": "ambientazione/npc.md", "descrizione": "gilda",
+   "id": "J1",
+   "term": "Irma Vossel",
+   "file": "ambientazione/npc.md",
+   "descrizione": "gilda",
    "nota": "L'espansione ridefinisce la voce puntando a un altro file: il master non troverebbe piu' la sua sezione."
   },
   {
-   "id": "J2", "term": "Pressione", "file": "meccanica/regole.md", "descrizione": "scoppio",
+   "id": "J2",
+   "term": "Pressione",
+   "file": "meccanica/regole.md",
+   "descrizione": "scoppio",
    "nota": "L'espansione porta una descrizione piu' povera: non deve prendere il posto di quella buona."
   }
  ],
- "manuali_rifiutati": ["altra-edizione"]
+ "manuali_rifiutati": [
+  "altra-edizione"
+ ]
 }

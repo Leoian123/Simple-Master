@@ -90,6 +90,9 @@ class Lineage:
         self.path = campaign.root / PREP_DIR / REGISTRY_NAME
         self.sources = campaign.root / PREP_DIR / SOURCES_DIR
         self.data = self._load()
+        # le parti di ogni sezione composta in questa corsa, per chi deve decidere quale testo vale (resolve.py):
+        # (file, titolo normalizzato) -> {"title", "pieces": [(origine, testo)], "protected"}
+        self.composed: dict[tuple[str, str], dict[str, Any]] = {}
 
     # --- registro ----------------------------------------------------------------------
 
@@ -316,10 +319,12 @@ class Lineage:
                     datum = {}
                 absorbed: dict[str, str | None] = datum.get("assorbiti", {})
                 pieces: list[str] = []
+                origins: list[str] = []  # da dove viene ogni pezzo, nello stesso ordine
                 parents: list[dict[str, Any]] = []
                 if datum.get("campagna"):
                     kept_text = self._kept().file(name).get_section(datum["titolo"]) or ""
                     pieces.append(kept_text.strip())
+                    origins.append(CAMPAIGN_ORIGIN)
                     parents.append({"origine": CAMPAIGN_ORIGIN, "impronta": datum["campagna"]})
                 for key in sorted(set(absorbed) - {k for k, _, _ in found}):  # dentro il testo conservato, senza spazio di lavoro
                     parents.append({"manuale": key, "pagine": manuals.get(key, {}).get("origini", {}).get(name, {}).get(ntitle, []), "assorbito": True})
@@ -339,11 +344,21 @@ class Lineage:
                     else:
                         parents.append({"manuale": key, "impronta": mark, "pagine": pages})
                     pieces.append(body)
+                    origins.append(key)
                 text = "\n\n".join(p for p in pieces if p)
                 if not text:
                     data[ntitle] = datum
                     continue
                 title = cur[0] if cur else datum.get("titolo") or best_title([t for _, t, _ in found])
+                # testo scritto dal giocatore o nato in gioco, senza manuali dentro: la risoluzione non lo tocca
+                self.composed[(name, ntitle)] = {"title": title, "pieces": [(o, p) for o, p in zip(origins, pieces) if p],
+                                                 "protected": bool(datum.get("campagna")) and not absorbed}
+                if cur is not None and datum.get("risoluzione") and datum.get("composta") == fingerprint(text):
+                    datum["genitori"] = parents  # stesse parti di quando la sezione e' stata risolta: il testo risolto resta
+                    data[ntitle] = datum
+                    continue
+                datum.pop("risoluzione", None)
+                datum["composta"] = fingerprint(text)
                 if cur is None:
                     target.set_section(title, text)
                     report.created.append(label)
@@ -405,6 +420,59 @@ class Lineage:
                 continue
             known[term] = {"manuale": key, "impronta": mark}
         return written
+
+    # --- cio' che serve alla risoluzione ----------------------------------------------
+
+    def part(self, key: str, file: str, title: str) -> str:
+        """Il testo di una sezione nello spazio di lavoro di un manuale."""
+        stage = self._stage(key)
+        f = stage.file(file) if stage else None
+        return ((f.get_section(title) if f and f.exists() else None) or "").strip()
+
+    def base_for(self, file: str, title: str) -> dict[str, Any] | None:
+        """Le parti di una sezione della campagna, anche se nessun manuale in lavorazione la compone (una
+        sezione del manuale base adottato, corretta da un'errata scritta altrove). Il testo di partenza e'
+        quello conservato, non quello gia' risolto: una decisione presa si riapplica, non si accumula."""
+        from .sanitize import norm_title
+
+        ntitle = norm_title(title)
+        if (file, ntitle) in self.composed:
+            return self.composed[(file, ntitle)]
+        f = self.campaign.file(file)
+        cur = f.get_section(title) if f.exists() else None
+        if cur is None:
+            return None
+        cur = cur.strip()
+        data = self.data["sezioni"].setdefault(file, {})
+        datum = data.get(ntitle)
+        if datum is None or datum.get("impronta") != fingerprint(cur) or not datum.get("campagna"):
+            self._kept().file(file).set_section(title, cur)
+            adopted = {k: None for k, m in self.data["manuali"].items() if m.get("adottato") and ntitle in m.get("origini", {}).get(file, {})}
+            absorbed = self._absorbed(datum, adopted) if datum else adopted
+            parents = [{"origine": CAMPAIGN_ORIGIN, "impronta": fingerprint(cur)}]
+            parents += [{"manuale": k, "pagine": self.data["manuali"].get(k, {}).get("origini", {}).get(file, {}).get(ntitle, []), "assorbito": True}
+                        for k in sorted(absorbed)]
+            datum = {"titolo": title, "campagna": fingerprint(cur), "assorbiti": absorbed, "impronta": fingerprint(cur),
+                     "composta": fingerprint(cur), "genitori": parents, "atto": "composizione"}
+            data[ntitle] = datum
+            kept = cur
+        else:
+            kept = (self._kept().file(file).get_section(datum["titolo"]) or cur).strip()
+        entry = {"title": title, "pieces": [(CAMPAIGN_ORIGIN, kept)], "protected": not datum.get("assorbiti")}
+        self.composed[(file, ntitle)] = entry
+        return entry
+
+    def resolved(self, file: str, ntitle: str, title: str, text: str, steps: list[dict[str, Any]]) -> bool:
+        """Scrive il testo in vigore di una sezione e registra come ci si e' arrivati. True se e' cambiato."""
+        datum = self.data["sezioni"].setdefault(file, {}).setdefault(ntitle, {"titolo": title})
+        target = self.campaign.file(file)
+        changed = (target.get_section(title) or "").strip() != text.strip()
+        if changed:
+            target.set_section(title, text)
+        datum.update({"impronta": fingerprint(text), "risoluzione": steps})
+        if any(s.get("esito") == "applicata" and s.get("rapporto") in ("identica", "sostituisce", "contraddice") for s in steps):
+            datum["atto"] = "risoluzione"
+        return changed
 
     # --- candidati allo scontro -------------------------------------------------------
 
