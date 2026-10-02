@@ -18,7 +18,7 @@ from golden import apply_staged, apply_today, load_manual, snapshot  # noqa: E40
 from master import Campaign  # noqa: E402
 from master.glossary import GlossaryEntry  # noqa: E402
 from master.lineage import CAMPAIGN_ORIGIN, Lineage, fingerprint  # noqa: E402
-from master.prepare import Preparer, PrepReport  # noqa: E402
+from master.prepare import MANUAL_FILE, EditionMismatch, Preparer, PrepReport  # noqa: E402
 from test_prepare import FakePrepClient, make_pdf  # noqa: E402
 
 RULES = "meccanica/regole.md"
@@ -67,6 +67,17 @@ class TestComposition(LineageCase):
         for manual in (expansion, base):
             apply_today(old_b, manual)
         self.assertNotEqual(snapshot(old_a), snapshot(old_b))
+
+    def test_manual_of_another_edition_is_refused(self) -> None:
+        for name in ("base", "espansione"):
+            apply_staged(self.camp, load_manual(name))
+        before, picture = snapshot(self.camp), Lineage(self.camp).picture()
+        with self.assertRaises(EditionMismatch) as caught:
+            apply_staged(self.camp, load_manual("altra-edizione"))
+        self.assertIn("edizione 2", str(caught.exception))
+        self.assertEqual(snapshot(self.camp), before)
+        self.assertEqual(Lineage(self.camp).picture(), picture)
+        self.assertIn("2d6", self.section(RULES, "Prove"))
 
     def test_every_section_knows_its_parents(self) -> None:
         apply_staged(self.camp, load_manual("espansione"))
@@ -274,6 +285,78 @@ class TestPreparerWithLineage(unittest.TestCase):
     @staticmethod
     def dice_calls(client) -> int:
         return sum(1 for c in client.calls if "PROFILO DEI DADI" in str(c.get("system")))
+
+    def test_publication_data_are_asked_once_and_order_the_manuals(self) -> None:
+        class Older(FakePrepClient):
+            def _create(self, **kwargs):
+                reply = super()._create(**kwargs)
+                for part in reply.content:
+                    part.text = part.text.replace("Danni: arma + Forza.", "Regola del manuale vecchio.")
+                return reply
+
+        newer = FakePrepClient()
+        newer.meta = {"titolo": "Il Compagno", "gioco": "Gioco di prova", "edizione": 5, "anno": 2022}
+        self.run_prep(newer, consolidate=False)
+        first = next(iter(Lineage(self.camp).data["manuali"]))
+        self.assertEqual(len(newer.meta_calls), 1)
+        self.assertIn("Pagina 1", newer.meta_calls[0]["messages"][0]["content"])  # le prime pagine del volume
+        self.assertEqual(json.loads((self.cache / first / MANUAL_FILE).read_text(encoding="utf-8"))["anno"], 2022)
+        self.run_prep(newer, consolidate=False)
+        self.assertEqual(len(newer.meta_calls), 1)  # una volta per manuale: poi sta nella sua cache
+
+        older = Older()
+        older.meta = {"titolo": "Il Manuale Base", "gioco": "Gioco di prova", "edizione": 5, "anno": 2019}
+        other = self.tmp / "base.pdf"
+        make_pdf(other, [f"Altra pagina {i} con regole di combattimento e luoghi" for i in range(1, 5)])
+        self.run_prep(older, pdf=other, consolidate=False)
+        lineage = Lineage(self.camp)
+        second = next(k for k in lineage.data["manuali"] if k != first)
+        self.assertEqual(lineage.manual_order(), [second, first])  # preparato dopo, ma pubblicato prima
+        self.assertEqual((lineage.data["manuali"][second]["titolo"], lineage.data["manuali"][second]["anno"]), ("Il Manuale Base", 2019))
+        body = self.camp.file(RULES).get_section("Combattimento")
+        self.assertTrue(body.startswith("Regola del manuale vecchio.\n\nIniziativa: d20 + Agilita'."), body)
+
+    def test_another_edition_is_refused_before_spending(self) -> None:
+        first = FakePrepClient()
+        first.meta = {"titolo": "Manuale base", "gioco": "Vampiri: la Masquerade", "edizione": 5, "anno": 2018}
+        self.run_prep(first, consolidate=False)
+        before = {f.name: f.read() for f in self.camp.files()}
+
+        other = self.tmp / "ventennale.pdf"
+        make_pdf(other, [f"Altra pagina {i} con regole di combattimento e luoghi" for i in range(1, 5)])
+        clash = FakePrepClient()
+        clash.meta = {"titolo": "Edizione del Ventennale", "gioco": "Vampiri la Masquerade", "edizione": 20, "anno": 2011}
+        with self.assertRaises(EditionMismatch):
+            self.run_prep(clash, pdf=other, consolidate=False)
+        self.assertEqual(clash.calls, [])  # nessuna estrazione pagata
+        self.assertEqual({f.name: f.read() for f in self.camp.files()}, before)
+        self.assertEqual(len(Lineage(self.camp).data["manuali"]), 1)
+
+        self.run_prep(clash, pdf=other, consolidate=False, other_edition=True)  # scelta esplicita: si fonde lo stesso
+        self.assertEqual(len(Lineage(self.camp).data["manuali"]), 2)
+
+        third = self.tmp / "altro-gioco.pdf"
+        make_pdf(third, [f"Terza pagina {i} con regole di combattimento e luoghi" for i in range(1, 5)])
+        unrelated = FakePrepClient()
+        unrelated.meta = {"titolo": "Lupi", "gioco": "Lupi Mannari", "edizione": 3, "anno": 2000}
+        self.run_prep(unrelated, pdf=third, consolidate=False)  # altro gioco: le edizioni non si confrontano
+        self.assertEqual(len(Lineage(self.camp).data["manuali"]), 3)
+
+    def test_missing_publication_data_do_not_stop_the_preparation(self) -> None:
+        class Mute(FakePrepClient):
+            def _create(self, **kwargs):
+                if "DATI DELLA PUBBLICAZIONE" in str(kwargs.get("system")):
+                    raise ConnectionError("rete giu'")
+                return super()._create(**kwargs)
+
+        client = Mute()
+        report = self.run_prep(client, consolidate=False)
+        self.assertTrue(any("dati della pubblicazione non ricavati" in w for w in report.warnings))
+        lineage = Lineage(self.camp)
+        key = next(iter(lineage.data["manuali"]))
+        self.assertNotIn("anno", lineage.data["manuali"][key])  # senza data: conta come il piu' vecchio
+        self.assertFalse((self.cache / key / MANUAL_FILE).exists())  # non in cache: si riprova alla prossima corsa
+        self.assertIn("Combattimento", self.camp.file(RULES).outline())
 
     def test_interrupted_run_leaves_the_campaign_untouched(self) -> None:
         class Breaking(FakePrepClient):

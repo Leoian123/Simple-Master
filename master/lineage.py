@@ -147,11 +147,24 @@ class Lineage:
         entry.update({"nome": name, "variante": variant})
         for part in ("blocchi", "origini", "consolidate"):
             entry.setdefault(part, {})
-        for item in ("titolo", "edizione", "anno"):
+        for item in ("titolo", "gioco", "edizione", "anno"):
             if meta and meta.get(item) is not None:
                 entry[item] = meta[item]
         root.mkdir(parents=True, exist_ok=True)
         return Campaign(root)
+
+    def other_edition(self, key: str, meta: dict[str, Any]) -> dict[str, Any] | None:
+        """Il manuale gia' in campagna con cui `meta` non puo' convivere: stesso gioco, altra edizione.
+        Vale solo quando entrambe le edizioni sono scritte nei volumi: nel dubbio non si rifiuta."""
+        edition, game = meta.get("edizione"), _compact(str(meta.get("gioco") or ""))
+        if type(edition) is not int or not game:
+            return None
+        for other, manual in self.data["manuali"].items():
+            theirs = _compact(str(manual.get("gioco") or ""))
+            if (other != key and type(manual.get("edizione")) is int and manual["edizione"] != edition
+                    and theirs and (game in theirs or theirs in game)):
+                return manual
+        return None
 
     def take_block(self, key: str, block: str, pages: str, data: dict[str, Any]) -> bool:
         """Registra un blocco estratto. Ritorna False se questo stesso blocco e' gia' stato fuso

@@ -1,6 +1,6 @@
 # Ottone e Cenere: Le Fornaci Basse
 
-<!-- chiave: golden-espansione | edizione: prima | anno: 2022 -->
+<!-- chiave: golden-espansione | gioco: Ottone e Cenere | edizione: 1 | anno: 2022 -->
 
 Espansione inventata per i test. Come una pubblicazione vera fa tutto insieme: aggiunge
 materiale, riprende regole del manuale base, le estende, le corregge, propone varianti e

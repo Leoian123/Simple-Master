@@ -49,7 +49,7 @@ def load_manual(name: str) -> dict[str, Any]:
         key, _, value = pair.partition(":")
         if value.strip():
             meta[key.strip()] = value.strip()
-    meta["anno"] = int(meta["anno"])
+    meta["anno"], meta["edizione"] = int(meta["anno"]), int(meta["edizione"])
 
     blocks: dict[tuple[int, int], dict[str, Any]] = {}
 

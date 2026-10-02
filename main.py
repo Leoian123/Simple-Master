@@ -73,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     prep.add_argument("--no-consolidate", action="store_true", help="salta il riordino finale dei file")
     prep.add_argument("--no-batch", action="store_true", help="estrazione immediata a prezzo pieno invece del Batch API a meta' prezzo")
     prep.add_argument("--no-tidy", action="store_true", help="salta il riordino del glossario dopo la preparazione")
+    prep.add_argument("--altra-edizione", action="store_true",
+                      help="fonde il manuale anche se e' di un'edizione diversa da quella della campagna (di norma viene rifiutato)")
     prep.add_argument("--tidy-glossary", action="store_true",
                       help="solo riordino del glossario: allinea ai file e pulisce con una chiamata veloce")
     prep.add_argument("--sanitize", action="store_true",
@@ -182,8 +184,14 @@ def _run(args: argparse.Namespace, log: logging.Logger) -> int:
         s = Settings.load(ROOT / "impostazioni.json")
         preparer = Preparer(Campaign(args.campaign), model=args.model or s.model_for("prepare"),
                             effort=args.effort or s.effort_for("prepare"), batch=s.prep_batch and not args.no_batch)
-        report = preparer.run(args.prepare, mode=args.mode, pages=args.pages,
-                              consolidate=not args.no_consolidate, tidy=not args.no_tidy)
+        from master.prepare import EditionMismatch
+
+        try:
+            report = preparer.run(args.prepare, mode=args.mode, pages=args.pages, consolidate=not args.no_consolidate,
+                                  tidy=not args.no_tidy, other_edition=args.altra_edizione)
+        except EditionMismatch as exc:
+            print(f"\n{exc}")
+            return 2
         print("\n" + report.summary())
         return 0
 

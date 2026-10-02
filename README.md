@@ -480,10 +480,16 @@ l'impronta del testo e da dove viene: quale manuale, quali pagine, oppure la
 campagna stessa.
 
 - **Niente da dichiarare.** Non si dice al programma quale manuale e' il base e
-  quale l'espansione: l'ordine canonico viene dalla data di pubblicazione
-  registrata per il manuale, e un manuale senza data conta come il piu' vecchio.
-  La lettura della data dal PDF non c'e' ancora: fino ad allora i manuali veri
-  si ordinano per impronta, in modo stabile ma non cronologico.
+  quale l'espansione. Alla prima preparazione di un volume una chiamata breve
+  legge dalle sue prime pagine titolo, gioco, edizione e anno, e li salva nella
+  cache del manuale (`manuale.json`): non si richiedono piu'. L'ordine canonico
+  viene dall'anno; un manuale senza data conta come il piu' vecchio, e se i dati
+  non si ricavano la preparazione prosegue lo stesso.
+- **Un'altra edizione e' un altro gioco.** Se il volume dichiara un'edizione
+  diversa da quella dei manuali dello stesso gioco gia' nella campagna, viene
+  rifiutato prima di spendere per l'estrazione: non c'e' niente da conciliare.
+  Vale solo quando entrambe le edizioni sono scritte nei volumi; nel dubbio non
+  si rifiuta. `--altra-edizione` per fonderlo lo stesso.
 - **Il testo scritto fuori dalla preparazione non si riscrive.** Una sezione che
   c'era gia', o che il master o il giocatore hanno cambiato, si riconosce
   dall'impronta diversa: quel testo diventa la prima parte della sezione

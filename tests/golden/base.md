@@ -1,6 +1,6 @@
 # Ottone e Cenere
 
-<!-- chiave: golden-base | edizione: prima | anno: 2019 -->
+<!-- chiave: golden-base | gioco: Ottone e Cenere | edizione: 1 | anno: 2019 -->
 
 Manuale base di un gioco inventato per i test: nessun testo viene da manuali pubblicati.
 Ogni sezione `## [pagine] file | titolo` e' una sezione gia' estratta, come la restituirebbe

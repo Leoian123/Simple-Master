@@ -1,6 +1,6 @@
 # Ottone e Cenere, seconda edizione
 
-<!-- chiave: golden-altra-edizione | edizione: seconda | anno: 2024 -->
+<!-- chiave: golden-altra-edizione | gioco: Ottone e Cenere | edizione: 2 | anno: 2024 -->
 
 Manuale di un'edizione diversa da quella della campagna: e' un altro gioco, non ha niente
 da conciliare con la prima edizione. Deve essere rifiutato all'ingresso.

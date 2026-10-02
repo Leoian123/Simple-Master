@@ -172,6 +172,48 @@ ordine, in Markdown, senza commenti prima o dopo.
 
 CONSOLIDATE_GROUP_CHARS = 45_000  # un gruppo di sezioni per chiamata: l'uscita resta sotto il tetto
 
+MANUAL_FILE = "manuale.json"  # i dati della pubblicazione, nella cache del manuale: si chiedono una volta sola
+FRONT_PAGES = 8               # frontespizio e colophon stanno qui
+FRONT_CHARS = 8_000
+
+MANUAL_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "titolo": {"type": "string"},
+        "gioco": {"type": "string"},
+        "edizione": {"type": ["integer", "null"]},
+        "anno": {"type": ["integer", "null"]},
+    },
+    "required": ["titolo", "gioco", "edizione", "anno"],
+    "additionalProperties": False,
+}
+
+MANUAL_PROMPT = """\
+Ricevi le prime pagine di un manuale di gioco di ruolo. Ricava i DATI DELLA PUBBLICAZIONE
+e restituisci SOLO un JSON:
+- `titolo`: il titolo del volume, com'e' scritto sul frontespizio.
+- `gioco`: il nome del gioco o della linea a cui il volume appartiene, senza numero di edizione.
+- `edizione`: il numero dell'edizione del GIOCO, solo se e' scritto nel testo ("quinta edizione",
+  "5th Edition", "V5" -> 5). Se non e' scritto, null: non dedurlo, e non confonderlo con la
+  ristampa o con la versione del volume.
+- `anno`: l'anno di pubblicazione di questo volume (il copyright o la data di stampa piu'
+  recente). Se non e' scritto, null.
+"""
+
+
+class EditionMismatch(ValueError):
+    """Il manuale e' di un'edizione diversa da quella dei manuali gia' nella campagna."""
+
+
+def front_matter(path: Path) -> str:
+    """Il testo delle prime pagine: dove un volume dice chi e', di quale edizione e di che anno."""
+    if path.suffix.lower() != ".pdf":
+        return path.read_text(encoding="utf-8", errors="replace")[:FRONT_CHARS]
+    from pypdf import PdfReader
+
+    pages = PdfReader(str(path)).pages
+    return "\n".join((pages[i].extract_text() or "") for i in range(min(FRONT_PAGES, len(pages))))[:FRONT_CHARS]
+
 
 @dataclass
 class Chunk:
@@ -469,6 +511,7 @@ class Preparer:
         tidy_effort: str | None = "low",
         batch: bool | None = None,
         progress: Callable[[str], None] = print,
+        other_edition: bool = False,
     ) -> PrepReport:
         use_batch = self.batch if batch is None else batch
         log.info("preparazione: fonte=%s campagna=%s modalita'=%s pagine=%s modello=%s effort=%s batch=%s",
@@ -491,14 +534,18 @@ class Preparer:
         if adopted:
             progress(f"  paternita': riconosciuti {len(adopted)} manuali gia' presenti nella campagna")
         try:
-            return self._run(path, key, cache_dir, lineage, report, mode, pages, consolidate, tidy, tidy_effort, use_batch, progress)
+            return self._run(path, key, cache_dir, lineage, report, mode, pages, consolidate, tidy, tidy_effort, use_batch,
+                             progress, other_edition)
         finally:
             self._stage = None
             lineage.save()
 
     def _run(self, path: Path, key: str, cache_dir: Path, lineage: Lineage, report: PrepReport, mode: str, pages: str | None,
-             consolidate: bool, tidy: bool, tidy_effort: str | None, use_batch: bool, progress: Callable[[str], None]) -> PrepReport:
-        stager = self._stager(lineage, key, path.name, cache_dir.name)
+             consolidate: bool, tidy: bool, tidy_effort: str | None, use_batch: bool, progress: Callable[[str], None],
+             other_edition: bool = False) -> PrepReport:
+        meta = self._manual_meta(path, key, report, progress)
+        self._check_edition(lineage, key, meta, other_edition)  # prima di spendere per l'estrazione
+        stager = self._stager(lineage, key, path.name, cache_dir.name, meta)
         stage = stager.campaign
 
         stats: dict[str, int] = {}
@@ -661,6 +708,52 @@ class Preparer:
                  report.output_tokens, ", ".join(report.files_touched) or "-", len(report.warnings))
         return report
 
+    # --- dati della pubblicazione ---------------------------------------------------
+
+    def _manual_meta(self, path: Path, key: str, report: PrepReport, progress: Callable[[str], None]) -> dict[str, Any]:
+        """Titolo, gioco, edizione e anno del volume, dalle sue prime pagine: una chiamata breve, una volta per
+        manuale. Servono a mettere i manuali in ordine e a non mescolare edizioni diverse, senza chiederlo a
+        nessuno. Se non si ricavano la preparazione prosegue: un manuale senza data conta come il piu' vecchio."""
+        cached = self.cache_root / key / MANUAL_FILE
+        meta = self._load_json(cached)
+        if meta is not None:
+            return meta
+        meta = {}
+        try:
+            text = front_matter(path)
+            if len(text.strip()) < MIN_PAGE_CHARS:
+                raise ValueError("le prime pagine non hanno testo leggibile")
+            response = create_message(self.client, max_seconds=min(self.block_timeout or 120, 120), model=self.model,
+                                      max_tokens=4000, system=MANUAL_PROMPT, messages=[{"role": "user", "content": text}],
+                                      output_config={"format": {"type": "json_schema", "schema": MANUAL_SCHEMA}})
+            self._count(report, response)
+            data = parse_json_object("\n".join(b.text for b in response.content if b.type == "text"))
+            year, edition = data.get("anno"), data.get("edizione")
+            meta = {"titolo": str(data.get("titolo") or "").strip(), "gioco": str(data.get("gioco") or "").strip(),
+                    "edizione": edition if type(edition) is int and edition > 0 else None,
+                    "anno": year if type(year) is int and 1970 <= year <= 2100 else None}
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            cached.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+            log.info("pubblicazione: %s | gioco=%s edizione=%s anno=%s", meta["titolo"] or path.name, meta["gioco"] or "-",
+                     meta["edizione"] or "-", meta["anno"] or "-")
+            progress(f"  pubblicazione: {meta['titolo'] or path.name}" + (f", {meta['anno']}" if meta["anno"] else ", anno non indicato")
+                     + (f", edizione {meta['edizione']}" if meta["edizione"] else ""))
+        except Exception as exc:
+            log.warning("dati della pubblicazione non ricavati: %s", describe_error(exc))
+            report.warnings.append(f"dati della pubblicazione non ricavati ({exc}): il manuale conta come senza data")
+        return meta
+
+    @staticmethod
+    def _check_edition(lineage: Lineage, key: str, meta: dict[str, Any], other_edition: bool) -> None:
+        clash = lineage.other_edition(key, meta)
+        if clash is None or other_edition:
+            return
+        message = (f"{meta.get('titolo') or key} e' dell'edizione {meta.get('edizione')} di {meta.get('gioco')}, ma la campagna e' "
+                   f"costruita sull'edizione {clash.get('edizione')} ({clash.get('titolo') or clash.get('nome')}): sono giochi diversi, "
+                   "non c'e' niente da conciliare. Manuale rifiutato; per fonderlo lo stesso usa --altra-edizione.")
+        log.error("preparazione RIFIUTATA: %s", message)
+        raise EditionMismatch(message)
+
     # --- spazio di lavoro del manuale e composizione della campagna ----------------
 
     def _stager(self, lineage: Lineage, key: str, name: str, variant: str, meta: dict[str, Any] | None = None) -> "Preparer":
@@ -688,13 +781,14 @@ class Preparer:
 
     def assimilate(self, key: str, name: str, blocks: list[tuple[str, str, dict[str, Any]]], report: PrepReport,
                    meta: dict[str, Any] | None = None, variant: str = "diretto",
-                   progress: Callable[[str], None] = lambda text: None) -> ComposeReport:
+                   progress: Callable[[str], None] = lambda text: None, other_edition: bool = False) -> ComposeReport:
         """Fonde blocchi gia' estratti (nome del blocco, pagine, dati) senza chiamate: e' il tratto della
         preparazione che viene dopo l'estrazione, lo stesso di `run`. Lo usano i test e la misura sul golden dataset."""
         from .sanitize import Sanitizer
 
         lineage = Lineage(self.campaign)
         lineage.adopt(self.cache_root)
+        self._check_edition(lineage, key, meta or {}, other_edition)
         try:
             stager = self._stager(lineage, key, name, variant, meta)
             for block, pages, data in blocks:

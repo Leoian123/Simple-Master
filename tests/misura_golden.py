@@ -5,7 +5,8 @@
 Tutti gli stadi qui sono gratuiti (nessuna chiamata). Ogni fase del lavoro aggiunge la sua colonna:
 
     partenza     la fusione com'era: ogni blocco accodato direttamente nella campagna
-    paternita'   uno spazio di lavoro per manuale, campagna composta in ordine canonico
+    paternita'   uno spazio di lavoro per manuale, campagna composta in ordine canonico,
+                 manuale di un'altra edizione rifiutato all'ingresso
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from golden import apply_staged, apply_today, load_cases, load_manual, score_state, snapshot  # noqa: E402
 from master import Campaign  # noqa: E402
+from master.prepare import EditionMismatch  # noqa: E402
 
 STAGES: dict[str, Callable] = {"partenza": apply_today, "paternita'": apply_staged}
 
@@ -38,7 +40,15 @@ def measure(apply: Callable, base: dict, expansion: dict, cases: dict) -> tuple[
     tmp = Path(tempfile.mkdtemp())
     try:
         forward = prepare(tmp, apply, [base, expansion])
-        return score_state(forward, cases, base), snapshot(forward) == snapshot(prepare(tmp, apply, [expansion, base]))
+        result = score_state(forward, cases, base)
+        same = snapshot(forward) == snapshot(prepare(tmp, apply, [expansion, base]))
+        for name in cases["manuali_rifiutati"]:  # per ultimi: se non vengono rifiutati sporcano la campagna
+            try:
+                apply(forward, load_manual(name))
+                result[name] = ["manuale di un'altra edizione fuso nella campagna"]
+            except EditionMismatch:
+                result[name] = []
+        return result, same
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -46,6 +56,7 @@ def measure(apply: Callable, base: dict, expansion: dict, cases: dict) -> tuple[
 def main() -> int:
     base, expansion, cases = load_manual("base"), load_manual("espansione"), load_cases()
     category = {c["id"]: c["categoria"] for c in cases["casi"]} | {g["id"]: "glossario conteso" for g in cases["glossario"]}
+    category |= {name: "altra edizione" for name in cases["manuali_rifiutati"]}
     results = {name: measure(apply, base, expansion, cases) for name, apply in STAGES.items()}
 
     names = list(dict.fromkeys(category.values()))
