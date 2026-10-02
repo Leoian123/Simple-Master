@@ -562,6 +562,7 @@ master/
 main.py           avvio, .env, CLI
 campaigns/esempio/   glossario.md + meccanica/, ambientazione/, schede/kael.json
 tests/               un file per area, tutti senza rete (client finto o risposte preparate)
+tests/golden/        manuale base ed espansione inventati, con casi piantati a risposta nota
 ```
 
 ## Test
@@ -571,4 +572,14 @@ poi `.venv\Scripts\python -m pip install -r requirements.txt`):
 
 ```bash
 .venv/Scripts/python -m unittest discover -s tests -v
+```
+
+La preparazione da piu' manuali si misura su un golden dataset: un manuale base e
+un'espansione inventati (`tests/golden/`), dove ogni sezione dell'espansione ha un
+rapporto noto con il manuale base (nuova, identica, estende, sostituisce, variante,
+contraddice) e un esito atteso. La misura e' gratuita e stampa quanti casi passano,
+per categoria:
+
+```bash
+.venv/Scripts/python tests/misura_golden.py
 ```
