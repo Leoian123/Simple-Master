@@ -1,10 +1,35 @@
+# Ambiente e segreti
 .venv/
 .env
+.env.*
+!.env.example
+
+# Stato locale dell'app
 .ultima_campagna
 impostazioni.json
 cache/
+log/
+*.log
+
+# Python
 __pycache__/
 *.pyc
-log/
+.pytest_cache/
+
+# Claude Code: impostazioni personali
+.claude/settings.local.json
+
+# Campagne: si traccia solo la campagna di esempio (originale) e il README.
+# Le campagne ricavate da manuali commerciali restano locali.
+campaigns/*
+!campaigns/README.md
+!campaigns/esempio/
 campaigns/*/sessioni/
 campaigns/*/preparazione/
+
+# Sistema ed editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
