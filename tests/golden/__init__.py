@@ -201,6 +201,15 @@ def apply_staged(campaign: Campaign, manual: dict[str, Any]) -> None:
     Preparer(campaign).assimilate(meta["chiave"], manual["nome"] + ".md", blocks, PrepReport(source=meta["titolo"]), meta=meta)
 
 
+def found_candidates(campaign: Campaign, manual: dict[str, Any]) -> set[tuple[Key, Key]]:
+    """Le coppie che la ricerca dei candidati propone per le sezioni di `manual`, nella forma di `score_candidates`."""
+    from master.lineage import Lineage
+    from master.prepare import TARGET_FILES
+
+    return {((c.file, c.title), (c.other_file, c.other_title)) for c in Lineage(campaign).candidates(TARGET_FILES)
+            if c.manual == manual["meta"]["chiave"]}
+
+
 def apply_today(campaign: Campaign, manual: dict[str, Any]) -> None:
     """La fusione com'era prima della paternita': `merge` blocco per blocco direttamente nella
     campagna, poi la sanificazione gratuita. Resta come termine di confronto: e' il punto di partenza."""

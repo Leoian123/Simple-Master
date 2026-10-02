@@ -7,6 +7,9 @@ Tutti gli stadi qui sono gratuiti (nessuna chiamata). Ogni fase del lavoro aggiu
     partenza     la fusione com'era: ogni blocco accodato direttamente nella campagna
     paternita'   uno spazio di lavoro per manuale, campagna composta in ordine canonico,
                  manuale di un'altra edizione rifiutato all'ingresso
+
+In fondo, la ricerca dei candidati allo scontro: quante coppie da confrontare trova tra quelle attese, e
+quante in piu' (ognuna costera' un confronto).
 """
 
 from __future__ import annotations
@@ -21,7 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from golden import apply_staged, apply_today, load_cases, load_manual, score_state, snapshot  # noqa: E402
+from golden import (  # noqa: E402
+    apply_staged, apply_today, found_candidates, load_cases, load_manual, score_candidates, score_state, snapshot,
+)
 from master import Campaign  # noqa: E402
 from master.prepare import EditionMismatch  # noqa: E402
 
@@ -69,6 +74,16 @@ def main() -> int:
     total = "".join(f"{sum(1 for why in result.values() if not why)}/{len(result)}".rjust(12) for result, _ in results.values())
     print(f"\n  {'TOTALE'.ljust(width)}{total}")
     print(f"  {'stesso esito cambiando ordine'.ljust(width)}" + "".join(("si" if same else "NO").rjust(12) for _, same in results.values()))
+
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        staged = prepare(tmp, apply_staged, [base, expansion])
+        found = score_candidates(found_candidates(staged, expansion), cases)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    print(f"\nCandidati allo scontro (nessuna chiamata): trovati {found['trovati']}/{found['attesi']}"
+          + (f", mancanti {', '.join(found['mancanti'])}" if found["mancanti"] else "")
+          + f"; {found['in_piu']} in piu', di cui {found['falsi_allarmi_presi']} falsi allarmi previsti")
 
     last, (result, _) = list(results.items())[-1]
     print(f"\nCasi che non passano ({last}):")

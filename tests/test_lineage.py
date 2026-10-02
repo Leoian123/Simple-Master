@@ -14,11 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from golden import apply_staged, apply_today, load_manual, snapshot  # noqa: E402
+from golden import apply_staged, apply_today, found_candidates, load_cases, load_manual, score_candidates, snapshot  # noqa: E402
 from master import Campaign  # noqa: E402
 from master.glossary import GlossaryEntry  # noqa: E402
 from master.lineage import CAMPAIGN_ORIGIN, Lineage, fingerprint  # noqa: E402
-from master.prepare import MANUAL_FILE, EditionMismatch, Preparer, PrepReport  # noqa: E402
+from master.prepare import MANUAL_FILE, TARGET_FILES, EditionMismatch, Preparer, PrepReport  # noqa: E402
 from test_prepare import FakePrepClient, make_pdf  # noqa: E402
 
 RULES = "meccanica/regole.md"
@@ -203,6 +203,52 @@ class TestTextFromOutside(LineageCase):
         self.feed("a", base, year=2019)
         self.assertIsNone(self.camp.glossary.get("Docce"))
         self.assertEqual(self.camp.glossary.get("Irma").description, "Maestra della Gilda, ora in esilio")
+
+
+class TestCandidates(LineageCase):
+    """La ricerca degli scontri possibili: larga, gratuita, uguale in qualunque ordine."""
+
+    def test_every_planted_clash_is_among_the_candidates(self) -> None:
+        base, expansion, cases = load_manual("base"), load_manual("espansione"), load_cases()
+        other = Campaign.create(self.tmp / "inverso")
+        for manual in (base, expansion):
+            apply_staged(self.camp, manual)
+        for manual in (expansion, base):
+            apply_staged(other, manual)
+        found = found_candidates(self.camp, expansion)
+        score = score_candidates(found, cases)
+        self.assertEqual(score["mancanti"], [])  # anche quelli sotto un altro titolo
+        self.assertEqual(score["falsi_allarmi_presi"], 2)  # il manometro nomina due regole: sta al confronto scartarli
+        self.assertLessEqual(score["in_piu"], 6)  # ogni candidato in piu' costera' un confronto
+        self.assertEqual(found, found_candidates(other, expansion))
+        self.assertNotIn((("ambientazione/mondo.md", "Valvola Rossa"), ("ambientazione/mondo.md", "Consiglio delle Valvole")), found)
+
+    def candidates(self) -> list[tuple[str, str, str]]:
+        return [(c.title, c.other_title, c.why) for c in Lineage(self.camp).candidates(TARGET_FILES) if c.manual == "b"]
+
+    def test_a_common_word_is_not_a_mention(self) -> None:
+        self.feed("a", [block([(RULES, "Combattimento", "Attacco e danno."), (RULES, "Pressione", "Indicatore da 0 a 6.")],
+                              [("Combattimento", "regola", "Attacco e danno", RULES), ("Pressione", "regola", "Indicatore", RULES)])], year=2019)
+        self.feed("b", [block([(RULES, "Ferite", "Chi e' fuori combattimento non agisce. Il fucile a pressione non conta."),
+                               (RULES, "Officine", "Errata: la Pressione sale di 2, non di 1.")])], year=2022)
+        self.assertEqual(self.candidates(), [("Officine", "Pressione", "termine: Pressione")])
+
+    def test_only_the_most_specific_terms_are_kept(self) -> None:
+        names = ["Alfa", "Beta", "Gamma", "Delta", "Epsilon"]
+        self.feed("a", [block([(RULES, n, f"Regola {n}.") for n in names], [(n, "regola", "x", RULES) for n in names])], year=2019)
+        crowded = "Si applicano Alfa, Beta, Gamma, Delta ed Epsilon."
+        self.feed("b", [block([(RULES, "Riepilogo", crowded), (RULES, "Nota uno", "Vedi Alfa."), (RULES, "Nota due", "Vedi Alfa e Beta.")])], year=2022)
+        kept = [other for title, other, _ in self.candidates() if title == "Riepilogo"]
+        self.assertEqual(sorted(kept), ["Delta", "Epsilon", "Gamma"])  # Alfa e Beta li nominano tutti: dicono meno
+
+    def test_a_section_met_only_by_its_own_manual_is_not_a_clash(self) -> None:
+        self.feed("a", [block([(RULES, "Combattimento", "Attacco e danno."), (RULES, "Danni", "Vedi Combattimento.")],
+                              [("Combattimento", "regola", "Attacco e danno", RULES)])], year=2019)
+        self.assertEqual(Lineage(self.camp).candidates(TARGET_FILES), [])
+        self.camp.file(RULES).set_section("Combattimento", "Attacco e danno. Regola di casa: si tira in vista.")
+        self.feed("a", [], year=2019)  # ora la sezione ha anche un'origine fuori dal manuale
+        self.assertEqual([(c.title, c.why) for c in Lineage(self.camp).candidates(TARGET_FILES)],
+                         [("Combattimento", "titolo"), ("Danni", "termine: Combattimento")])
 
 
 class TestAdoption(LineageCase):

@@ -40,6 +40,9 @@ SOURCES_DIR = "fonti"
 KEPT = "_campagna"  # spazio del testo non scritto dalla preparazione
 CAMPAIGN_ORIGIN = "campagna"
 SOURCE_INDEX_PREFIX = "fonte-"
+MIN_TERM = 4        # come nel contesto del turno: sotto, un termine compare ovunque per caso
+MAX_TERM_CANDIDATES = 3  # per sezione, i termini piu' specifici: gli altri sono rumore che si paga
+_WORD = r"(?<![\w]){}(?![\w])"
 KEY_STEM_AT = 17    # una chiave di manuale e' "<16 esadecimali>-<nome>": qui comincia il nome
 KEY_STEM_MAX = 40   # ...troncato a questa lunghezza (vedi prepare.source_key)
 
@@ -51,6 +54,17 @@ def fingerprint(text: str) -> str:
 
 def _compact(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+@dataclass(frozen=True)
+class Candidate:
+    """Una sezione di un manuale e la sezione della campagna con cui puo' scontrarsi."""
+    manual: str
+    file: str
+    title: str
+    other_file: str
+    other_title: str
+    why: str  # "titolo", oppure "termine: <voce di glossario nominata nel corpo>"
 
 
 @dataclass
@@ -391,6 +405,65 @@ class Lineage:
                 continue
             known[term] = {"manuale": key, "impronta": mark}
         return written
+
+    # --- candidati allo scontro -------------------------------------------------------
+
+    def candidates(self, targets: Iterable[str], per_section: int = MAX_TERM_CANDIDATES) -> list[Candidate]:
+        """Le coppie (sezione di un manuale, sezione della campagna) che possono dire cose diverse sullo
+        stesso argomento. Nessuna chiamata, e volutamente largo: un candidato in piu' costa un confronto,
+        uno in meno e' uno scontro che nessuno vedra' mai.
+
+        Due strade. Per titolo: la sezione della campagna ha lo stesso titolo e almeno un'altra origine.
+        Per termine: il corpo della sezione nomina una voce di glossario la cui sezione ha un'altra
+        origine (un'errata alle Riparazioni scritta dentro "Nuove regole per le officine"). I termini
+        nominati da molte sezioni dicono poco: per ogni sezione si tengono i piu' specifici. Un termine
+        di una parola sola conta se e' scritto come nel glossario, con la sua maiuscola: "fuori
+        combattimento" non nomina la regola del Combattimento."""
+        from .sanitize import norm_title
+
+        targets = list(targets)
+        stages = {key: stage for key in self.manual_order() if (stage := self._stage(key)) is not None}
+        origins: dict[tuple[str, str], tuple[str, set[str]]] = {}  # (file, titolo normalizzato) -> titolo, origini
+        for name in targets:
+            f = self.campaign.file(name)
+            for title in f.outline() if f.exists() else []:
+                datum = self.data["sezioni"].get(name, {}).get(norm_title(title))
+                sources = {p.get("manuale") or CAMPAIGN_ORIGIN for p in datum.get("genitori", [])} if datum else {CAMPAIGN_ORIGIN}
+                origins.setdefault((name, norm_title(title)), (title, sources))
+        named: dict[str, tuple[str, str]] = {}  # termine -> la sezione che porta il suo nome
+        for entry in self.campaign.glossary.entries():
+            term = entry.term.strip()
+            if len(term) >= MIN_TERM and (entry.file, norm_title(term)) in origins:
+                named[term] = (entry.file, norm_title(term))
+
+        def names(term: str, body: str) -> bool:
+            if " " in term:
+                return bool(re.search(_WORD.format(re.escape(term.lower())), body.lower()))
+            return term in body and bool(re.search(_WORD.format(re.escape(term)), body))
+
+        sections = [(key, name, title, body) for key, stage in stages.items() for name in targets if stage.file(name).exists()
+                    for title, body in stage.file(name).sections().items() if title and body.strip()]
+        mentions = [[term for term in named if names(term, body)] for _, _, _, body in sections]
+        spread: dict[str, int] = {}
+        for found in mentions:
+            for term in found:
+                spread[term] = spread.get(term, 0) + 1
+
+        out: list[Candidate] = []
+        for (key, name, title, _), found in zip(sections, mentions):
+            own = (name, norm_title(title))
+            if own in origins and origins[own][1] - {key}:
+                out.append(Candidate(key, name, title, name, origins[own][0], "titolo"))
+            taken: set[tuple[str, str]] = {own}
+            for term in sorted(found, key=lambda t: (spread[t], -len(t), t)):
+                target = named[term]
+                if target in taken or not origins[target][1] - {key}:
+                    continue
+                taken.add(target)
+                out.append(Candidate(key, name, title, target[0], origins[target][0], f"termine: {term}"))
+                if len(taken) > per_section:  # `taken` conta anche la sezione stessa
+                    break
+        return out
 
     # --- lettura -----------------------------------------------------------------------
 

@@ -506,9 +506,18 @@ campagna stessa.
   cache condivisa, da li' si ricava senza chiamate quali sezioni e quali pagine
   vengono da ciascuno. Rilanciare un manuale adottato non lo duplica.
 
-La paternita' oggi mette in ordine e tiene traccia: due versioni della stessa
-regola restano ancora una dopo l'altra, la piu' vecchia per prima. Decidere
-quale vale e' il passo successivo, e si misura sul golden dataset.
+- **Scontri possibili.** A fine preparazione il programma cerca, senza chiamate,
+  i punti in cui il manuale tocca testo di un'altra origine: le sezioni con lo
+  stesso titolo, e quelle che nominano nel corpo una voce di glossario la cui
+  sezione viene da altrove (un'errata alle Riparazioni scritta dentro "Nuove
+  regole per le officine"). Per ogni sezione tiene al massimo i tre termini piu'
+  specifici. E' una ricerca larga: sul golden dataset trova tutti i 21 scontri
+  piantati e 5 coppie in piu'.
+
+La paternita' oggi mette in ordine, tiene traccia e dice dove guardare: due
+versioni della stessa regola restano ancora una dopo l'altra, la piu' vecchia
+per prima. Decidere quale vale e' il passo successivo, e si misura sul golden
+dataset.
 
 ## Registri (log): dove e perche' si ferma qualcosa
 

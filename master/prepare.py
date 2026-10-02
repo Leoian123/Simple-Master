@@ -252,6 +252,7 @@ class PrepReport:
     tidy: str = ""
     consolidated_sections: list[tuple[str, str]] = field(default_factory=list)  # (file, titolo) ripuliti in questa corsa
     composition: str = ""
+    clashes: str = ""
 
     def summary(self) -> str:
         lines = [
@@ -266,6 +267,8 @@ class PrepReport:
         ]
         if self.composition:
             lines.append("Campagna: " + self.composition)
+        if self.clashes:
+            lines.append("Scontri possibili: " + self.clashes)
         if self.pages_skipped:
             lines.append(f"Pagine scartate perche' senza valore (vuote, immagini, indici): {self.pages_skipped}")
         if self.estimate:
@@ -490,6 +493,7 @@ class Preparer:
         self.block_timeout = block_timeout
         self._client = client
         self._stage: Campaign | None = None  # lo spazio di lavoro del manuale in corso (vedi lineage.py)
+        self._stage_key = ""
 
     @property
     def client(self) -> Any:
@@ -758,7 +762,7 @@ class Preparer:
 
     def _stager(self, lineage: Lineage, key: str, name: str, variant: str, meta: dict[str, Any] | None = None) -> "Preparer":
         """Un Preparer che lavora nello spazio del manuale: stessa fusione e stesso consolidamento, altro bersaglio."""
-        self._stage = lineage.open_manual(key, name, variant, meta)
+        self._stage, self._stage_key = lineage.open_manual(key, name, variant, meta), key
         return Preparer(self._stage, client=self._client, model=self.model, effort=self.effort, max_tokens=self.max_tokens,
                         cache_root=self.cache_root, batch=self.batch, poll_seconds=self.poll_seconds, block_timeout=self.block_timeout)
 
@@ -768,6 +772,12 @@ class Preparer:
 
         composed = lineage.compose(TARGET_FILES)
         report.composition = composed.summary().split(": ", 1)[1]
+        clashes = [c for c in lineage.candidates(TARGET_FILES) if c.manual == self._stage_key]
+        if clashes:
+            by_title = sum(1 for c in clashes if c.why == "titolo")
+            report.clashes = (f"{len(clashes)} punti in cui questo manuale tocca testo di altra origine "
+                              f"({by_title} per titolo, {len(clashes) - by_title} per termini nominati): per ora restano uno dopo l'altro")
+            progress("  scontri possibili: " + report.clashes)
         report.warnings += composed.warnings
         progress("  " + composed.summary())
         after = Sanitizer(self.campaign).run_free()
