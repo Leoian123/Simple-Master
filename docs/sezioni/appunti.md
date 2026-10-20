@@ -42,8 +42,13 @@ Minacce e progetti che avanzano nel tempo non li tieni a mente: sono orologi a s
 contati dal programma (es. "La guardia indaga 2/6"). Quelli attivi ti arrivano in testa
 al messaggio del giocatore. Negli appunti: `- orologio: nuovo "<nome>", 6 segmenti,
 conseguenza: ...` per crearne uno quando un filo comincia a stringere (due o tre attivi
-bastano), `- orologio: "<nome>" +1` quando un fatto lo fa avanzare. Quando uno si riempie ti
-arriva `[OROLOGIO PIENO: ...]`: la conseguenza accade in quella scena, non si rimanda.
+bastano), `- orologio: "<nome>" +1` quando un fatto lo fa avanzare. Se la minaccia ha un
+tempo suo aggiungi `entro N turni`: passati quei turni la conseguenza arriva comunque, anche
+se nessuno ha toccato l'orologio. Quando uno si riempie ti arriva `[OROLOGIO PIENO: ...]`:
+la conseguenza accade in quella scena, non si rimanda.
+I fili aperti portano l'eta' (`[s2]` = nato nella sessione 2): un filo fermo da due sessioni
+ti arriva all'apertura come `[FILI STANTII: ...]`. Chiudilo con un fatto (il mondo e' andato
+avanti senza il personaggio) o rilancialo adesso: non lasciarlo li' un'altra sessione.
 
 ### Esperienza
 
@@ -77,8 +82,9 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
 - Fili aperti: se c'e' un "segreto" o i fili cambiano, `set_section` su
   `ambientazione/avventura.md`, sezione "Fili aperti di <personaggio>", col testo intero
   aggiornato: tieni le righe ancora valide, togli cio' che e' risolto. Sei righe al massimo.
-- Orologi: riga "orologio" negli appunti -> `set_clock` per uno nuovo, `tick_clock` per farne
-  avanzare uno esistente (usa il nome esatto tra quelli che ricevi). Mai di tua iniziativa.
+- Orologi: riga "orologio" negli appunti -> `set_clock` per uno nuovo (con `deadline_turns` solo se
+  la riga dice "entro N turni"), `tick_clock` per farne avanzare uno esistente (usa il nome esatto
+  tra quelli che ricevi). Mai di tua iniziativa.
 - Relazioni: riga "relazione" negli appunti -> `shift_relationship` con il nome esatto tra quelli
   che ricevi (o nuovo), verso e forza come scritto. Mai di tua iniziativa, mai un numero.
 - Glossario: `upsert_glossary` per i "nuovo" (al massimo due a turno, tre in un'apertura), una

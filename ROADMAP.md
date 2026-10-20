@@ -170,7 +170,12 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 
 ---
 
-## Fase 3 — Fili e orologi che non restano eterni
+## Fase 3 — Fili e orologi che non restano eterni — FATTO (2026-10-20)
+> Orologi con `scadenza_turni`/`creato_turno` (`set_clock(..., deadline)`, `expire_clocks` in
+> `_table_state`, "(il tempo e' passato)", resto visibile in `clocks_line`); fili aperti con
+> `[sN]` messi da `master/fili.py` a ogni scrittura (scriba e consolidamento), `stale_threads`
+> consegnati all'apertura e al consolidamento, consiglio nella verifica; 6 righe di mutazione,
+> 2 tentativi ostili, `tests/test_scadenze.py`.
 
 - **Lezione.** Gli eventi narrativi di Voyage hanno `targetTurns`, force-complete a 2× e
   uno stato `sospeso` con ripresa che conserva il contatore; le quest scadono per tick,

@@ -452,6 +452,15 @@ def _check_state(campaign: Campaign, report: ValidationReport) -> None:
                 elif not _is_int(full) or not 0 <= full <= seg:
                     report.add("error", where, "riempimento fuori misura", "`pieni` va da 0 ai segmenti",
                                "correggi `pieni`")
+                if isinstance(clock, dict) and "scadenza_turni" in clock:
+                    due = clock["scadenza_turni"]
+                    if not _is_int(due) or due < 1:
+                        report.add("error", f"{where}.scadenza_turni", "scadenza non valida", "e' un numero di turni, da 1 in su",
+                                   "correggi `scadenza_turni` o toglila")
+                    elif not _is_int(clock.get("creato_turno")) or clock["creato_turno"] < 0:
+                        report.add("error", f"{where}.creato_turno", "scadenza senza turno di partenza",
+                                   "con `scadenza_turni` serve `creato_turno` (intero da 0): da li' il programma conta i turni",
+                                   "metti `creato_turno` al numero di turni giocati quando l'orologio e' nato")
                 if isinstance(clock, dict) and not str(clock.get("conseguenza") or "").strip():
                     report.add("recommendation", where, "orologio senza conseguenza",
                                "quando si riempie il narratore ricevera' solo 'si compie'",
@@ -573,6 +582,11 @@ def _check_play(campaign: Campaign, report: ValidationReport) -> None:
         report.add("recommendation", f"{ADVENTURE} § {title}", "fili aperti assenti",
                    "il narratore non ha fili da muovere: ogni scena improvvisa dal nulla",
                    "'Consolida memoria' li ricava dal giocato; oppure scrivili a mano nella sezione")
+    stale = campaign.stale_threads(name)
+    if stale:
+        report.add("recommendation", f"{ADVENTURE} § {title}", "fili stantii",
+                   f"{len(stale)} fil{'o fermo' if len(stale) == 1 else 'i fermi'} da almeno due sessioni: {'; '.join(stale)[:200]}",
+                   "il narratore li riceve alla prossima apertura e il consolidamento fra i documenti: chiudili o rilanciali")
     pending = played - campaign.consolidated(slug)
     if pending >= MIN_TURNS_TO_CONSOLIDATE:
         report.add("recommendation", f"{STATE_FILE}:memoria[{slug}]", "memoria da consolidare",

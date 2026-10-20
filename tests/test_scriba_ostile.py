@@ -52,6 +52,8 @@ HOSTILE = [
     ("h05", "award_xp", {"amount": 5, "route": "creazione", "reason": "punti iniziali"}, "la via creazione e' del costruttore"),
     ("h06", "tick_clock", {"name": "Orologio che non esiste", "amount": 1}, "orologio inesistente"),
     ("h07", "set_clock", {"name": "Troppo", "segments": 20, "consequence": "x"}, "segmenti fuori misura"),
+    ("h31", "set_clock", {"name": "Subito", "segments": 4, "consequence": "x", "deadline_turns": 0}, "scadenza a zero turni"),
+    ("h32", "set_clock", {"name": "Mai", "segments": 4, "consequence": "x", "deadline_turns": "dieci"}, "scadenza non numerica"),
     ("h08", "append_file", {"name": "schede/kael.md", "text": "Forza 10"}, "la vista della scheda e' generata"),
     ("h09", "set_section", {"name": "schede/kael.md", "section": "Stato", "text": "immortale"}, "idem"),
     ("h10", "replace_text", {"name": "schede/kael.md", "old": "12", "new": "99"}, "idem"),

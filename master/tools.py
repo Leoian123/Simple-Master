@@ -197,6 +197,8 @@ CLOCK_TOOLS: list[dict[str, Any]] = [
                 "segments": {"type": "integer", "minimum": 0, "maximum": 12, "description": "4 breve, 6 normale, 8 lungo; 0 = togli"},
                 "consequence": {"type": "string", "description": "Cosa succede quando e' pieno, in una frase"},
                 "filled": {"type": "integer", "minimum": 0, "description": "Segmenti gia' pieni (di solito 0)"},
+                "deadline_turns": {"type": "integer", "minimum": 1,
+                                   "description": "Solo se gli appunti dicono 'entro N turni': dopo N turni la conseguenza arriva comunque, anche se l'orologio non e' pieno"},
             },
             "required": ["name", "segments"],
         },
@@ -369,6 +371,11 @@ class ToolExecutor:
     def _do_set_section(self, name: str, section: str, text: str) -> str:
         self._not_a_sheet_view(name)
         f = self.campaign.file(name)
+        if section.strip().lower().startswith("fili aperti di"):
+            from . import fili
+
+            # l'eta' di ogni filo la mette il codice: le righe che c'erano tengono la loro etichetta
+            text = fili.tag_lines(f.get_section(section) or "", text, self.campaign.session_number)
         what = f.set_section(section, text)
         self._touch(self.files_changed, f.name)
         return f"Sezione '{section}' {what} in {f.name}"
@@ -459,10 +466,13 @@ class ToolExecutor:
         return (f"Relazione di {moved['nome']}: {moved['stadio_prima']} -> {moved['stadio']} "
                 f"({moved['prima']} -> {moved['relazione']})")
 
-    def _do_set_clock(self, name: str, segments: int, consequence: str = "", filled: int = 0) -> str:
-        clock = self.campaign.set_clock(name, segments, consequence, filled)
+    def _do_set_clock(self, name: str, segments: int, consequence: str = "", filled: int = 0, deadline_turns: int | None = None) -> str:
+        clock = self.campaign.set_clock(name, segments, consequence, filled, deadline_turns)
         self._touch(self.files_changed, "stato.json")
-        return f"Orologio '{name}': {clock['pieni']}/{clock['segmenti']}" if clock else f"Orologio '{name}' tolto"
+        if not clock:
+            return f"Orologio '{name}' tolto"
+        due = f", scade fra {clock['scadenza_turni']} turni" if "scadenza_turni" in clock else ""
+        return f"Orologio '{name}': {clock['pieni']}/{clock['segmenti']}{due}"
 
     def _do_tick_clock(self, name: str, amount: int = 1) -> str:
         clock = self.campaign.tick_clock(name, amount)

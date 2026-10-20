@@ -254,7 +254,12 @@ class Campaign:
         state["orologi"] = clocks
         self._save_state(state)
 
-    def set_clock(self, name: str, segments: int, consequence: str = "", filled: int = 0) -> dict:
+    def played_turns(self) -> int:
+        """I turni giocati dal personaggio attivo, archivio compreso: l'orologio delle scadenze."""
+        return len(self.all_turns(self.active_pg)) if self.active_pg else 0
+
+    def set_clock(self, name: str, segments: int, consequence: str = "", filled: int = 0, deadline: int | None = None) -> dict:
+        """`deadline`: entro quanti turni la conseguenza arriva comunque, anche se nessuno fa avanzare l'orologio."""
         name = name.strip()
         if not name:
             raise ValueError("Un orologio ha bisogno di un nome")
@@ -268,9 +273,36 @@ class Campaign:
         old = clocks.get(name, {})
         clock = {"segmenti": int(segments), "pieni": max(0, min(int(filled or old.get("pieni", 0)), int(segments))),
                  "conseguenza": consequence.strip() or old.get("conseguenza", "")}
+        if deadline is not None:
+            if int(deadline) < 1:
+                raise ValueError("La scadenza di un orologio e' almeno 1 turno")
+            clock["scadenza_turni"] = int(deadline)
+            clock["creato_turno"] = self.played_turns()
+        elif "scadenza_turni" in old:
+            clock["scadenza_turni"], clock["creato_turno"] = old["scadenza_turni"], old.get("creato_turno", 0)
         clocks[name] = clock
         self._save_clocks(clocks)
         return clock
+
+    def clock_remaining(self, clock: dict) -> int | None:
+        """Turni che restano prima della scadenza, o None se l'orologio non ne ha una."""
+        if "scadenza_turni" not in clock:
+            return None
+        return int(clock["scadenza_turni"]) - (self.played_turns() - int(clock["creato_turno"]))
+
+    def expire_clocks(self) -> list[str]:
+        """Gli orologi con scadenza passata si riempiono da soli: il tempo e' passato anche se nessuno li ha toccati."""
+        clocks = self.clocks()
+        expired = []
+        for name, clock in clocks.items():
+            remaining = self.clock_remaining(clock)
+            if remaining is not None and remaining <= 0 and clock["pieni"] < clock["segmenti"]:
+                clock["pieni"] = clock["segmenti"]
+                clock["scaduto"] = True
+                expired.append(name)
+        if expired:
+            self._save_clocks(clocks)
+        return expired
 
     def tick_clock(self, name: str, amount: int = 1) -> dict:
         clocks = self.clocks()
@@ -283,7 +315,12 @@ class Campaign:
         return {"nome": key, **clock}
 
     def clocks_line(self) -> str:
-        return "; ".join(f"{k} {c['pieni']}/{c['segmenti']}" for k, c in self.clocks().items())
+        parts = []
+        for k, c in self.clocks().items():
+            remaining = self.clock_remaining(c)
+            due = "" if remaining is None else f" (entro {remaining} turni)" if remaining > 0 else " (scaduto)"
+            parts.append(f"{k} {c['pieni']}/{c['segmenti']}{due}")
+        return "; ".join(parts)
 
     def pop_full_clocks(self) -> list[str]:
         """Gli orologi pieni: si consegnano una volta e si tolgono."""
@@ -291,7 +328,26 @@ class Campaign:
         full = {k: c for k, c in clocks.items() if c["pieni"] >= c["segmenti"]}
         if full:
             self._save_clocks({k: c for k, c in clocks.items() if k not in full})
-        return [f"{k}: {c.get('conseguenza') or 'si compie'}" for k, c in full.items()]
+        return [f"{k}: {c.get('conseguenza') or 'si compie'}" + (" (il tempo e' passato)" if c.get("scaduto") else "")
+                for k, c in full.items()]
+
+    # --- fili aperti: prosa in avventura.md, con l'eta' di ogni riga messa dal codice (fili.py) --------
+
+    @staticmethod
+    def threads_title(name: str) -> str:
+        return f"Fili aperti di {name}"
+
+    def open_threads(self, name: str) -> str:
+        from .campaign import SETTING_DIR as _s  # noqa: F401  (stesso modulo: evita l'import circolare in testa)
+
+        adventure = self.file(f"{SETTING_DIR}/avventura.md")
+        return (adventure.get_section(self.threads_title(name)) or "") if adventure.exists() else ""
+
+    def stale_threads(self, name: str) -> list[str]:
+        """I fili fermi da almeno due sessioni: da chiudere o rilanciare, mai da lasciare li'."""
+        from . import fili
+
+        return fili.stale(self.open_threads(name), self.session_number)
 
     # --- relazioni dei PNG: un numero per PNG, mosso per enum, letto come stadio -------------------
     #

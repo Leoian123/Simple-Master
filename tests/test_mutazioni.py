@@ -68,7 +68,7 @@ PROFILO: dict[str, Any] = {
 }
 STATO_BASE: dict[str, Any] = {
     "pg_attivo": "kael", "sessione": 2,
-    "orologi": {"Guardia": {"segmenti": 6, "pieni": 2, "conseguenza": "arrivano"}},
+    "orologi": {"Guardia": {"segmenti": 6, "pieni": 2, "conseguenza": "arrivano", "scadenza_turni": 12, "creato_turno": 0}},
     "memoria": {"kael": 2},
     "png": {"Mira Sol": {"relazione": -23}},
 }
@@ -151,6 +151,10 @@ def codice_stato(camp: Campaign) -> bool:
         if not isinstance(data["orologi"], dict):
             return False
         [k for k, c in data["orologi"].items() if c["pieni"] >= c["segmenti"]]  # come pop_full_clocks
+        for c in data["orologi"].values():
+            if "scadenza_turni" in c:
+                if int(c["scadenza_turni"]) < 1 or int(c["creato_turno"]) < 0:  # KeyError = fallback a 0: un rifiuto
+                    return False
         camp.clocks_line()
     if "memoria" in data:
         if not isinstance(data["memoria"], dict):
@@ -283,6 +287,12 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (STATO, "orologi.Guardia.pieni", 9, "errore", "accetta", "oltre: vale come pieno"),
     (STATO, "orologi.Guardia.pieni", DELETE, "errore", "rifiuta", "KeyError nel conteggio dei pieni"),
     (STATO, "orologi.Guardia.conseguenza", "", "consiglio", "accetta", "'si compie'"),
+    (STATO, "orologi.Guardia.scadenza_turni", DELETE, None, "accetta", "orologio senza scadenza"),
+    (STATO, "orologi.Guardia.scadenza_turni", "dieci", "errore", "rifiuta", "int() fallisce nel conteggio"),
+    (STATO, "orologi.Guardia.scadenza_turni", 0, "errore", "rifiuta", "scadrebbe subito: riportato a mai"),
+    (STATO, "orologi.Guardia.creato_turno", DELETE, "errore", "rifiuta", "senza turno di partenza il conteggio parte da 0 in silenzio"),
+    (STATO, "orologi.Guardia.creato_turno", "x", "errore", "rifiuta", "int() fallisce"),
+    (STATO, "orologi.Guardia.creato_turno", -3, "errore", "rifiuta", "un turno negativo"),
     (STATO, "orologi.Guardia.conseguenza", DELETE, "consiglio", "accetta", "idem"),
     (STATO, "memoria", DELETE, None, "accetta", "nulla consolidato"),
     (STATO, "memoria", "x", "errore", "rifiuta", "la memoria sparisce"),

@@ -280,6 +280,22 @@ motivo`, e solo per interazioni dirette e sostanziali: lo scriba lo trascrive co
 (3, 8, 15) e clampa. Il consolidamento della memoria puo' muoverlo di un passo medio per i
 PNG toccati nei turni riletti. Zero chiamate in piu'. `python main.py --doc relazioni`.
 
+## Scadenze: il tempo passa anche se nessuno lo conta
+
+Un orologio puo' avere una scadenza: il narratore scrive `entro N turni` nella riga degli
+appunti, lo scriba la passa a `set_clock`, e il programma conta i turni giocati da quando
+l'orologio e' nato. Passata la scadenza senza che nessuno lo abbia riempito, l'orologio si
+riempie da solo e la conseguenza arriva al narratore come `[OROLOGIO PIENO: ... (il tempo e'
+passato)]`. Il narratore vede quanto resta accanto a ogni orologio attivo (`Guardia 2/6 (entro
+7 turni)`).
+
+I fili aperti in `ambientazione/avventura.md` portano l'eta': ogni riga ha `[sN]`, la sessione
+in cui e' nata, messa dal codice a ogni scrittura (lo scriba e il consolidamento scrivono il
+testo, il programma conserva le etichette delle righe che c'erano). Un filo fermo da due
+sessioni e' stantio: all'apertura della sessione il narratore lo riceve come `[FILI STANTII:
+...]` e deve chiuderlo con un fatto o rilanciarlo; il consolidamento lo riceve fra i documenti
+con lo stesso invito. Nessun filo sopravvive in silenzio per sempre.
+
 ## Quanto costa un turno, e perche' costa poco
 
 Un turno di gioco e' una chiamata del narratore su un contesto composto dal
@@ -729,6 +745,7 @@ master/
   tidy.py         GlossaryTidier: allinea il glossario ai file, poi lo pulisce e ordina con una chiamata veloce
   validate.py     verifica della campagna: errori, avvisi, consigli con file, punto e rimedio; nessuna chiamata, nessuna scrittura
   relazioni.py    le relazioni dei PNG: scala degli stadi (default o dal manuale), passo per enum, etichetta per il narratore
+  fili.py         l'eta' dei fili aperti: etichette [sN] messe dal codice, fili stantii da chiudere o rilanciare
   docs.py         la documentazione a sezioni (--doc): quattro generate da schemi e prompt, quattro scritte in docs/sezioni/
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina

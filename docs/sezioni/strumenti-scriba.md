@@ -115,6 +115,7 @@ Crea o aggiorna un orologio: una minaccia o un progetto che avanza a segmenti (e
 | `segments` | integer, min 0, max 12 | si | 4 breve, 6 normale, 8 lungo; 0 = togli |
 | `consequence` | string | no | Cosa succede quando e' pieno, in una frase |
 | `filled` | integer, min 0 | no | Segmenti gia' pieni (di solito 0) |
+| `deadline_turns` | integer, min 1 | no | Solo se gli appunti dicono 'entro N turni': dopo N turni la conseguenza arriva comunque, anche se l'orologio non e' pieno |
 
 ### `tick_clock`
 

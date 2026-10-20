@@ -22,6 +22,7 @@ from typing import Any
 from . import dice
 from .campaign import DIARY, MECHANICS_DIR, SETTING_DIR, SHEETS_DIR, Campaign
 from .conversation import CACHE, DEFAULT_MODEL, ConversationEngine, TurnResult
+from .fili import STALE_AFTER
 from .logbook import describe_error, short
 from .models import cost_usd
 from .sheet import Sheet
@@ -86,8 +87,13 @@ Minacce e progetti che avanzano nel tempo non li tieni a mente: sono orologi a s
 contati dal programma (es. "La guardia indaga 2/6"). Quelli attivi ti arrivano in testa
 al messaggio del giocatore. Negli appunti: `- orologio: nuovo "<nome>", 6 segmenti,
 conseguenza: ...` per crearne uno quando un filo comincia a stringere (due o tre attivi
-bastano), `- orologio: "<nome>" +1` quando un fatto lo fa avanzare. Quando uno si riempie ti
-arriva `[OROLOGIO PIENO: ...]`: la conseguenza accade in quella scena, non si rimanda.
+bastano), `- orologio: "<nome>" +1` quando un fatto lo fa avanzare. Se la minaccia ha un
+tempo suo aggiungi `entro N turni`: passati quei turni la conseguenza arriva comunque, anche
+se nessuno ha toccato l'orologio. Quando uno si riempie ti arriva `[OROLOGIO PIENO: ...]`:
+la conseguenza accade in quella scena, non si rimanda.
+I fili aperti portano l'eta' (`[s2]` = nato nella sessione 2): un filo fermo da due sessioni
+ti arriva all'apertura come `[FILI STANTII: ...]`. Chiudilo con un fatto (il mondo e' andato
+avanti senza il personaggio) o rilancialo adesso: non lasciarlo li' un'altra sessione.
 
 ## Relazioni
 L'atteggiamento di ogni PNG verso il personaggio lo conta il programma: nel contesto lo vedi
@@ -141,8 +147,9 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
 - Fili aperti: se c'e' un "segreto" o i fili cambiano, `set_section` su
   `{SETTING_DIR}/avventura.md`, sezione "Fili aperti di <personaggio>", col testo intero
   aggiornato: tieni le righe ancora valide, togli cio' che e' risolto. Sei righe al massimo.
-- Orologi: riga "orologio" negli appunti -> `set_clock` per uno nuovo, `tick_clock` per farne
-  avanzare uno esistente (usa il nome esatto tra quelli che ricevi). Mai di tua iniziativa.
+- Orologi: riga "orologio" negli appunti -> `set_clock` per uno nuovo (con `deadline_turns` solo se
+  la riga dice "entro N turni"), `tick_clock` per farne avanzare uno esistente (usa il nome esatto
+  tra quelli che ricevi). Mai di tua iniziativa.
 - Relazioni: riga "relazione" negli appunti -> `shift_relationship` con il nome esatto tra quelli
   che ricevi (o nuovo), verso e forza come scritto. Mai di tua iniziativa, mai un numero.
 - Glossario: `upsert_glossary` per i "nuovo" (al massimo due a turno, tre in un'apertura), una
@@ -317,6 +324,7 @@ class MasterEngine(ConversationEngine):
 
         Sta qui e non nel prompt di sistema perche' cambia spesso: nel prompt invaliderebbe la cache.
         """
+        self.campaign.expire_clocks()  # il tempo passa anche per gli orologi che nessuno tocca
         lines = [f"[OROLOGIO PIENO: {c}. La conseguenza accade in questa scena.]" for c in self.campaign.pop_full_clocks()]
         active = self.campaign.clocks_line()
         if active:
@@ -358,10 +366,19 @@ class MasterEngine(ConversationEngine):
         number = self.campaign.session_number
         if number > 1:
             # dalla seconda sessione non si rinasce dal background: si riparte da scena, diario e fili aperti
-            brief = OPENING_BRIEF.format(number=number, name=sheet["name"], notes=hint) + self._diary_tail()
+            brief = OPENING_BRIEF.format(number=number, name=sheet["name"], notes=hint) + self._stale_threads_note(sheet["name"]) + self._diary_tail()
             return self.play(brief, saved_as=OPENING_MARK + (f" {notes}" if notes else ""))
         brief = PRELUDE_BRIEF.format(name=sheet["name"], notes=hint)
         return self.play(brief, saved_as=PRELUDE_MARK + (f" {notes}" if notes else ""))
+
+    def _stale_threads_note(self, name: str) -> str:
+        """I fili fermi da due sessioni, una volta, all'apertura: il narratore li chiude o li rilancia."""
+        stale = self.campaign.stale_threads(name)
+        if not stale:
+            return ""
+        return (f"{NL_}[FILI STANTII, fermi da almeno {STALE_AFTER} sessioni: " + " | ".join(stale)
+                + "]{NL_}Per ognuno: chiudilo con un fatto accaduto nel frattempo, o rilancialo in questa apertura. Negli appunti un"
+                " \"segreto\" con i fili aggiornati: quelli chiusi spariscono.{NL_}").replace("{NL_}", NL_)
 
     def _diary_tail(self) -> str:
         """L'ultima parte del diario, gia' nel messaggio: scena e fili aperti sono nel contesto del turno."""

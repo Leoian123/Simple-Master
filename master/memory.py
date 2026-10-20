@@ -23,6 +23,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import fili
 from .campaign import DIARY, SETTING_DIR, STATE_FILE, Campaign
 from .logbook import describe_error, usage_line
 from .models import cost_usd
@@ -103,7 +104,9 @@ scritti, numerati) e i documenti attuali della campagna. Converti il giocato in 
   una frase sola; nessuno per i turni in cui non accade nulla.
 - Le istruzioni del tavolo (aperture e chiusure tra parentesi quadre) non sono eventi.
 - Fili aperti: parti dal testo attuale, togli cio' che si e' risolto, aggiorna cio' che si e' mosso, aggiungi
-  cio' che e' nato. I segreti restano segreti.
+  cio' che e' nato. I segreti restano segreti. Le etichette `[sN]` (la sessione in cui un filo e' nato) le
+  mette il programma: non scriverle. Un filo segnato STANTIO non si ricopia uguale: o si chiude (nella cronaca
+  una riga su cio' che e' successo nel frattempo, "pagato dal destino") o si rilancia con un fatto nuovo.
 - PNG: separa cio' che sanno da cio' che credono. Una bugia creduta resta creduta finche' qualcosa la smentisce.
 - Relazione: `sale` o `scende` solo se in questi turni il personaggio ha aiutato, danneggiato, tradito o
   mantenuto una promessa verso quel PNG, di persona; complimenti e gesti vuoti non contano: `invariata`.
@@ -165,6 +168,10 @@ class Consolidator:
         adventure = camp.file(ADVENTURE)
         threads = adventure.get_section(f"Fili aperti di {name}") if adventure.exists() else None
         parts.append("FILI APERTI ATTUALI:\n" + (threads.strip() if threads else "(nessuno)"))
+        stale = camp.stale_threads(name)
+        if stale:
+            parts.append(f"FILI STANTII (fermi da almeno {fili.STALE_AFTER} sessioni: chiudili o rilanciali, non ricopiarli):\n"
+                         + "\n".join(f"- {t}" for t in stale))
         memory = camp.file(NPC_MEMORY)
         if memory.exists():
             parts.append("MEMORIA DEI PNG ATTUALE:\n" + memory.read().strip())
@@ -253,7 +260,9 @@ class Consolidator:
 
         threads = str(data.get("fili_aperti") or "").strip()
         if threads:
-            camp.file(ADVENTURE).set_section(f"Fili aperti di {name}", threads)
+            adventure = camp.file(ADVENTURE)
+            old_threads = (adventure.get_section(f"Fili aperti di {name}") or "") if adventure.exists() else ""
+            adventure.set_section(f"Fili aperti di {name}", fili.tag_lines(old_threads, threads, camp.session_number))
             touched.append(ADVENTURE)
 
         memory = camp.file(NPC_MEMORY)

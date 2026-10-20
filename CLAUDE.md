@@ -15,7 +15,7 @@ nella sezione, non esiste**: non inventare chiavi, percorsi o strumenti.
 | gli appunti del narratore, `MASTER_PROMPT`, `SCRIBE_PROMPT`, lo scriba | `--doc appunti` |
 | `tools.py`, `ToolExecutor`, un tool nuovo | `--doc strumenti-scriba` |
 | `dadi.json`, `dice.py`, il marcatore `[[tiro: ...]]` | `--doc dadi` |
-| `stato.json`, `sessioni/`, orologi, memoria consolidata, `campaign.py` | `--doc stato` |
+| `stato.json`, `sessioni/`, orologi e scadenze, fili aperti e la loro eta' (`fili.py`), memoria consolidata, `campaign.py` | `--doc stato` |
 | le relazioni dei PNG, `relazioni.py`, `shift_relationship`, `meccanica/relazioni.json` | `--doc relazioni` |
 | `glossario.md`, `glossary.py`, `context.py`, `tidy.py` | `--doc glossario` |
 | le cartelle e i file di una campagna, `files.py` | `--doc campagna` |
