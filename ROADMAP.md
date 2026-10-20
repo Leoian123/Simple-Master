@@ -274,7 +274,22 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 
 ---
 
-## Fase 7 — Studio: AiChatTrpg a confronto (un pomeriggio, nessun codice)
+## Fase 7 — Studio: AiChatTrpg a confronto (un pomeriggio, nessun codice) — FATTO (2026-10-20)
+> `docs/confronto-aichattrpg.md`. Esito: sul parser siamo piu' solidi (blocchi, cache,
+> paternita', piu' manuali); il loro "dice IR" esprime tre forme che il nostro profilo non ha
+> (roll-under con soglie derivate, tieni il piu' alto/basso, piu' assi per tiro) e ha un metodo
+> da prendere: il profilo si valida eseguendo campioni. Da qui la Fase 1b.
+
+## Fase 1b — Profilo dei dadi v2 (dallo studio 7) — DA FARE
+- **Campioni**: `esempi` nel profilo, eseguiti con dadi fissi da `extract_profile` prima di
+  salvare (un retry con l'errore) e rieseguiti dalla verifica a zero chiamate.
+- **`tipo: "sotto"`**: roll-under con `soglie` a frazioni del valore e fallimento critico (CoC,
+  BRP, Delta Green, WFRP, Mythras).
+- **`tieni`** `{quanti, quale}` + `esiti_su: "dado"` (Forged in the Dark, 2d20); **`esplode_su`**
+  (Savage Worlds, L5R, Cyberpunk RED).
+- Righe nella tabella di mutazione, sezione `dadi` rigenerata, banco di prova su un manuale a d100
+  e uno a "dado piu' alto". Le tabelle casuali come dati e la prefazione generata delle regole
+  restano alla prossima fase sulla preparazione.
 
 - `Leehow/AiChatTrpg` (Apache-2.0) fa la nostra stessa cosa: manuale PDF → JSON
   strutturato, «Dice IR» con motori intercambiabili (d100, d20 vs DC, PbtA 2d6, pool).
