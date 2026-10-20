@@ -73,7 +73,11 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 - **Fatto quando.** `CLAUDE.md` di Simple Master dice «prima di toccare X leggi
   `--doc X`» e le sezioni coprono scheda, dadi, appunti, strumenti, stato, campagna.
 
-### 0.3 Differential testing dei file di campagna
+### 0.3 Differential testing dei file di campagna — FATTO (2026-10-20)
+> `tests/test_mutazioni.py`: 81 mutazioni su dadi.json, stato.json e scheda, tabella con i due
+> verdetti attesi (codice / validatore), invariante "rifiuta ⇒ errore" misurata sulla realta',
+> copertura dei campi, casi `oltre` dichiarati. Una sola previsione smentita e corretta: due
+> tipi di tiro omonimi fermano il secondo marcatore, il codice rifiuta davvero.
 - **Lezione.** Il wiki Voyage costruisce un mondo sintetico, muta un campo alla volta e
   pretende che decoder e validatore concordino (1.820 mutazioni, 0 disaccordi).
 - **Dove.** `tests/test_mutazioni.py`: dalla campagna d'esempio, per ogni campo di

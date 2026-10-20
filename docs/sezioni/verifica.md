@@ -28,6 +28,20 @@ Ogni rilievo: `path` (file; dopo `:` la chiave JSON, dopo ` § ` la sezione o la
 Per un agente: modifica, valida, correggi finche' `counts.errors` e' 0; leggi gli avvisi, decidi
 sui consigli. Una verifica pulita prova la forma, non la qualita' del contenuto.
 
+## Il validatore e il codice dicono la stessa cosa (test di mutazione)
+
+`tests/test_mutazioni.py` parte da una campagna sintetica pulita e muta un campo alla volta di
+`dadi.json`, `stato.json` e della parte fissa della scheda (`nome`, `esperienza`, il percorso
+letto dai dadi speciali): tipo sbagliato, valore fuori misura, chiave in piu', chiave
+mancante, file illeggibile. Per ogni mutazione confronta due verdetti: quello del **codice**
+(`accetta` se usa il file com'e' scritto; `rifiuta` se si ferma o butta via il dato in
+silenzio) e quello del **validatore** (errore, avviso, consiglio, nulla). La tabella del test
+dichiara entrambi; l'invariante e' **dove il codice rifiuta, il validatore dice errore**. Il
+contrario e' ammesso solo se dichiarato riga per riga (`oltre:`): il validatore vede cio' che
+il codice tollera (una soglia oltre le facce del dado, un totale scritto a mano, un percorso
+che i dadi speciali non trovano). Un campo nuovo in uno di quei file senza una riga nella
+tabella e' un rosso: quando aggiungi un campo, aggiungi la sua mutazione.
+
 ## Tutte le campagne e l'hook
 
 Senza `--campaign` controlla ogni cartella di `campaigns/` e stampa solo chi ha errori o

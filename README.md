@@ -720,6 +720,13 @@ poi `.venv\Scripts\python -m pip install -r requirements.txt`):
 .venv/Scripts/python -m unittest discover -s tests -v
 ```
 
+Il validatore e il codice sono tenuti d'accordo da un test di mutazione
+(`tests/test_mutazioni.py`): da una campagna pulita si altera un campo alla volta di
+`dadi.json`, `stato.json` e della scheda, e per ognuno si confronta cio' che fa il codice
+(accetta, o si ferma / butta via il dato) con cio' che dice la verifica. Dove il codice
+rifiuta, la verifica deve dire errore; dove la verifica e' piu' severa del codice la riga lo
+dichiara. Un campo nuovo senza la sua mutazione e' un rosso.
+
 La preparazione da piu' manuali si misura su un golden dataset: un manuale base e
 un'espansione inventati (`tests/golden/`), dove ogni sezione dell'espansione ha un
 rapporto noto con il manuale base (nuova, identica, estende, sostituisce, variante,
