@@ -128,7 +128,7 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
   `stato.volonta.attuale`, `stato.condizioni.+` per aggiungere una voce). Una chiamata sola.
   Fai tu il conto dal valore attuale: "-1" su 6 diventa 5.
 - Esperienza: `award_xp` / `spend_xp` SOLO se gli appunti hanno una riga "pe" esplicita con
-  punti e via (o costo e tratto). Mai di tua iniziativa.
+  punti e via (o costo e tratto). Mai di tua iniziativa: senza quella riga il programma li rifiuta.
 - Fili aperti: se c'e' un "segreto" o i fili cambiano, `set_section` su
   `{SETTING_DIR}/avventura.md`, sezione "Fili aperti di <personaggio>", col testo intero
   aggiornato: tieni le righe ancora valide, togli cio' che e' risolto. Sei righe al massimo.
@@ -136,6 +136,8 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
   avanzare uno esistente (usa il nome esatto tra quelli che ricevi). Mai di tua iniziativa.
 - Glossario: `upsert_glossary` per i "nuovo" (al massimo due a turno, tre in un'apertura), una
   frase breve; file `{SETTING_DIR}/npc.md` per i PNG, `{SETTING_DIR}/mondo.md` per i luoghi.
+  PRIMA la sezione nel file (`set_section` con il nome come titolo), POI la voce: il programma
+  rifiuta una voce il cui termine non compare nel file indicato.
 - SCENA: chiama SEMPRE `set_scene`, anche se gli appunti dicono "nulla". E' il documento da cui il
   narratore ripartira' al prossimo turno, senza altra memoria: deve dire dove si e', quando, chi e'
   presente, cosa e' appena successo (comprese le azioni del giocatore, con precisione) e cosa resta
@@ -144,6 +146,7 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
 Stile telegrafico. Dopo gli strumenti non scrivere altro.
 """
 NOTES_RE = re.compile(r"<appunti>(.*?)(?:</appunti>|$)", re.S | re.I)
+XP_LINE_RE = re.compile(r"(?im)^\s*[-*]?\s*pe\s*:")  # la riga degli appunti che autorizza award_xp / spend_xp
 DEFAULT_SCRIBE_MODEL = "claude-haiku-4-5"
 READ_TOOL_NAMES = {"read_file", "lookup_glossary", "list_files"}
 
@@ -461,6 +464,7 @@ class MasterEngine(ConversationEngine):
                                                "(non li ha lasciati: ricava dalla narrazione solo i fatti certi)"))
         messages: list[dict[str, Any]] = [{"role": "user", "content": body}]
         tokens = [0, 0]
+        self.executor.xp_allowed = bool(notes and XP_LINE_RE.search(notes))
         try:
             for round_ in range(2):  # il secondo giro solo per correggere uno strumento fallito
                 response = self.client.messages.create(model=self.scribe_model, max_tokens=4000, system=SCRIBE_PROMPT,
@@ -488,6 +492,8 @@ class MasterEngine(ConversationEngine):
             self.log.error("turno %d SCRIBA FALLITO (%s): appunti tenuti per il prossimo turno: %s",
                            self.turns, describe_error(exc), short(notes or "", 400))
             return 0.0
+        finally:
+            self.executor.xp_allowed = True
         self._unwritten_notes = []
         cost = cost_usd(self.scribe_model, tokens[0], tokens[1])
         self.log.info("turno %d scriba %s | token in/out=%d/%d costo~$%.4f", self.turns, self.scribe_model, tokens[0], tokens[1], cost)

@@ -168,6 +168,12 @@ gioco e' diviso in due chiamate che non si parlano:
 Lo scriba parte a ogni turno, anche quando gli appunti dicono `nulla`: aggiorna
 comunque `scena.md` (`set_scene`), il documento da cui riparte il turno dopo. Se
 fallisce il turno resta valido e gli appunti partono con quelli del turno dopo.
+Il codice non si fida dello scriba: i punti esperienza passano solo se gli appunti
+hanno la riga `pe` (mai di sua iniziativa), una voce di glossario e' rifiutata se il
+termine non compare nel file indicato (prima la sezione, poi la voce), la scena e'
+rifiutata se `presenti` non e' un elenco. Ogni rifiuto torna allo scriba come errore e
+ha un secondo giro per correggersi; `tests/test_scriba_ostile.py` prova tutte le
+scappatoie con un modello finto che rispetta lo schema.
 Sotto ogni risposta il costo riporta la quota dello scriba. Il costruttore di schede
 non usa lo scriba: salva lui, alla conferma del giocatore.
 

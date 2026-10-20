@@ -95,9 +95,11 @@ class TestOneCallTurns(Base):
 
 class TestCacheStability(Base):
     def test_system_prompt_is_frozen_and_refreshed_every_few_turns(self) -> None:
+        section = _b(type="tool_use", id="g0", name="set_section",
+                     input={"name": "ambientazione/mondo.md", "section": "Seminterrato", "text": "Umido, sotto la Lanterna Blu."})
         upsert = _b(type="tool_use", id="g1", name="upsert_glossary",
                     input={"term": "Seminterrato", "kind": "luogo", "description": "Dove tutto e' cominciato", "file": "ambientazione/mondo.md"})
-        client = ScriptedClient([[_b(type="text", text=NARRATION), upsert]])
+        client = ScriptedClient([[_b(type="text", text=NARRATION), section, upsert]])
         engine = conversation(self.camp, client=client)
         for i in range(SNAPSHOT_TURNS + 1):
             engine.play(f"Azione {i}.")

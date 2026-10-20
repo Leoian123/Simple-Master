@@ -157,8 +157,13 @@ Salva la scheda completa di un personaggio giocante come dati in schede/<nome>.j
 - Scrivere sulla vista `schede/<pg>.md` di una scheda che ha il JSON: la vista e' generata, i dati si cambiano con `update_sheet`.
 - `update_sheet` su un percorso che comincia con `esperienza`: i punti entrano solo da `award_xp` e `spend_xp`.
 - `update_sheet` su un percorso che non esiste (il messaggio elenca le chiavi disponibili), un indice fuori dall'elenco, o un gruppo usato come valore. Le modifiche sono tutte o nessuna.
+- `award_xp` e `spend_xp` dallo scriba quando gli appunti del narratore non hanno una riga `pe:` (il motore apre il permesso solo per quel giro); `award_xp` con la via `creazione` (e' del costruttore, via `save_sheet`).
 - `award_xp` con una via sconosciuta, con punti non positivi, senza motivo, o per la via `sessione` quando la sessione in corso li ha gia' ricevuti.
 - `spend_xp` se i punti disponibili non bastano, o se una delle modifiche al tratto fallisce (spesa e crescita insieme o niente).
+- `upsert_glossary` con un termine vuoto, o con un termine che non compare nel file indicato (salvo i tipi `file`, `fonte`, `cronaca`): prima la sezione, poi la voce.
+- `set_scene` con `presenti` o `da_richiamare` che non sono elenchi di testi, o con un campo di testo che non e' un testo: la scena di prima resta.
 - `set_clock` con segmenti fuori da 2..12 (0 toglie l'orologio); `tick_clock` su un nome che non esiste (il messaggio elenca quelli attivi).
 - Lo scriba che chiama uno strumento di lettura o `save_sheet`: 'Lo scriba non legge e non crea schede: trascrive soltanto.'
+
+`tests/test_scriba_ostile.py` prova ognuno di questi rifiuti con un modello finto che rispetta lo schema e cerca la scappatoia.
 - Qualunque nome di file fuori dalla campagna, con `..`, o con estensione diversa da `.md`/`.txt`.

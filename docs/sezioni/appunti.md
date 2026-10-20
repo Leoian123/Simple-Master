@@ -73,7 +73,7 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
   `stato.volonta.attuale`, `stato.condizioni.+` per aggiungere una voce). Una chiamata sola.
   Fai tu il conto dal valore attuale: "-1" su 6 diventa 5.
 - Esperienza: `award_xp` / `spend_xp` SOLO se gli appunti hanno una riga "pe" esplicita con
-  punti e via (o costo e tratto). Mai di tua iniziativa.
+  punti e via (o costo e tratto). Mai di tua iniziativa: senza quella riga il programma li rifiuta.
 - Fili aperti: se c'e' un "segreto" o i fili cambiano, `set_section` su
   `ambientazione/avventura.md`, sezione "Fili aperti di <personaggio>", col testo intero
   aggiornato: tieni le righe ancora valide, togli cio' che e' risolto. Sei righe al massimo.
@@ -81,6 +81,8 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
   avanzare uno esistente (usa il nome esatto tra quelli che ricevi). Mai di tua iniziativa.
 - Glossario: `upsert_glossary` per i "nuovo" (al massimo due a turno, tre in un'apertura), una
   frase breve; file `ambientazione/npc.md` per i PNG, `ambientazione/mondo.md` per i luoghi.
+  PRIMA la sezione nel file (`set_section` con il nome come titolo), POI la voce: il programma
+  rifiuta una voce il cui termine non compare nel file indicato.
 - SCENA: chiama SEMPRE `set_scene`, anche se gli appunti dicono "nulla". E' il documento da cui il
   narratore ripartira' al prossimo turno, senza altra memoria: deve dire dove si e', quando, chi e'
   presente, cosa e' appena successo (comprese le azioni del giocatore, con precisione) e cosa resta

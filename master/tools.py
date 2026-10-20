@@ -14,6 +14,9 @@ from .glossary import GlossaryEntry
 from .sheet import XP_ROUTES, Sheet, slugify
 
 WHOLE_FILE_LIMIT = 24_000  # caratteri: oltre, read_file senza sezione restituisce l'elenco delle sezioni
+GLOSSARY_KINDS_ABOUT_FILES = {"file", "fonte", "cronaca"}  # voci che descrivono il file, non un termine dentro al file
+SCENE_TEXT_KEYS = ("luogo", "quando", "appena_successo", "domanda_aperta")
+SCENE_LIST_KEYS = ("presenti", "da_richiamare")
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -257,6 +260,9 @@ class ToolExecutor:
         self.campaign = campaign
         self.files_read: list[str] = []
         self.files_changed: list[str] = []
+        # Lo scriba puo' muovere l'esperienza solo se il narratore ha lasciato una riga `pe`: lo imposta
+        # il motore a ogni giro. Per chi usa l'esecutore direttamente (test, strumenti) resta aperto.
+        self.xp_allowed = True
 
     def reset(self) -> None:
         self.files_read.clear()
@@ -353,7 +359,16 @@ class ToolExecutor:
         return f"Sostituito in {f.name}"
 
     def _do_upsert_glossary(self, term: str, kind: str, description: str, file: str) -> str:
-        self.campaign.resolve(file)  # valida il nome
+        target = self.campaign.file(file)  # valida il nome
+        term = str(term).strip()
+        if not term:
+            raise ValueError("Una voce di glossario ha bisogno di un termine")
+        if str(kind).strip().lower() not in GLOSSARY_KINDS_ABOUT_FILES:
+            # Il glossario e' un indice: una voce il cui termine non sta nel file porta nel contesto del
+            # turno una sezione che non c'e' (su una campagna reale: 25 PNG indicizzati e mai scritti).
+            if not target.exists() or term.lower() not in target.read().lower():
+                raise ValueError(f"'{term}' non compare in {target.name}: scrivi prima la sua sezione con set_section "
+                                 f"(o append_file), poi la voce di glossario. Una voce senza testo non porta nulla nel contesto")
         what = self.campaign.glossary.upsert(GlossaryEntry(term, kind, description, file))
         self._touch(self.files_changed, self.campaign.glossary.file.name)
         return f"Glossario: '{term}' {what}"
@@ -377,13 +392,22 @@ class ToolExecutor:
     def _xp_line(xp: dict[str, int]) -> str:
         return f"Esperienza ora: disponibili {xp['disponibili']} (guadagnati {xp['guadagnati']}, spesi {xp['spesi']})"
 
+    def _xp_gate(self, route: str | None = None) -> None:
+        if route == "creazione":
+            raise ValueError("La via `creazione` e' del costruttore di schede (save_sheet con starting_xp), non dello scriba")
+        if not self.xp_allowed:
+            raise ValueError("Gli appunti del narratore non hanno una riga `pe`: i punti esperienza entrano ed escono solo "
+                             "su sua indicazione, mai di iniziativa dello scriba")
+
     def _do_award_xp(self, amount: int, route: str, reason: str, pg: str | None = None) -> str:
+        self._xp_gate(route)
         sheet = self._sheet(pg)
         xp = sheet.award(amount, route, reason)
         self._sheet_saved(sheet)
         return f"+{int(amount)} a {sheet.name} (via {route}, sessione {self.campaign.session_number}). {self._xp_line(xp)}"
 
     def _do_spend_xp(self, amount: int, reason: str, changes: list[dict[str, Any]], pg: str | None = None) -> str:
+        self._xp_gate()
         sheet = self._sheet(pg)
         xp, done = sheet.spend(amount, reason, changes)
         self._sheet_saved(sheet)
@@ -392,6 +416,16 @@ class ToolExecutor:
     def _do_set_scene(self, **scene: Any) -> str:
         from .memory import SCENE, write_scene
 
+        # La forma la impone lo schema del tool, ma un modello puo' passare `presenti` come frase: su una
+        # campagna reale la scena mostrava "J, o, n, a, t, h, a, n" (la stringa iterata lettera per lettera).
+        for key in SCENE_TEXT_KEYS:
+            if not isinstance(scene.get(key), str):
+                raise ValueError(f"set_scene: `{key}` dev'essere un testo (ricevuto {type(scene.get(key)).__name__})")
+        for key in SCENE_LIST_KEYS:
+            value = scene.get(key)
+            if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+                raise ValueError(f"set_scene: `{key}` dev'essere un elenco di testi, es. [\"Mira Sol\", \"la guardia\"] "
+                                 f"(ricevuto {type(value).__name__})")
         write_scene(self.campaign, scene, "aggiornato dallo scriba a fine turno")
         self._touch(self.files_changed, SCENE)
         return "Scena aggiornata"

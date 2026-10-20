@@ -86,7 +86,13 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
   (`Sheet`, `load_profile`, `Campaign._state`) e `--validate` diano lo stesso verdetto.
 - **Fatto quando.** Nessun disaccordo; un campo nuovo senza mutazione è un rosso.
 
-### 0.4 Lo scriba ostile
+### 0.4 Lo scriba ostile — FATTO (2026-10-20)
+> `tests/test_scriba_ostile.py`: 26 tentativi schema-validi in un solo giro, tutti respinti,
+> nessuna traccia nei file, turno valido; piu' la controprova con le stesse scritture fatte
+> bene. Tre gate nuovi nel codice: `upsert_glossary` rifiuta un termine che non compare nel
+> file (i 25 PNG fantasma di Vampire), `set_scene` rifiuta `presenti`/`da_richiamare` non
+> elenco (la scena a lettere), `award_xp`/`spend_xp` passano solo se gli appunti hanno la
+> riga `pe:` (e mai per la via `creazione`).
 - **Lezione.** `trpg-drama-engine` testa i contratti LLM con un modello finto *ostile ma
   schema-valido*: rispetta lo schema e prova a violare le regole.
 - **Dove.** `tests/test_scriba_ostile.py`: un client finto che risponde con `tool_use`
