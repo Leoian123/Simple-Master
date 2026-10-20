@@ -26,6 +26,7 @@ solo il codice li scrive (`Campaign`), mai uno strumento dell'AI.
 | `memoria` | oggetto | slug -> fino a che turno del giocato il consolidamento e' arrivato. Nulla si ripaga; non puo' superare i turni esistenti |
 | `png` | oggetto | nome del PNG -> `{relazione}` da -100 a 100, l'atteggiamento verso il personaggio contato dal codice e letto come stadio (sezione `relazioni`) |
 | `modo` | nome | il modo di gioco scelto, fra quelli di `meccanica/modi.json` o i predefiniti (`quieto`, `classico`, `spietato`); assente = `classico` (sezione `modi`) |
+| `trigger_scattati` | elenco di nomi | le regole non ricorrenti di `meccanica/trigger.json` gia' scattate: non scattano piu' (sezione `trigger`) |
 
 Un `stato.json` illeggibile vale come vuoto: il programma riparte senza personaggio attivo,
 orologi e contatore (la verifica lo segnala come errore).

@@ -242,7 +242,13 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 
 ---
 
-## Fase 6 — Trigger come dati: le regole del manuale che il codice può contare
+## Fase 6 — Trigger come dati: le regole del manuale che il codice può contare — FATTO (2026-10-20)
+> `master/trigger.py` + `meccanica/trigger.json`: condizioni su scheda/orologio/relazione/
+> stadio/esito/contatore (AND, max 5), effetti avviso/orologio/relazione (max 3), ricorrenti o
+> una tantum (`stato.json.trigger_scattati`), valutati in `_table_state` prima del narratore;
+> verifica (forma + percorsi della scheda), sesto file del test di mutazione (31 righe),
+> sezione generata `--doc trigger`, `tests/test_trigger.py`. L'estrazione dal manuale resta
+> per dopo: prima si scrivono a mano.
 
 - **Lezione.** Il vero linguaggio del World Engine sono i trigger: condizioni strutturali
   sui fatti (risorsa, relazione, stadio, tick) → effetti tipizzati (istruzione one-shot al

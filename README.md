@@ -317,6 +317,20 @@ tira il programma, la scheda non cambia. Entra nel prompt di sistema come parte 
 in cache, quindi non costa nulla a ogni turno e si riscrive solo quando lo si cambia. Una
 campagna puo' avere i suoi modi in `meccanica/modi.json`. `python main.py --doc modi`.
 
+## Trigger: le regole del manuale che il programma puo' contare
+
+`meccanica/trigger.json` e' un elenco di regole `condizioni -> effetti`, scritte come dati.
+Le condizioni leggono solo cio' che il programma possiede: un valore della scheda
+(`stato.fame >= 4`), un orologio, la relazione o lo stadio di un PNG, l'esito dell'ultimo
+tiro, i contatori di turni e sessioni. Gli effetti sono tipizzati: un avviso al narratore
+(`[TRIGGER rischio di frenesia: ...]` in testa al messaggio del turno, come gli orologi
+pieni), un orologio che avanza o nasce, una relazione che si muove di un passo. A ogni
+turno, prima della chiamata del narratore, il codice le valuta tutte e applica gli effetti;
+una regola non ricorrente scatta una volta sola. Niente testo da giudicare, niente script,
+nessuna chiamata: la regola della frenesia arriva al narratore dal contatore della scheda,
+non dalla sua memoria. Si scrivono a mano; un file malformato si ignora intero e la
+verifica lo dice. `python main.py --doc trigger`.
+
 ## Quanto costa un turno, e perche' costa poco
 
 Un turno di gioco e' una chiamata del narratore su un contesto composto dal
@@ -769,6 +783,7 @@ master/
   fili.py         l'eta' dei fili aperti: etichette [sN] messe dal codice, fili stantii da chiudere o rilanciare
   modi.py         i modi di gioco: la lente sul narratore (tre predefiniti o meccanica/modi.json), nel prompt in cache
   fatti.py        i fatti da non perdere: lettura, aggiunta con tetto e senza doppioni, pertinenza al turno
+  trigger.py      i trigger: regole condizioni->effetti su scheda, orologi, relazioni, esiti; valutate dal codice a ogni turno
   docs.py         la documentazione a sezioni (--doc): quattro generate da schemi e prompt, quattro scritte in docs/sezioni/
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina

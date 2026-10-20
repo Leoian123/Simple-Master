@@ -46,6 +46,9 @@ bastano), `- orologio: "<nome>" +1` quando un fatto lo fa avanzare. Se la minacc
 tempo suo aggiungi `entro N turni`: passati quei turni la conseguenza arriva comunque, anche
 se nessuno ha toccato l'orologio. Quando uno si riempie ti arriva `[OROLOGIO PIENO: ...]`:
 la conseguenza accade in quella scena, non si rimanda.
+Le regole che il programma puo' contare (fame oltre una soglia, un orologio a un certo punto,
+una relazione che cambia stadio) arrivano gia' valutate come `[TRIGGER <nome>: ...]` in testa
+al messaggio: applicale come regole del manuale, nella scena, senza rimandare.
 I fili aperti portano l'eta' (`[s2]` = nato nella sessione 2): un filo fermo da due sessioni
 ti arriva all'apertura come `[FILI STANTII: ...]`. Chiudilo con un fatto (il mondo e' andato
 avanti senza il personaggio) o rilancialo adesso: non lasciarlo li' un'altra sessione.

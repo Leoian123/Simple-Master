@@ -27,6 +27,7 @@ from .campaign import DIARY, MECHANICS_DIR, PREP_DIR, SETTING_DIR, SHEETS_DIR, S
 from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_dice
 from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
 from .modi import FILE_NAME as MODES_NAME, modi_problems
+from .trigger import FILE_NAME as TRIGGER_NAME, problems as trigger_problems, sheet_path_problems
 from .relazioni import FILE_NAME as RELATIONS_NAME, MAX as REL_MAX, MIN as REL_MIN, stadi_problems
 from .sheet import XP_KEY, XP_ROUTES
 
@@ -131,6 +132,7 @@ def validate(campaign: Campaign) -> ValidationReport:
     _check_state(campaign, report)
     _check_relations(campaign, report)
     _check_modes(campaign, report)
+    _check_triggers(campaign, report)
     _check_lineage(campaign, report)
     _check_play(campaign, report)
     return report
@@ -467,6 +469,10 @@ def _check_state(campaign: Campaign, report: ValidationReport) -> None:
                     report.add("recommendation", where, "orologio senza conseguenza",
                                "quando si riempie il narratore ricevera' solo 'si compie'",
                                "scrivi la conseguenza negli appunti o nel file")
+    fired = data.get("trigger_scattati")
+    if fired is not None and (not isinstance(fired, list) or not all(isinstance(x, str) for x in fired)):
+        report.add("error", f"{STATE_FILE}:trigger_scattati", "trigger scattati non validi", "e' un elenco di nomi di regole",
+                   "ripara la struttura (o togli la chiave: le regole non ricorrenti scatterebbero di nuovo)")
     mode = data.get("modo")
     if mode is not None:
         from .modi import nomi
@@ -549,6 +555,37 @@ def _check_modes(campaign: Campaign, report: ValidationReport) -> None:
     for where, problem in modi_problems(modes):
         report.add("error", f"{name}:modi{where}", "modi di gioco malformati", problem + ": il programma usa i modi predefiniti e ignora il file",
                    "correggi il modo indicato")
+
+
+def _check_triggers(campaign: Campaign, report: ValidationReport) -> None:
+    name = f"{MECHANICS_DIR}/{TRIGGER_NAME}"
+    data, err = _read_json(campaign.root / MECHANICS_DIR / TRIGGER_NAME)
+    if err is not None:
+        report.add("error", name, "trigger illeggibili", f"non e' JSON valido ({err}): nessuna regola scatta",
+                   "ripara il JSON, oppure cancella il file")
+        return
+    if data is None:
+        return
+    found = trigger_problems(data)
+    for where, problem in found:
+        report.add("error", f"{name}:{where}" if where else name, "trigger malformati", problem + ": il file viene ignorato intero, nessuna regola scatta",
+                   "correggi la regola indicata (python main.py --doc trigger)")
+    if found:
+        return
+    sheet_info = campaign.active_sheet()
+    if sheet_info is None:
+        return
+    from .sheet import Sheet
+
+    try:
+        sheet = Sheet(campaign, sheet_info["slug"])
+    except ValueError:
+        return
+    if not sheet.exists:
+        return
+    for where, problem in sheet_path_problems(data, sheet):
+        report.add("error", f"{name}:{where}", "percorso assente dalla scheda", problem,
+                   "allinea il percorso alla scheda (o la scheda al percorso)")
 
 
 def _check_lineage(campaign: Campaign, report: ValidationReport) -> None:

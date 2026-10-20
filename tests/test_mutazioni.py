@@ -38,7 +38,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from master import Campaign, dice, modi, relazioni  # noqa: E402
+from master import Campaign, dice, modi, relazioni, trigger  # noqa: E402
 from master.memory import write_scene  # noqa: E402
 from master.sheet import Sheet  # noqa: E402
 from master.validate import validate  # noqa: E402
@@ -46,6 +46,7 @@ from master.validate import validate  # noqa: E402
 DELETE = object()      # la chiave sparisce
 RAW = object()         # il valore e' il testo intero del file (file illeggibile, JSON non oggetto)
 DADI, STATO, SCHEDA, RELAZ, MODI = "meccanica/dadi.json", "stato.json", "schede/kael.json", "meccanica/relazioni.json", "meccanica/modi.json"
+TRIG = "meccanica/trigger.json"
 
 # --- la campagna sintetica: pulita per costruzione (lo prova il primo test) ----------------------
 
@@ -72,7 +73,16 @@ STATO_BASE: dict[str, Any] = {
     "memoria": {"kael": 2},
     "png": {"Mira Sol": {"relazione": -23}},
     "modo": "cupo",
+    "trigger_scattati": ["una tantum"],
 }
+TRIGGER_BASE: dict[str, Any] = {"trigger": [
+    {"nome": "fame alta", "ricorrente": True,
+     "quando": [{"scheda": "stato.fame", "op": ">=", "valore": 4}, {"contatore": "sessione", "op": ">", "valore": 0}],
+     "effetti": [{"avviso": "rischio di frenesia"}]},
+    {"nome": "una tantum", "quando": [{"orologio": "Guardia", "op": ">=", "valore": 2}],
+     "effetti": [{"orologio": "La Bestia", "avanza": 1, "segmenti": 6, "conseguenza": "x"},
+                 {"relazione": "Mira Sol", "verso": "scende", "forza": "lieve"}]},
+]}
 MODI_BASE: dict[str, Any] = {"modi": [{"nome": "cupo", "descrizione": "x", "istruzioni": "tono cupo", "png": "diffidenti"},
                                       {"nome": "lieve", "descrizione": "y", "istruzioni": "tono lieve"}]}
 STADI_BASE: dict[str, Any] = {"stadi": [{"nome": "Ostile", "da": -100, "a": -21}, {"nome": "Neutrale", "da": -20, "a": 20},
@@ -169,6 +179,9 @@ def codice_stato(camp: Campaign) -> bool:
     if "modo" in data:
         if not isinstance(data["modo"], str) or data["modo"].strip().lower() not in modi.nomi(camp):
             return False  # il narratore giocherebbe in `classico` in silenzio
+    if "trigger_scattati" in data:
+        if not isinstance(data["trigger_scattati"], list) or not all(isinstance(x, str) for x in data["trigger_scattati"]):
+            return False  # l'elenco sparisce e le regole scatterebbero di nuovo
     if "png" in data:
         if not isinstance(data["png"], dict):
             return False
@@ -217,7 +230,16 @@ def codice_modi(camp: Campaign) -> bool:
     return True
 
 
-CODICE = {DADI: codice_dadi, STATO: codice_stato, SCHEDA: codice_scheda, RELAZ: codice_relazioni, MODI: codice_modi}
+def codice_trigger(camp: Campaign) -> bool:
+    """Specchio di trigger.carica + valuta: un file che non passa `problems` viene ignorato intero."""
+    data = json.loads((camp.root / TRIG).read_text(encoding="utf-8"))
+    if trigger.problems(data):
+        return False
+    trigger.valuta(camp, "")
+    return True
+
+
+CODICE = {DADI: codice_dadi, STATO: codice_stato, SCHEDA: codice_scheda, RELAZ: codice_relazioni, MODI: codice_modi, TRIG: codice_trigger}
 
 
 def accetta(fn, camp: Campaign) -> bool:
@@ -317,6 +339,9 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (STATO, "modo", DELETE, None, "accetta", "vale `classico`"),
     (STATO, "modo", "inesistente", "errore", "rifiuta", "il narratore giocherebbe in `classico` senza dirlo"),
     (STATO, "modo", 5, "errore", "rifiuta", "non e' un nome"),
+    (STATO, "trigger_scattati", DELETE, None, "accetta", "nessuna regola scattata"),
+    (STATO, "trigger_scattati", "x", "errore", "rifiuta", "l'elenco sparisce"),
+    (STATO, "trigger_scattati.0", 5, "errore", "rifiuta", "un nome non testo"),
     (STATO, "png", DELETE, None, "accetta", "nessuna relazione contata"),
     (STATO, "png", "x", "errore", "rifiuta", "le relazioni spariscono"),
     (STATO, "png.Mira Sol", "x", "errore", "rifiuta", "voce non oggetto"),
@@ -351,6 +376,37 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (MODI, "modi.0.istruzioni", DELETE, "errore", "rifiuta", "senza istruzioni la lente e' vuota"),
     (MODI, "modi.0.png", 3, "errore", "rifiuta", "png non testo"),
     (MODI, "modi.0.png", DELETE, None, "accetta", "le inclinazioni dei PNG sono facoltative"),
+    # --- meccanica/trigger.json (regole: valide tutte o si ignorano) ---
+    (TRIG, "", "{", "errore", "rifiuta", "illeggibile: nessuna regola scatta"),
+    (TRIG, "", "[1]", "errore", "rifiuta", "non e' un oggetto"),
+    (TRIG, "trigger", DELETE, "errore", "rifiuta", "senza elenco"),
+    (TRIG, "trigger", "x", "errore", "rifiuta", "non e' un elenco"),
+    (TRIG, "trigger", [], None, "accetta", "nessuna regola e' lecito"),
+    (TRIG, "trigger.0", "x", "errore", "rifiuta", "una regola non oggetto"),
+    (TRIG, "trigger.0.nome", DELETE, "errore", "rifiuta", "regola senza nome"),
+    (TRIG, "trigger.1.nome", "fame alta", "errore", "rifiuta", "nome doppio"),
+    (TRIG, "trigger.0.ricorrente", "si", "errore", "rifiuta", "non booleano"),
+    (TRIG, "trigger.0.ricorrente", DELETE, None, "accetta", "non ricorrente per default"),
+    (TRIG, "trigger.0.quando", [], "errore", "rifiuta", "senza condizioni"),
+    (TRIG, "trigger.0.quando.0", "x", "errore", "rifiuta", "condizione non oggetto"),
+    (TRIG, "trigger.0.quando.0.scheda", "stato.sete", "errore", "accetta", "oltre: il percorso non esiste nella scheda, la regola non scatta mai"),
+    (TRIG, "trigger.0.quando.0.op", "~", "errore", "rifiuta", "operatore sconosciuto"),
+    (TRIG, "trigger.0.quando.0.valore", "quattro", "errore", "rifiuta", "con >= serve un numero"),
+    (TRIG, "trigger.0.quando.0.valore", DELETE, "errore", "rifiuta", "manca il valore"),
+    (TRIG, "trigger.0.quando.1.contatore", "giorni", "errore", "rifiuta", "contatore sconosciuto"),
+    (TRIG, "trigger.0.quando.1.op", "<=", None, "accetta", "altro operatore numerico"),
+    (TRIG, "trigger.1.quando.0.orologio", "", "errore", "rifiuta", "nome vuoto"),
+    (TRIG, "trigger.0.effetti", [], "errore", "rifiuta", "senza effetti"),
+    (TRIG, "trigger.0.effetti.0", "x", "errore", "rifiuta", "effetto non oggetto"),
+    (TRIG, "trigger.0.effetti.0.avviso", "", "errore", "rifiuta", "avviso vuoto"),
+    (TRIG, "trigger.1.effetti.0.orologio", DELETE, "errore", "rifiuta", "effetto senza chiave"),
+    (TRIG, "trigger.1.effetti.0.avanza", "uno", "errore", "rifiuta", "avanza non intero"),
+    (TRIG, "trigger.1.effetti.0.segmenti", 20, "errore", "rifiuta", "segmenti fuori misura"),
+    (TRIG, "trigger.1.effetti.0.conseguenza", DELETE, None, "accetta", "conseguenza facoltativa"),
+    (TRIG, "trigger.1.effetti.1.relazione", 5, "errore", "rifiuta", "nome non testo"),
+    (TRIG, "trigger.1.effetti.1.verso", "su", "errore", "rifiuta", "verso fuori vocabolario"),
+    (TRIG, "trigger.1.effetti.1.forza", "enorme", "errore", "rifiuta", "forza fuori vocabolario"),
+    (TRIG, "extra", 1, None, "accetta", "chiave in piu' ignorata"),
     # --- schede/kael.json (la parte con una forma: nome, esperienza, e stato.fame letto dai dadi) ---
     (SCHEDA, "", "{", "errore", "rifiuta", "illeggibile: il gioco si ferma"),
     (SCHEDA, "", "[]", "errore", "rifiuta", "non e' un oggetto"),
@@ -388,6 +444,7 @@ class Base(unittest.TestCase):
         self.write(STATO, STATO_BASE)
         self.write(RELAZ, STADI_BASE)
         self.write(MODI, MODI_BASE)
+        self.write(TRIG, TRIGGER_BASE)
         sheet = json.loads((self.camp.root / SCHEDA).read_text(encoding="utf-8"))
         sheet["stato"]["fame"] = 2
         sheet["esperienza"] = {"registro": copy.deepcopy(REGISTRO)}
@@ -461,7 +518,7 @@ class TestMutazioni(Base):
         for name, path, _, _, _, _ in TABELLA:
             if path:
                 mutati.setdefault(name, set()).add(_norm(path))
-        campi = {DADI: _paths(PROFILO), STATO: _paths(STATO_BASE), RELAZ: _paths(STADI_BASE), MODI: _paths(MODI_BASE)}
+        campi = {DADI: _paths(PROFILO), STATO: _paths(STATO_BASE), RELAZ: _paths(STADI_BASE), MODI: _paths(MODI_BASE), TRIG: _paths(TRIGGER_BASE)}
         sheet = self.read(SCHEDA)
         campi[SCHEDA] = {p for p in _paths(sheet) if p.startswith(COPERTURA_SCHEDA)}
         for name, paths in campi.items():

@@ -183,6 +183,18 @@ class Campaign:
         slug = self.active_pg
         return next((s for s in self.sheets() if s["slug"] == slug), None) if slug else None
 
+    # --- trigger: le regole non ricorrenti gia' scattate (trigger.py) ----------------------------------
+
+    def triggers_fired(self) -> set[str]:
+        data = self._state().get("trigger_scattati")
+        return {str(x).strip().lower() for x in data} if isinstance(data, list) else set()
+
+    def mark_triggers_fired(self, names: list[str]) -> None:
+        state = self._state()
+        current = state.get("trigger_scattati") if isinstance(state.get("trigger_scattati"), list) else []
+        state["trigger_scattati"] = sorted({str(x).strip().lower() for x in [*current, *names]})
+        self._save_state(state)
+
     # --- modo di gioco: la lente scelta dal giocatore, per campagna (modi.py) --------------------------
 
     def mode_name(self) -> str | None:

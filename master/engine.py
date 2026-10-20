@@ -22,7 +22,7 @@ from typing import Any
 from . import dice
 from .campaign import DIARY, MECHANICS_DIR, SETTING_DIR, SHEETS_DIR, Campaign
 from .conversation import CACHE, DEFAULT_MODEL, ConversationEngine, TurnResult
-from . import fatti
+from . import fatti, trigger
 from .fili import STALE_AFTER
 from .logbook import describe_error, short
 from .models import cost_usd
@@ -92,6 +92,9 @@ bastano), `- orologio: "<nome>" +1` quando un fatto lo fa avanzare. Se la minacc
 tempo suo aggiungi `entro N turni`: passati quei turni la conseguenza arriva comunque, anche
 se nessuno ha toccato l'orologio. Quando uno si riempie ti arriva `[OROLOGIO PIENO: ...]`:
 la conseguenza accade in quella scena, non si rimanda.
+Le regole che il programma puo' contare (fame oltre una soglia, un orologio a un certo punto,
+una relazione che cambia stadio) arrivano gia' valutate come `[TRIGGER <nome>: ...]` in testa
+al messaggio: applicale come regole del manuale, nella scena, senza rimandare.
 I fili aperti portano l'eta' (`[s2]` = nato nella sessione 2): un filo fermo da due sessioni
 ti arriva all'apertura come `[FILI STANTII: ...]`. Chiudilo con un fatto (il mondo e' andato
 avanti senza il personaggio) o rilancialo adesso: non lasciarlo li' un'altra sessione.
@@ -307,7 +310,7 @@ class MasterEngine(ConversationEngine):
         router = self._route_rules if saved_as is None and not spoken.startswith("[Tiro]") else None
         context = compose(self.campaign, spoken if saved_as is None else "", self.save_name or "", router=router)
         self.log.info("turno %d contesto: %s", self.turns, context.stats())
-        return context.text + self._table_state() + ("GIOCATORE: " if saved_as is None else "") + spoken
+        return context.text + self._table_state(spoken) + ("GIOCATORE: " if saved_as is None else "") + spoken
 
     def _after_narration(self, result: TurnResult, spoken: str, saved_as: str | None, calls: int) -> None:
         if result.stop_reason in ("end_turn", "max_tokens"):
@@ -326,13 +329,17 @@ class MasterEngine(ConversationEngine):
         super()._record_spend(result, calls, narrator_cost)
         self.campaign.record_spend("scriba", self.scribe_model, result.scribe_cost_usd, turno=self.turns)
 
-    def _table_state(self) -> str:
+    def _table_state(self, spoken: str = "") -> str:
         """Cio' che il programma conta al posto del narratore, in testa al messaggio del turno.
 
         Sta qui e non nel prompt di sistema perche' cambia spesso: nel prompt invaliderebbe la cache.
+        Ordine: il tempo passa (scadenze), le regole scattano (trigger: possono riempire un orologio),
+        gli orologi pieni si consegnano.
         """
         self.campaign.expire_clocks()  # il tempo passa anche per gli orologi che nessuno tocca
+        triggered = trigger.valuta(self.campaign, spoken)
         lines = [f"[OROLOGIO PIENO: {c}. La conseguenza accade in questa scena.]" for c in self.campaign.pop_full_clocks()]
+        lines += triggered
         active = self.campaign.clocks_line()
         if active:
             lines.append(f"[Orologi: {active}]")
