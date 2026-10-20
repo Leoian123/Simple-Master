@@ -23,7 +23,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from .campaign import DIARY, SETTING_DIR, Campaign
+from .campaign import DIARY, SETTING_DIR, STATE_FILE, Campaign
 from .logbook import describe_error, usage_line
 from .models import cost_usd
 from .sheet import Sheet
@@ -61,8 +61,10 @@ MEMORY_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "properties": {"nome": {"type": "string"}, "sa": {"type": "string", "description": "Cosa sa del personaggio e dei fatti"},
                                "crede": {"type": "string", "description": "Cosa crede, anche se falso (bugie a cui ha creduto); vuoto se nulla"},
-                               "vuole": {"type": "string", "description": "Cosa vuole adesso e cosa fara' se nessuno lo ferma"}},
-                "required": ["nome", "sa", "crede", "vuole"],
+                               "vuole": {"type": "string", "description": "Cosa vuole adesso e cosa fara' se nessuno lo ferma"},
+                               "relazione": {"type": "string", "enum": ["sale", "scende", "invariata"],
+                                             "description": "Come e' cambiato il suo atteggiamento verso il personaggio in questi turni, solo per interazioni dirette e sostanziali; invariata nel dubbio"}},
+                "required": ["nome", "sa", "crede", "vuole", "relazione"],
                 "additionalProperties": False,
             },
         },
@@ -103,6 +105,8 @@ scritti, numerati) e i documenti attuali della campagna. Converti il giocato in 
 - Fili aperti: parti dal testo attuale, togli cio' che si e' risolto, aggiorna cio' che si e' mosso, aggiungi
   cio' che e' nato. I segreti restano segreti.
 - PNG: separa cio' che sanno da cio' che credono. Una bugia creduta resta creduta finche' qualcosa la smentisce.
+- Relazione: `sale` o `scende` solo se in questi turni il personaggio ha aiutato, danneggiato, tradito o
+  mantenuto una promessa verso quel PNG, di persona; complimenti e gesti vuoti non contano: `invariata`.
 - Incoerenze: segnala solo contraddizioni vere tra il giocato e i documenti (o dentro il giocato), con la
   lettura da tenere d'ora in poi. Il giocato fa fede sui documenti.
 Italiano asciutto, frasi brevi."""
@@ -173,6 +177,9 @@ class Consolidator:
         clocks = camp.clocks_line()
         if clocks:
             parts.append("OROLOGI: " + clocks)
+        relations = camp.relations_line()
+        if relations:
+            parts.append("RELAZIONI DEI PNG (contate dal programma): " + relations)
         return "\n\n".join(parts)
 
     # --- consolidamento -------------------------------------------------------------------------
@@ -262,6 +269,10 @@ class Consolidator:
             body.append(f"- **Vuole:** {npc.get('vuole', '').strip()}")
             memory.set_section(who, "\n".join(body))
             report.npcs.append(who)
+            if npc.get("relazione") in ("sale", "scende"):
+                camp.shift_relation(who, str(npc["relazione"]), "media", "consolidamento della memoria")
+                if STATE_FILE not in touched:
+                    touched.append(STATE_FILE)
         if report.npcs:
             touched.append(NPC_MEMORY)
 

@@ -125,6 +125,17 @@ Fa avanzare (o arretrare, con un numero negativo) un orologio esistente. Il cont
 | `name` | string | si |  |
 | `amount` | integer | no | Di solito 1; 2-3 per un fatto grave |
 
+### `shift_relationship`
+
+Muove l'atteggiamento di un PNG verso il personaggio di un passo, in su o in giu'. Il numero lo tiene il codice e te lo restituisce come stadio (Diffidente, Cordiale...): tu dici solo il verso e la forza. Solo per la riga `relazione` degli appunti del narratore, mai di tua iniziativa.
+
+| parametro | tipo | obbligatorio | significato |
+|---|---|---|---|
+| `name` | string | si | Il PNG, con il nome esatto tra quelli che ricevi (o nuovo) |
+| `verso` | string (`sale`, `scende`) | si |  |
+| `forza` | string (`lieve`, `media`, `forte`) | si | lieve: un gesto; media: un aiuto o un torto concreto; forte: una svolta |
+| `reason` | string | si | Perche', in una riga |
+
 ### `set_scene`
 
 Riscrive il documento della scena in corso, com'e' ALLA FINE di questo turno. Va chiamato a ogni turno.

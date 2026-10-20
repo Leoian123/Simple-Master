@@ -26,6 +26,7 @@ from typing import Any
 from .campaign import DIARY, MECHANICS_DIR, PREP_DIR, SETTING_DIR, SHEETS_DIR, STATE_FILE, Campaign
 from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_dice
 from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
+from .relazioni import FILE_NAME as RELATIONS_NAME, MAX as REL_MAX, MIN as REL_MIN, stadi_problems
 from .sheet import XP_KEY, XP_ROUTES
 
 VERSION = 1
@@ -127,6 +128,7 @@ def validate(campaign: Campaign) -> ValidationReport:
     _check_dice(campaign, report)
     _check_sheets(campaign, report)
     _check_state(campaign, report)
+    _check_relations(campaign, report)
     _check_lineage(campaign, report)
     _check_play(campaign, report)
     return report
@@ -454,6 +456,23 @@ def _check_state(campaign: Campaign, report: ValidationReport) -> None:
                     report.add("recommendation", where, "orologio senza conseguenza",
                                "quando si riempie il narratore ricevera' solo 'si compie'",
                                "scrivi la conseguenza negli appunti o nel file")
+    png = data.get("png")
+    if png is not None:
+        if not isinstance(png, dict):
+            report.add("error", f"{STATE_FILE}:png", "relazioni non e' un oggetto", "le relazioni sono {nome del PNG: {relazione}}",
+                       "ripara la struttura")
+        else:
+            for pname, entry in png.items():
+                where = f"{STATE_FILE}:png[{pname}]"
+                if not isinstance(entry, dict):
+                    report.add("error", where, "voce di relazione non valida", "ogni PNG ha un oggetto {relazione}",
+                               "ripara la voce")
+                elif "relazione" not in entry:
+                    report.add("error", where, "voce senza relazione", "manca il numero: il programma lo leggerebbe come 0",
+                               "scrivi `relazione` (da -100 a 100) o togli la voce")
+                elif not _is_int(entry["relazione"]) or not REL_MIN <= entry["relazione"] <= REL_MAX:
+                    report.add("error", f"{where}.relazione", "relazione fuori scala", f"dev'essere un intero fra {REL_MIN} e {REL_MAX}",
+                               "correggi il valore")
     memory = data.get("memoria")
     if memory is not None:
         if not isinstance(memory, dict):
@@ -471,6 +490,27 @@ def _check_state(campaign: Campaign, report: ValidationReport) -> None:
                     report.add("error", where, "consolidato oltre il giocato",
                                f"risultano consolidati {count} turni ma il giocato di '{mname}' ne ha {played}: il prossimo consolidamento salterebbe turni",
                                f"porta il valore a {played} o meno")
+
+
+def _check_relations(campaign: Campaign, report: ValidationReport) -> None:
+    name = f"{MECHANICS_DIR}/{RELATIONS_NAME}"
+    data, err = _read_json(campaign.root / MECHANICS_DIR / RELATIONS_NAME)
+    if err is not None:
+        report.add("error", name, "scala delle relazioni illeggibile",
+                   f"non e' JSON valido ({err}): il programma usa gli stadi predefiniti e ignora il file",
+                   "ripara il JSON, oppure cancella il file")
+        return
+    if data is None:
+        return
+    stadi = data.get("stadi") if isinstance(data, dict) else None
+    if stadi is None:
+        report.add("error", name, "scala delle relazioni senza stadi", "il file deve contenere {\"stadi\": [{nome, da, a}, ...]}",
+                   "scrivi gli stadi, oppure cancella il file (valgono i predefiniti)")
+        return
+    for where, problem in stadi_problems(stadi):
+        report.add("error", f"{name}:stadi{where}", "scala delle relazioni malformata",
+                   problem + ": il programma usa gli stadi predefiniti e ignora il file",
+                   "correggi gli stadi: devono tassellare -100..100 senza buchi")
 
 
 def _check_lineage(campaign: Campaign, report: ValidationReport) -> None:

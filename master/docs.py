@@ -32,6 +32,7 @@ INDEX: dict[str, tuple[str, str, str]] = {
     "strumenti-scriba": ("Gli strumenti dell'API", "ogni tool con parametri, chi lo usa e cosa viene rifiutato", "tools.py"),
     "dadi": ("Il profilo dei dadi", "meccanica/dadi.json: campi, marcatore [[tiro: ...]], esito [Tiro]", "dice.PROFILE_SCHEMA"),
     "stato": ("Lo stato della campagna", "stato.json, sessioni/<pg>.jsonl, spese.jsonl, impostazioni.json", "docs/sezioni/stato.md"),
+    "relazioni": ("Le relazioni dei PNG", "il numero in stato.json, la scala degli stadi, il passo per enum, il tool, l'override dal manuale", "relazioni.py, tools.RELATION_TOOLS"),
     "glossario": ("Il glossario", "la tabella, i tipi, come entra nel contesto del turno", "docs/sezioni/glossario.md"),
     "verifica": ("La verifica della campagna", "i tre livelli, il JSON, l'hook", "docs/sezioni/verifica.md"),
 }
@@ -346,8 +347,73 @@ def _gen_sheet() -> str:
     return "\n".join(out)
 
 
+def _gen_relations() -> str:
+    from .relazioni import DEFAULT_STADI, DELTA, FILE_NAME, MAX, MIN, scala
+    from .tools import RELATION_TOOLS
+
+    tool = RELATION_TOOLS[0]
+    out = [
+        f"Ogni PNG ha un atteggiamento verso il personaggio da {MIN} a {MAX}, in `stato.json` sotto `png`:",
+        "",
+        "```json",
+        '"png": {"Mira Sol": {"relazione": -23}}',
+        "```",
+        "",
+        "Il numero lo possiede il codice (`Campaign.shift_relation`). Il narratore non lo vede mai: nel contesto",
+        "del turno ogni PNG porta l'etichetta del suo STADIO accanto al tipo (`### Mira Sol (png · Diffidente)`),",
+        "e lo scriba non scrive numeri: dice il verso e la forza, il codice applica il passo e clampa.",
+        "",
+        "## La scala degli stadi",
+        "",
+        f"Predefinita: {scala(DEFAULT_STADI)}.",
+        "",
+        f"Un manuale con i suoi nomi la sovrascrive con `meccanica/{FILE_NAME}`:",
+        "",
+        "```json",
+        '{"stadi": [{"nome": "Ostile", "da": -100, "a": -21}, {"nome": "Neutrale", "da": -20, "a": 20}, {"nome": "Amico", "da": 21, "a": 100}]}',
+        "```",
+        "",
+        f"Gli stadi devono tassellare {MIN}..{MAX} senza buchi ne' sovrapposizioni, con nomi unici",
+        "(`relazioni.stadi_problems`, la regola usata anche dalla verifica). Un file che non la rispetta viene",
+        "ignorato (valgono i predefiniti) e la verifica lo segnala come errore.",
+        "",
+        "## Il passo",
+        "",
+        "| forza | passo |",
+        "|---|---|",
+        *[f"| `{k}` | {v} |" for k, v in DELTA.items()],
+        "",
+        "`sale` aggiunge, `scende` toglie; il valore resta nella scala. Un PNG mai contato parte da 0 (Neutrale).",
+        "Il nome si cerca senza distinzione di maiuscole fra i PNG gia' contati.",
+        "",
+        "## Chi la muove",
+        "",
+        f"- Lo scriba, con `{tool['name']}`, solo per la riga `- relazione: <png> sale|scende (lieve|media|forte) — motivo`",
+        "  degli appunti del narratore (sezione `appunti`); mai di propria iniziativa.",
+        "- Il consolidamento della memoria (`memory.py`): per ogni PNG toccato dice `sale`, `scende` o `invariata`,",
+        "  e il codice applica un passo `media`; solo per interazioni dirette e sostanziali.",
+        "- Nessun altro: il narratore e il costruttore di schede non hanno il tool.",
+        "",
+        f"### `{tool['name']}`",
+        "",
+        str(tool["description"]).strip(),
+        "",
+        _params_table(tool["input_schema"]),
+        "",
+        "Rifiutato: nome vuoto, `verso` o `forza` fuori vocabolario (anche se lo schema li ammetterebbe come testo).",
+        "",
+        "## Dove si legge",
+        "",
+        "- Nel contesto del turno (`context.compose`): l'etichetta accanto a ogni PNG nominato, mai il numero.",
+        "- Nel contesto dello scriba e del consolidamento: `RELAZIONI DEI PNG: Mira Sol: Diffidente (-23); ...`.",
+        "- `Campaign.relation(nome)` -> intero o None; `relations_line()`; `relazioni.stadio(valore, stadi)`.",
+    ]
+    return "\n".join(out)
+
+
 GENERATED: dict[str, Callable[[], str]] = {
     "scheda": _gen_sheet,
+    "relazioni": _gen_relations,
     "appunti": _gen_notes,
     "strumenti-scriba": _gen_tools,
     "dadi": _gen_dice,

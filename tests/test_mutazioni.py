@@ -38,14 +38,14 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from master import Campaign, dice  # noqa: E402
+from master import Campaign, dice, relazioni  # noqa: E402
 from master.memory import write_scene  # noqa: E402
 from master.sheet import Sheet  # noqa: E402
 from master.validate import validate  # noqa: E402
 
 DELETE = object()      # la chiave sparisce
 RAW = object()         # il valore e' il testo intero del file (file illeggibile, JSON non oggetto)
-DADI, STATO, SCHEDA = "meccanica/dadi.json", "stato.json", "schede/kael.json"
+DADI, STATO, SCHEDA, RELAZ = "meccanica/dadi.json", "stato.json", "schede/kael.json", "meccanica/relazioni.json"
 
 # --- la campagna sintetica: pulita per costruzione (lo prova il primo test) ----------------------
 
@@ -70,7 +70,10 @@ STATO_BASE: dict[str, Any] = {
     "pg_attivo": "kael", "sessione": 2,
     "orologi": {"Guardia": {"segmenti": 6, "pieni": 2, "conseguenza": "arrivano"}},
     "memoria": {"kael": 2},
+    "png": {"Mira Sol": {"relazione": -23}},
 }
+STADI_BASE: dict[str, Any] = {"stadi": [{"nome": "Ostile", "da": -100, "a": -21}, {"nome": "Neutrale", "da": -20, "a": 20},
+                                        {"nome": "Amico", "da": 21, "a": 100}]}
 REGISTRO = [
     {"quando": "2026-09-18T16:58", "sessione": 1, "via": "sessione", "punti": 2, "motivo": "prima sessione"},
     {"quando": "2026-09-18T17:10", "sessione": 1, "via": "spesa", "punti": -1, "motivo": "Forza 2->3"},
@@ -156,6 +159,24 @@ def codice_stato(camp: Campaign) -> bool:
             if int(count) < 0:
                 return False
             camp.consolidated(name)
+    if "png" in data:
+        if not isinstance(data["png"], dict):
+            return False
+        for name, entry in data["png"].items():
+            value = int(entry["relazione"])  # KeyError/ValueError = il codice legge 0 o None: un fallback
+            if not relazioni.MIN <= value <= relazioni.MAX:
+                return False  # verrebbe clampato in silenzio
+            if camp.relation(name) != value:
+                return False
+    return True
+
+
+def codice_relazioni(camp: Campaign) -> bool:
+    """Specchio di relazioni.carica: un file che non passa stadi_problems viene ignorato in silenzio."""
+    data = json.loads((camp.root / RELAZ).read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or relazioni.stadi_problems(data.get("stadi")):
+        return False
+    relazioni.stadio(0, data["stadi"])
     return True
 
 
@@ -177,7 +198,7 @@ def codice_scheda(camp: Campaign) -> bool:
     return True
 
 
-CODICE = {DADI: codice_dadi, STATO: codice_stato, SCHEDA: codice_scheda}
+CODICE = {DADI: codice_dadi, STATO: codice_stato, SCHEDA: codice_scheda, RELAZ: codice_relazioni}
 
 
 def accetta(fn, camp: Campaign) -> bool:
@@ -268,6 +289,27 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (STATO, "memoria.kael", 99, "errore", "accetta", "oltre: il prossimo consolidamento salterebbe turni"),
     (STATO, "memoria.kael", "quattro", "errore", "rifiuta", "int() fallisce, torna 0"),
     (STATO, "memoria.kael", -1, "errore", "rifiuta", "riportato a 0"),
+    (STATO, "png", DELETE, None, "accetta", "nessuna relazione contata"),
+    (STATO, "png", "x", "errore", "rifiuta", "le relazioni spariscono"),
+    (STATO, "png.Mira Sol", "x", "errore", "rifiuta", "voce non oggetto"),
+    (STATO, "png.Mira Sol.relazione", "molto", "errore", "rifiuta", "int() fallisce, l'etichetta sparisce"),
+    (STATO, "png.Mira Sol.relazione", 150, "errore", "rifiuta", "clampato in silenzio"),
+    (STATO, "png.Mira Sol.relazione", DELETE, "errore", "rifiuta", "letto come 0 in silenzio"),
+    (STATO, "png.Mira Sol.nota", "x", None, "accetta", "chiave in piu' conservata"),
+    # --- meccanica/relazioni.json (la scala del manuale: o e' valida o si ignora, mai a meta') ---
+    (RELAZ, "", "{", "errore", "rifiuta", "illeggibile: valgono gli stadi predefiniti"),
+    (RELAZ, "", "[1]", "errore", "rifiuta", "non e' un oggetto"),
+    (RELAZ, "extra", 1, None, "accetta", "chiave in piu' ignorata"),
+    (RELAZ, "stadi", DELETE, "errore", "rifiuta", "senza stadi il file non vale"),
+    (RELAZ, "stadi", [], "errore", "rifiuta", "idem"),
+    (RELAZ, "stadi.0", "x", "errore", "rifiuta", "uno stadio non oggetto"),
+    (RELAZ, "stadi.0.nome", DELETE, "errore", "rifiuta", "stadio senza nome"),
+    (RELAZ, "stadi.0.nome", "Neutrale", "errore", "rifiuta", "nome doppio"),
+    (RELAZ, "stadi.0.da", -90, "errore", "rifiuta", "la scala non comincia a -100"),
+    (RELAZ, "stadi.0.a", -25, "errore", "rifiuta", "un buco fra gli stadi"),
+    (RELAZ, "stadi.1.da", -30, "errore", "rifiuta", "stadi sovrapposti"),
+    (RELAZ, "stadi.1.da", "x", "errore", "rifiuta", "non e' un intero"),
+    (RELAZ, "stadi.2.a", 90, "errore", "rifiuta", "la scala non finisce a 100"),
     # --- schede/kael.json (la parte con una forma: nome, esperienza, e stato.fame letto dai dadi) ---
     (SCHEDA, "", "{", "errore", "rifiuta", "illeggibile: il gioco si ferma"),
     (SCHEDA, "", "[]", "errore", "rifiuta", "non e' un oggetto"),
@@ -303,6 +345,7 @@ class Base(unittest.TestCase):
         self.camp = Campaign(self.tmp / "camp")
         self.write(DADI, PROFILO)
         self.write(STATO, STATO_BASE)
+        self.write(RELAZ, STADI_BASE)
         sheet = json.loads((self.camp.root / SCHEDA).read_text(encoding="utf-8"))
         sheet["stato"]["fame"] = 2
         sheet["esperienza"] = {"registro": copy.deepcopy(REGISTRO)}
@@ -376,7 +419,7 @@ class TestMutazioni(Base):
         for name, path, _, _, _, _ in TABELLA:
             if path:
                 mutati.setdefault(name, set()).add(_norm(path))
-        campi = {DADI: _paths(PROFILO), STATO: _paths(STATO_BASE)}
+        campi = {DADI: _paths(PROFILO), STATO: _paths(STATO_BASE), RELAZ: _paths(STADI_BASE)}
         sheet = self.read(SCHEDA)
         campi[SCHEDA] = {p for p in _paths(sheet) if p.startswith(COPERTURA_SCHEDA)}
         for name, paths in campi.items():

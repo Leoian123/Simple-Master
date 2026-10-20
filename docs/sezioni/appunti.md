@@ -79,6 +79,8 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
   aggiornato: tieni le righe ancora valide, togli cio' che e' risolto. Sei righe al massimo.
 - Orologi: riga "orologio" negli appunti -> `set_clock` per uno nuovo, `tick_clock` per farne
   avanzare uno esistente (usa il nome esatto tra quelli che ricevi). Mai di tua iniziativa.
+- Relazioni: riga "relazione" negli appunti -> `shift_relationship` con il nome esatto tra quelli
+  che ricevi (o nuovo), verso e forza come scritto. Mai di tua iniziativa, mai un numero.
 - Glossario: `upsert_glossary` per i "nuovo" (al massimo due a turno, tre in un'apertura), una
   frase breve; file `ambientazione/npc.md` per i PNG, `ambientazione/mondo.md` per i luoghi.
   PRIMA la sezione nel file (`set_section` con il nome come titolo), POI la voce: il programma

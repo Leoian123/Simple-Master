@@ -293,6 +293,68 @@ class Campaign:
             self._save_clocks({k: c for k, c in clocks.items() if k not in full})
         return [f"{k}: {c.get('conseguenza') or 'si compie'}" for k, c in full.items()]
 
+    # --- relazioni dei PNG: un numero per PNG, mosso per enum, letto come stadio -------------------
+    #
+    # `stato.json` -> "png": {"<nome>": {"relazione": -100..100}}. La scala degli stadi e il passo di
+    # un movimento stanno in relazioni.py; qui solo il dato e chi puo' muoverlo.
+
+    def relations(self) -> dict[str, dict]:
+        data = self._state().get("png")
+        return data if isinstance(data, dict) else {}
+
+    def _relation_key(self, name: str) -> str | None:
+        wanted = name.strip().lower()
+        return next((k for k in self.relations() if k.lower() == wanted), None)
+
+    def relation(self, name: str) -> int | None:
+        """Il valore per un PNG, o None se il programma non lo ha mai contato."""
+        key = self._relation_key(name)
+        if key is None:
+            return None
+        from . import relazioni
+
+        entry = self.relations()[key]
+        try:
+            return relazioni.clampa(entry.get("relazione", 0))
+        except (TypeError, ValueError, AttributeError):
+            return None
+
+    def shift_relation(self, name: str, verso: str, forza: str, reason: str = "") -> dict:
+        """Muove la relazione di un PNG di un passo (enum -> numero, clampato). Un PNG nuovo parte da 0."""
+        from . import relazioni
+
+        name = name.strip()
+        if not name:
+            raise ValueError("Serve il nome del PNG")
+        delta = relazioni.passo(verso, forza)
+        state = self._state()
+        png = state.get("png") if isinstance(state.get("png"), dict) else {}
+        key = self._relation_key(name) or name
+        entry = png.get(key) if isinstance(png.get(key), dict) else {}
+        try:
+            before = relazioni.clampa(entry.get("relazione", 0))
+        except (TypeError, ValueError):
+            before = 0
+        after = relazioni.clampa(before + delta)
+        png[key] = {**entry, "relazione": after}
+        state["png"] = png
+        self._save_state(state)
+        stadi = relazioni.carica(self)
+        return {"nome": key, "prima": before, "relazione": after, "stadio_prima": relazioni.stadio(before, stadi),
+                "stadio": relazioni.stadio(after, stadi), "motivo": reason.strip()}
+
+    def relations_line(self) -> str:
+        """Per lo scriba e il consolidamento: `Mira Sol: Diffidente (-25); ...`."""
+        from . import relazioni
+
+        stadi = relazioni.carica(self)
+        parts = []
+        for name in self.relations():
+            value = self.relation(name)
+            if value is not None:
+                parts.append(f"{name}: {relazioni.stadio(value, stadi)} ({value})")
+        return "; ".join(parts)
+
     # --- il giocato: un solo archivio per conversazione, trascrizione e ripresa insieme -----------
     #
     # `sessioni/<nome>.jsonl`, una riga JSON per turno, solo in aggiunta. E' la trascrizione

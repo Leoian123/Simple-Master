@@ -72,6 +72,10 @@ HOSTILE = [
      "il file non esiste"),
     ("h23", "upsert_glossary", {"term": "", "kind": "png", "description": "x", "file": "ambientazione/npc.md"}, "termine vuoto"),
     ("h24", "read_file", {"name": "ambientazione/npc.md"}, "lo scriba non legge"),
+    ("h27", "shift_relationship", {"name": "Mira Sol", "verso": "sale", "forza": "enorme", "reason": "x"}, "forza fuori vocabolario"),
+    ("h28", "shift_relationship", {"name": "Mira Sol", "verso": "su", "forza": "lieve", "reason": "x"}, "verso fuori vocabolario"),
+    ("h29", "shift_relationship", {"name": "Mira Sol", "verso": "sale", "forza": 20, "reason": "x"}, "un numero al posto della forza"),
+    ("h30", "shift_relationship", {"name": "  ", "verso": "sale", "forza": "lieve", "reason": "x"}, "PNG senza nome"),
     ("h25", "save_sheet", {"name": "Kael", "summary": "x", "data": {"stato": {}}}, "lo scriba non crea schede"),
     ("h26", "list_files", {}, "lo scriba non legge"),
 ]
@@ -99,11 +103,13 @@ class TestScribaOstile(Base):
 
     def test_the_same_writes_pass_when_they_follow_the_rules(self) -> None:
         """La controprova: con la riga pe e la sezione scritta prima, le stesse operazioni passano."""
-        notes = f"{NARRATION}\n\n<appunti>\n- nuovo: Jolyne (png), amica di Kayla\n- pe: 2, via storia, chiusa la storia del faro\n</appunti>"
+        notes = (f"{NARRATION}\n\n<appunti>\n- nuovo: Jolyne (png), amica di Kayla\n- pe: 2, via storia, chiusa la storia del faro\n"
+                 "- relazione: Jolyne sale (media) — Kael l'ha difesa\n</appunti>")
         good = [tool("g1", "set_section", {"name": "ambientazione/npc.md", "section": "Jolyne", "text": "Amica di Kayla, bracciale VIP giallo."}),
                 tool("g2", "upsert_glossary", term="Jolyne", kind="png", description="Amica di Kayla", file="ambientazione/npc.md"),
                 tool("g3", "award_xp", amount=2, route="storia", reason="Chiusa la storia del faro"),
-                tool("g4", "set_scene", **{**SCENE_OK, "presenti": ["Jolyne", "Mira Sol"]})]
+                tool("g4", "set_scene", **{**SCENE_OK, "presenti": ["Jolyne", "Mira Sol"]}),
+                tool("g5", "shift_relationship", {"name": "Jolyne", "verso": "sale", "forza": "media", "reason": "Kael l'ha difesa"})]
         client = ScriptedClient([ROUTER, [_b(type="text", text=notes)], good])
         engine = MasterEngine(self.camp, client=client)
         engine.play("Parlo con Jolyne.")
@@ -111,6 +117,7 @@ class TestScribaOstile(Base):
         self.assertEqual(self.camp.glossary.get("Jolyne").file, "ambientazione/npc.md")
         self.assertEqual(Sheet(self.camp, "kael").xp()["disponibili"], 2)
         self.assertIn("Jolyne, Mira Sol", self.camp.file("ambientazione/scena.md").read())
+        self.assertEqual(self.camp.relation("Jolyne"), 8)  # enum in ingresso, numero scritto dal codice
         self.assertTrue(engine.executor.xp_allowed)  # il permesso vale per quel giro, poi si richiude
 
     def test_glossary_entry_about_the_file_itself_needs_no_term_in_it(self) -> None:

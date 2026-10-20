@@ -12,7 +12,8 @@ solo il codice li scrive (`Campaign`), mai uno strumento dell'AI.
  "orologi": {
   "Rosa Ruiz e la polizia": {"segmenti": 6, "pieni": 1, "conseguenza": "Agenti al portone con mandato"}
  },
- "memoria": {"jonathan-harker": 9}
+ "memoria": {"jonathan-harker": 9},
+ "png": {"Rosa Ruiz": {"relazione": -23}}
 }
 ```
 
@@ -22,6 +23,7 @@ solo il codice li scrive (`Campaign`), mai uno strumento dell'AI.
 | `sessione` | intero >= 1 | la sessione in corso. Avanza solo con "Chiudi sessione" dopo almeno 3 turni giocati; con meno e' un rifare da capo |
 | `orologi` | oggetto | nome -> `{segmenti (2..12), pieni (0..segmenti), conseguenza}`. `set_clock` con `segments` 0 lo toglie; quando `pieni >= segmenti` il narratore lo riceve una volta come `[OROLOGIO PIENO: nome: conseguenza]` e l'orologio sparisce |
 | `memoria` | oggetto | slug -> fino a che turno del giocato il consolidamento e' arrivato. Nulla si ripaga; non puo' superare i turni esistenti |
+| `png` | oggetto | nome del PNG -> `{relazione}` da -100 a 100, l'atteggiamento verso il personaggio contato dal codice e letto come stadio (sezione `relazioni`) |
 
 Un `stato.json` illeggibile vale come vuoto: il programma riparte senza personaggio attivo,
 orologi e contatore (la verifica lo segnala come errore).

@@ -213,6 +213,29 @@ CLOCK_TOOLS: list[dict[str, Any]] = [
 ]
 TOOLS += CLOCK_TOOLS
 
+RELATION_TOOLS: list[dict[str, Any]] = [
+    {
+        "name": "shift_relationship",
+        "description": (
+            "Muove l'atteggiamento di un PNG verso il personaggio di un passo, in su o in giu'. Il numero lo tiene il "
+            "codice e te lo restituisce come stadio (Diffidente, Cordiale...): tu dici solo il verso e la forza. "
+            "Solo per la riga `relazione` degli appunti del narratore, mai di tua iniziativa."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Il PNG, con il nome esatto tra quelli che ricevi (o nuovo)"},
+                "verso": {"type": "string", "enum": ["sale", "scende"]},
+                "forza": {"type": "string", "enum": ["lieve", "media", "forte"],
+                          "description": "lieve: un gesto; media: un aiuto o un torto concreto; forte: una svolta"},
+                "reason": {"type": "string", "description": "Perche', in una riga"},
+            },
+            "required": ["name", "verso", "forza", "reason"],
+        },
+    },
+]
+TOOLS += RELATION_TOOLS
+
 # Solo per lo scriba del livello veloce: la scena e' il documento da cui riparte il turno dopo.
 SCENE_TOOL: dict[str, Any] = {
     "name": "set_scene",
@@ -429,6 +452,12 @@ class ToolExecutor:
         write_scene(self.campaign, scene, "aggiornato dallo scriba a fine turno")
         self._touch(self.files_changed, SCENE)
         return "Scena aggiornata"
+
+    def _do_shift_relationship(self, name: str, verso: str, forza: str, reason: str = "") -> str:
+        moved = self.campaign.shift_relation(name, verso, forza, reason)
+        self._touch(self.files_changed, "stato.json")
+        return (f"Relazione di {moved['nome']}: {moved['stadio_prima']} -> {moved['stadio']} "
+                f"({moved['prima']} -> {moved['relazione']})")
 
     def _do_set_clock(self, name: str, segments: int, consequence: str = "", filled: int = 0) -> str:
         clock = self.campaign.set_clock(name, segments, consequence, filled)

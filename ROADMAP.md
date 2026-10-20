@@ -139,7 +139,11 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 
 ---
 
-## Fase 2 — Relazioni dei PNG: un numero per PNG, stadi nominati, delta a enum
+## Fase 2 — Relazioni dei PNG: un numero per PNG, stadi nominati, delta a enum — FATTO (2026-10-20)
+> `master/relazioni.py` (scala, passo, override da `meccanica/relazioni.json`), `stato.json` ->
+> `png`, tool `shift_relationship` (enum, mai un numero), etichetta nel contesto del turno,
+> consolidamento che muove di un passo medio, verifica + 20 righe di mutazione + 4 tentativi
+> ostili, sezione generata `--doc relazioni`.
 
 - **Lezione.** Ogni PNG di Voyage ha un punteggio −100..100 verso il giocatore, stadi
   nominati che tassellano la scala (Nemesi … Devoto), delta solo su interazione diretta,

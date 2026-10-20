@@ -16,11 +16,12 @@ nella sezione, non esiste**: non inventare chiavi, percorsi o strumenti.
 | `tools.py`, `ToolExecutor`, un tool nuovo | `--doc strumenti-scriba` |
 | `dadi.json`, `dice.py`, il marcatore `[[tiro: ...]]` | `--doc dadi` |
 | `stato.json`, `sessioni/`, orologi, memoria consolidata, `campaign.py` | `--doc stato` |
+| le relazioni dei PNG, `relazioni.py`, `shift_relationship`, `meccanica/relazioni.json` | `--doc relazioni` |
 | `glossario.md`, `glossary.py`, `context.py`, `tidy.py` | `--doc glossario` |
 | le cartelle e i file di una campagna, `files.py` | `--doc campagna` |
 | `validate.py`, i livelli della verifica | `--doc verifica` |
 
-Le sezioni `scheda`, `appunti`, `strumenti-scriba` e `dadi` sono generate dal codice
+Le sezioni `scheda`, `appunti`, `strumenti-scriba`, `dadi` e `relazioni` sono generate dal codice
 (`master/docs.py`): se cambi uno schema, un tool o un prompt lancia `--doc --rigenera` e
 committa i file in `docs/sezioni/` insieme al codice (`tests/test_docs.py` lo pretende).
 

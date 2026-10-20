@@ -267,6 +267,19 @@ crea e li fa avanzare con una riga negli appunti, lo scriba esegue con
 `set_clock` / `tick_clock`. Quando uno si riempie la conseguenza arriva al
 narratore al turno dopo, una volta sola, e l'orologio sparisce.
 
+## Relazioni dei PNG: il numero lo conta il programma, il narratore legge l'etichetta
+
+Ogni PNG ha un atteggiamento verso il personaggio da -100 a 100, in `stato.json`. Il
+narratore non vede il numero: nel contesto del turno ogni PNG nominato porta l'etichetta
+del suo stadio (`Mira Sol (png · Diffidente)`), su una scala che tassella tutta la fascia
+(Nemico, Ostile, Diffidente, Neutrale, Cordiale, Amico, Devoto; un manuale con i suoi nomi
+la sovrascrive con `meccanica/relazioni.json`). Il numero cambia solo per quello che il
+narratore dichiara negli appunti, `- relazione: <png> sale|scende (lieve|media|forte) —
+motivo`, e solo per interazioni dirette e sostanziali: lo scriba lo trascrive con
+`shift_relationship`, dicendo verso e forza, mai un numero; il codice applica il passo
+(3, 8, 15) e clampa. Il consolidamento della memoria puo' muoverlo di un passo medio per i
+PNG toccati nei turni riletti. Zero chiamate in piu'. `python main.py --doc relazioni`.
+
 ## Quanto costa un turno, e perche' costa poco
 
 Un turno di gioco e' una chiamata del narratore su un contesto composto dal
@@ -715,6 +728,7 @@ master/
   sanitize.py     Sanitizer: fusione dei doppioni, gratuita e approfondita
   tidy.py         GlossaryTidier: allinea il glossario ai file, poi lo pulisce e ordina con una chiamata veloce
   validate.py     verifica della campagna: errori, avvisi, consigli con file, punto e rimedio; nessuna chiamata, nessuna scrittura
+  relazioni.py    le relazioni dei PNG: scala degli stadi (default o dal manuale), passo per enum, etichetta per il narratore
   docs.py         la documentazione a sezioni (--doc): quattro generate da schemi e prompt, quattro scritte in docs/sezioni/
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina

@@ -89,6 +89,15 @@ conseguenza: ...` per crearne uno quando un filo comincia a stringere (due o tre
 bastano), `- orologio: "<nome>" +1` quando un fatto lo fa avanzare. Quando uno si riempie ti
 arriva `[OROLOGIO PIENO: ...]`: la conseguenza accade in quella scena, non si rimanda.
 
+## Relazioni
+L'atteggiamento di ogni PNG verso il personaggio lo conta il programma: nel contesto lo vedi
+come etichetta accanto al nome (Diffidente, Neutrale, Cordiale...). Narra coerente con
+l'etichetta: un Ostile non si scioglie per un sorriso. Cambia solo per un'interazione diretta
+e sostanziale (un aiuto, un torto, una promessa mantenuta o tradita), mai per complimenti o
+gesti vuoti. Negli appunti: `- relazione: <png> sale|scende (lieve|media|forte) — motivo`;
+lieve e' un gesto, media un aiuto o un torto concreto, forte una svolta. Il numero non lo
+scrivi mai: il programma applica il passo.
+
 ## Esperienza
 Il conto dei punti esperienza non lo tieni tu: sta nel registro della scheda, e in
 `esperienza` (nel contesto del turno) trovi guadagnati, spesi e disponibili gia' calcolati.
@@ -134,6 +143,8 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
   aggiornato: tieni le righe ancora valide, togli cio' che e' risolto. Sei righe al massimo.
 - Orologi: riga "orologio" negli appunti -> `set_clock` per uno nuovo, `tick_clock` per farne
   avanzare uno esistente (usa il nome esatto tra quelli che ricevi). Mai di tua iniziativa.
+- Relazioni: riga "relazione" negli appunti -> `shift_relationship` con il nome esatto tra quelli
+  che ricevi (o nuovo), verso e forza come scritto. Mai di tua iniziativa, mai un numero.
 - Glossario: `upsert_glossary` per i "nuovo" (al massimo due a turno, tre in un'apertura), una
   frase breve; file `{SETTING_DIR}/npc.md` per i PNG, `{SETTING_DIR}/mondo.md` per i luoghi.
   PRIMA la sezione nel file (`set_section` con il nome come titolo), POI la voce: il programma
@@ -445,6 +456,7 @@ class MasterEngine(ConversationEngine):
         scene = self.campaign.file(SCENE)
         parts.append("SCENA PRIMA DI QUESTO TURNO:" + NL_ + (scene.read().strip() if scene.exists() else "(nessuna: e' la prima)"))
         parts.append("OROLOGI ATTIVI: " + (self.campaign.clocks_line() or "(nessuno)"))
+        parts.append("RELAZIONI DEI PNG: " + (self.campaign.relations_line() or "(nessuna contata)"))
         parts.append(f'FILI APERTI ATTUALI (sezione "{title}"):' + "\n" + (threads.strip() if threads else "(nessuno)"))
         return "\n\n".join(parts)
 
