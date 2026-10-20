@@ -33,6 +33,7 @@ INDEX: dict[str, tuple[str, str, str]] = {
     "dadi": ("Il profilo dei dadi", "meccanica/dadi.json: campi, marcatore [[tiro: ...]], esito [Tiro]", "dice.PROFILE_SCHEMA"),
     "stato": ("Lo stato della campagna", "stato.json, sessioni/<pg>.jsonl, spese.jsonl, impostazioni.json", "docs/sezioni/stato.md"),
     "relazioni": ("Le relazioni dei PNG", "il numero in stato.json, la scala degli stadi, il passo per enum, il tool, l'override dal manuale", "relazioni.py, tools.RELATION_TOOLS"),
+    "modi": ("I modi di gioco", "la lente sul narratore: i tre modi predefiniti, il blocco nel prompt, meccanica/modi.json", "modi.py"),
     "glossario": ("Il glossario", "la tabella, i tipi, come entra nel contesto del turno", "docs/sezioni/glossario.md"),
     "verifica": ("La verifica della campagna", "i tre livelli, il JSON, l'hook", "docs/sezioni/verifica.md"),
 }
@@ -411,9 +412,43 @@ def _gen_relations() -> str:
     return "\n".join(out)
 
 
+def _gen_modes() -> str:
+    from .modi import DEFAULT, DEFAULT_MODI, FILE_NAME, testo
+
+    out = [
+        "Un modo di gioco e' una LENTE sul narratore: tono, ritmo, quanto il mondo concede alle soluzioni",
+        "improbabili, quanto costano gli errori, come si inclinano i PNG. Non e' una regola: le difficolta' restano",
+        "quelle del manuale, i dadi li tira il programma, la scheda non cambia. Si sceglie dalla pagina (selettore",
+        "'Modo' nella testata) o scrivendo `modo` in `stato.json`; vale dal turno dopo. Entra nel prompt di sistema",
+        "come parte del primo blocco, in cache: si riscrive solo quando il giocatore lo cambia. Zero chiamate in piu'.",
+        "",
+        f"## I modi predefiniti (`{DEFAULT}` se non si sceglie)",
+        "",
+    ]
+    for m in DEFAULT_MODI:
+        out += [f"### `{m['nome']}`", "", m["descrizione"], "", "Blocco nel prompt, parola per parola:", "", "```", testo(m).strip(), "```", ""]
+    out += [
+        f"## `meccanica/{FILE_NAME}`: i modi della campagna",
+        "",
+        "```json",
+        '{"modi": [{"nome": "cupo", "descrizione": "una riga per il selettore", "istruzioni": "cosa cambia per il narratore", "png": "come si inclinano i PNG (facoltativo)"}]}',
+        "```",
+        "",
+        "Se il file c'e' ed e' valido SOSTITUISCE i predefiniti (tutti); `nome`, `descrizione` e `istruzioni` sono",
+        "testi obbligatori, `png` facoltativo, nomi unici (`modi.modi_problems`, la regola usata anche dalla verifica).",
+        "Un file malformato viene ignorato e la verifica lo segnala come errore; un `modo` in `stato.json` che non",
+        "esiste piu' e' un errore (il narratore giocherebbe in `classico` senza dirlo).",
+        "",
+        "Nel codice: `modi.carica(campaign)`, `modi.attivo(campaign)`, `modi.testo(modo)`, `Campaign.set_mode(nome)`,",
+        "`POST /api/mode {name}`; lo stato della pagina espone `mode` e `modes`.",
+    ]
+    return "\n".join(out)
+
+
 GENERATED: dict[str, Callable[[], str]] = {
     "scheda": _gen_sheet,
     "relazioni": _gen_relations,
+    "modi": _gen_modes,
     "appunti": _gen_notes,
     "strumenti-scriba": _gen_tools,
     "dadi": _gen_dice,

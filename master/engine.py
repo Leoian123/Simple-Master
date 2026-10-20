@@ -266,7 +266,7 @@ class MasterEngine(ConversationEngine):
     def system_blocks(self) -> list[dict[str, Any]]:
         """Primo blocco: non cambia mai. Secondo: la parte stabile della scheda, che cambia solo quando
         il personaggio cresce; se cambia si riscrive lei sola, il primo blocco resta in cache."""
-        blocks = [{"type": "text", "text": self.prompt + self.dice_text(), "cache_control": CACHE}]
+        blocks = [{"type": "text", "text": self.prompt + self.dice_text() + self.mode_text(), "cache_control": CACHE}]
         sheet = self.campaign.active_sheet()
         data = Sheet(self.campaign, sheet["slug"]) if sheet else None
         if data is not None and data.exists:
@@ -275,6 +275,12 @@ class MasterEngine(ConversationEngine):
                            "Stato ed esperienza, che cambiano spesso, li trovi aggiornati nel contesto di ogni turno.\n"
                            "```json\n" + data.stable_json() + "\n```"})
         return blocks
+
+    def mode_text(self) -> str:
+        """La lente del modo di gioco scelto: nel primo blocco, in cache, cambia solo se il giocatore lo cambia."""
+        from . import modi
+
+        return modi.testo(modi.attivo(self.campaign))
 
     def dice_text(self) -> str:
         """Come si chiede un tiro in QUESTA campagna: generato dal profilo ricavato dal manuale."""

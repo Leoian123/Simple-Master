@@ -38,14 +38,14 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from master import Campaign, dice, relazioni  # noqa: E402
+from master import Campaign, dice, modi, relazioni  # noqa: E402
 from master.memory import write_scene  # noqa: E402
 from master.sheet import Sheet  # noqa: E402
 from master.validate import validate  # noqa: E402
 
 DELETE = object()      # la chiave sparisce
 RAW = object()         # il valore e' il testo intero del file (file illeggibile, JSON non oggetto)
-DADI, STATO, SCHEDA, RELAZ = "meccanica/dadi.json", "stato.json", "schede/kael.json", "meccanica/relazioni.json"
+DADI, STATO, SCHEDA, RELAZ, MODI = "meccanica/dadi.json", "stato.json", "schede/kael.json", "meccanica/relazioni.json", "meccanica/modi.json"
 
 # --- la campagna sintetica: pulita per costruzione (lo prova il primo test) ----------------------
 
@@ -71,7 +71,10 @@ STATO_BASE: dict[str, Any] = {
     "orologi": {"Guardia": {"segmenti": 6, "pieni": 2, "conseguenza": "arrivano", "scadenza_turni": 12, "creato_turno": 0}},
     "memoria": {"kael": 2},
     "png": {"Mira Sol": {"relazione": -23}},
+    "modo": "cupo",
 }
+MODI_BASE: dict[str, Any] = {"modi": [{"nome": "cupo", "descrizione": "x", "istruzioni": "tono cupo", "png": "diffidenti"},
+                                      {"nome": "lieve", "descrizione": "y", "istruzioni": "tono lieve"}]}
 STADI_BASE: dict[str, Any] = {"stadi": [{"nome": "Ostile", "da": -100, "a": -21}, {"nome": "Neutrale", "da": -20, "a": 20},
                                         {"nome": "Amico", "da": 21, "a": 100}]}
 REGISTRO = [
@@ -163,6 +166,9 @@ def codice_stato(camp: Campaign) -> bool:
             if int(count) < 0:
                 return False
             camp.consolidated(name)
+    if "modo" in data:
+        if not isinstance(data["modo"], str) or data["modo"].strip().lower() not in modi.nomi(camp):
+            return False  # il narratore giocherebbe in `classico` in silenzio
     if "png" in data:
         if not isinstance(data["png"], dict):
             return False
@@ -202,7 +208,16 @@ def codice_scheda(camp: Campaign) -> bool:
     return True
 
 
-CODICE = {DADI: codice_dadi, STATO: codice_stato, SCHEDA: codice_scheda, RELAZ: codice_relazioni}
+def codice_modi(camp: Campaign) -> bool:
+    """Specchio di modi.carica: un file che non passa modi_problems viene ignorato in silenzio."""
+    data = json.loads((camp.root / MODI).read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or modi.modi_problems(data.get("modi")):
+        return False
+    modi.testo(data["modi"][0])
+    return True
+
+
+CODICE = {DADI: codice_dadi, STATO: codice_stato, SCHEDA: codice_scheda, RELAZ: codice_relazioni, MODI: codice_modi}
 
 
 def accetta(fn, camp: Campaign) -> bool:
@@ -299,6 +314,9 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (STATO, "memoria.kael", 99, "errore", "accetta", "oltre: il prossimo consolidamento salterebbe turni"),
     (STATO, "memoria.kael", "quattro", "errore", "rifiuta", "int() fallisce, torna 0"),
     (STATO, "memoria.kael", -1, "errore", "rifiuta", "riportato a 0"),
+    (STATO, "modo", DELETE, None, "accetta", "vale `classico`"),
+    (STATO, "modo", "inesistente", "errore", "rifiuta", "il narratore giocherebbe in `classico` senza dirlo"),
+    (STATO, "modo", 5, "errore", "rifiuta", "non e' un nome"),
     (STATO, "png", DELETE, None, "accetta", "nessuna relazione contata"),
     (STATO, "png", "x", "errore", "rifiuta", "le relazioni spariscono"),
     (STATO, "png.Mira Sol", "x", "errore", "rifiuta", "voce non oggetto"),
@@ -320,6 +338,19 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (RELAZ, "stadi.1.da", -30, "errore", "rifiuta", "stadi sovrapposti"),
     (RELAZ, "stadi.1.da", "x", "errore", "rifiuta", "non e' un intero"),
     (RELAZ, "stadi.2.a", 90, "errore", "rifiuta", "la scala non finisce a 100"),
+    # --- meccanica/modi.json (i modi della campagna: o validi tutti o si ignorano) ---
+    (MODI, "", "{", "errore", "rifiuta", "illeggibile: valgono i modi predefiniti (e `cupo` sparisce)"),
+    (MODI, "", "[1]", "errore", "rifiuta", "non e' un oggetto"),
+    (MODI, "extra", 1, None, "accetta", "chiave in piu' ignorata"),
+    (MODI, "modi", DELETE, "errore", "rifiuta", "senza elenco il file non vale"),
+    (MODI, "modi", [], "errore", "rifiuta", "idem"),
+    (MODI, "modi.0", "x", "errore", "rifiuta", "un modo non oggetto"),
+    (MODI, "modi.0.nome", DELETE, "errore", "rifiuta", "modo senza nome"),
+    (MODI, "modi.1.nome", "cupo", "errore", "rifiuta", "nome doppio"),
+    (MODI, "modi.0.descrizione", "", "errore", "rifiuta", "descrizione vuota"),
+    (MODI, "modi.0.istruzioni", DELETE, "errore", "rifiuta", "senza istruzioni la lente e' vuota"),
+    (MODI, "modi.0.png", 3, "errore", "rifiuta", "png non testo"),
+    (MODI, "modi.0.png", DELETE, None, "accetta", "le inclinazioni dei PNG sono facoltative"),
     # --- schede/kael.json (la parte con una forma: nome, esperienza, e stato.fame letto dai dadi) ---
     (SCHEDA, "", "{", "errore", "rifiuta", "illeggibile: il gioco si ferma"),
     (SCHEDA, "", "[]", "errore", "rifiuta", "non e' un oggetto"),
@@ -356,6 +387,7 @@ class Base(unittest.TestCase):
         self.write(DADI, PROFILO)
         self.write(STATO, STATO_BASE)
         self.write(RELAZ, STADI_BASE)
+        self.write(MODI, MODI_BASE)
         sheet = json.loads((self.camp.root / SCHEDA).read_text(encoding="utf-8"))
         sheet["stato"]["fame"] = 2
         sheet["esperienza"] = {"registro": copy.deepcopy(REGISTRO)}
@@ -429,7 +461,7 @@ class TestMutazioni(Base):
         for name, path, _, _, _, _ in TABELLA:
             if path:
                 mutati.setdefault(name, set()).add(_norm(path))
-        campi = {DADI: _paths(PROFILO), STATO: _paths(STATO_BASE), RELAZ: _paths(STADI_BASE)}
+        campi = {DADI: _paths(PROFILO), STATO: _paths(STATO_BASE), RELAZ: _paths(STADI_BASE), MODI: _paths(MODI_BASE)}
         sheet = self.read(SCHEDA)
         campi[SCHEDA] = {p for p in _paths(sheet) if p.startswith(COPERTURA_SCHEDA)}
         for name, paths in campi.items():

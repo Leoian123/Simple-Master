@@ -26,6 +26,7 @@ from typing import Any
 from .campaign import DIARY, MECHANICS_DIR, PREP_DIR, SETTING_DIR, SHEETS_DIR, STATE_FILE, Campaign
 from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_dice
 from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
+from .modi import FILE_NAME as MODES_NAME, modi_problems
 from .relazioni import FILE_NAME as RELATIONS_NAME, MAX as REL_MAX, MIN as REL_MIN, stadi_problems
 from .sheet import XP_KEY, XP_ROUTES
 
@@ -129,6 +130,7 @@ def validate(campaign: Campaign) -> ValidationReport:
     _check_sheets(campaign, report)
     _check_state(campaign, report)
     _check_relations(campaign, report)
+    _check_modes(campaign, report)
     _check_lineage(campaign, report)
     _check_play(campaign, report)
     return report
@@ -465,6 +467,14 @@ def _check_state(campaign: Campaign, report: ValidationReport) -> None:
                     report.add("recommendation", where, "orologio senza conseguenza",
                                "quando si riempie il narratore ricevera' solo 'si compie'",
                                "scrivi la conseguenza negli appunti o nel file")
+    mode = data.get("modo")
+    if mode is not None:
+        from .modi import nomi
+
+        if not isinstance(mode, str) or mode.strip().lower() not in nomi(campaign):
+            report.add("error", f"{STATE_FILE}:modo", "modo di gioco sconosciuto",
+                       f"{json.dumps(mode, ensure_ascii=False)} non e' tra {', '.join(nomi(campaign))}: il narratore giocherebbe in `classico` senza dirlo",
+                       "scegli un modo dalla pagina, o correggi il valore")
     png = data.get("png")
     if png is not None:
         if not isinstance(png, dict):
@@ -520,6 +530,25 @@ def _check_relations(campaign: Campaign, report: ValidationReport) -> None:
         report.add("error", f"{name}:stadi{where}", "scala delle relazioni malformata",
                    problem + ": il programma usa gli stadi predefiniti e ignora il file",
                    "correggi gli stadi: devono tassellare -100..100 senza buchi")
+
+
+def _check_modes(campaign: Campaign, report: ValidationReport) -> None:
+    name = f"{MECHANICS_DIR}/{MODES_NAME}"
+    data, err = _read_json(campaign.root / MECHANICS_DIR / MODES_NAME)
+    if err is not None:
+        report.add("error", name, "modi di gioco illeggibili", f"non e' JSON valido ({err}): il programma usa i modi predefiniti e ignora il file",
+                   "ripara il JSON, oppure cancella il file")
+        return
+    if data is None:
+        return
+    modes = data.get("modi") if isinstance(data, dict) else None
+    if modes is None:
+        report.add("error", name, "modi di gioco senza elenco", "il file deve contenere {\"modi\": [{nome, descrizione, istruzioni, png}, ...]}",
+                   "scrivi i modi, oppure cancella il file (valgono i predefiniti)")
+        return
+    for where, problem in modi_problems(modes):
+        report.add("error", f"{name}:modi{where}", "modi di gioco malformati", problem + ": il programma usa i modi predefiniti e ignora il file",
+                   "correggi il modo indicato")
 
 
 def _check_lineage(campaign: Campaign, report: ValidationReport) -> None:

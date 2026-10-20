@@ -200,7 +200,10 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 
 ---
 
-## Fase 4 — Modi di gioco come lente (non come regole)
+## Fase 4 — Modi di gioco come lente (non come regole) — FATTO (2026-10-20)
+> `master/modi.py` (tre modi, override `meccanica/modi.json`), `stato.json.modo`, blocco nel
+> primo blocco del prompt (cache), selettore 'Modo' nella testata + `POST /api/mode`, verifica
+> su stato e file, 15 righe di mutazione (modi.json e' il quinto file), `tests/test_modi.py`.
 
 - **Lezione.** I Game Modes di Voyage sono una «lente»: istruzioni al narratore +
   istruzioni ai PNG + difficoltà, scelti dal giocatore, che non cambiano il contenuto. Da

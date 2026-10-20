@@ -13,7 +13,8 @@ solo il codice li scrive (`Campaign`), mai uno strumento dell'AI.
   "Rosa Ruiz e la polizia": {"segmenti": 6, "pieni": 1, "conseguenza": "Agenti al portone con mandato"}
  },
  "memoria": {"jonathan-harker": 9},
- "png": {"Rosa Ruiz": {"relazione": -23}}
+ "png": {"Rosa Ruiz": {"relazione": -23}},
+ "modo": "spietato"
 }
 ```
 
@@ -24,6 +25,7 @@ solo il codice li scrive (`Campaign`), mai uno strumento dell'AI.
 | `orologi` | oggetto | nome -> `{segmenti (2..12), pieni (0..segmenti), conseguenza}`, piu' `scadenza_turni` (da 1) e `creato_turno` (i turni giocati quando e' nato) se ha una scadenza. `set_clock` con `segments` 0 lo toglie; quando `pieni >= segmenti` il narratore lo riceve una volta come `[OROLOGIO PIENO: nome: conseguenza]` e l'orologio sparisce. Passata la scadenza senza che nessuno lo abbia riempito, il programma lo riempie da solo (`scaduto: true`) e la conseguenza arriva con "(il tempo e' passato)" |
 | `memoria` | oggetto | slug -> fino a che turno del giocato il consolidamento e' arrivato. Nulla si ripaga; non puo' superare i turni esistenti |
 | `png` | oggetto | nome del PNG -> `{relazione}` da -100 a 100, l'atteggiamento verso il personaggio contato dal codice e letto come stadio (sezione `relazioni`) |
+| `modo` | nome | il modo di gioco scelto, fra quelli di `meccanica/modi.json` o i predefiniti (`quieto`, `classico`, `spietato`); assente = `classico` (sezione `modi`) |
 
 Un `stato.json` illeggibile vale come vuoto: il programma riparte senza personaggio attivo,
 orologi e contatore (la verifica lo segnala come errore).

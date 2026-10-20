@@ -296,6 +296,17 @@ sessioni e' stantio: all'apertura della sessione il narratore lo riceve come `[F
 ...]` e deve chiuderlo con un fatto o rilanciarlo; il consolidamento lo riceve fra i documenti
 con lo stesso invito. Nessun filo sopravvive in silenzio per sempre.
 
+## Modi di gioco: una lente, non una regola
+
+Nella testata del tavolo si sceglie il modo: `quieto` (tono caldo, ritmo disteso, gli errori
+costano tempo), `classico` (il tono del manuale, conseguenze proporzionate) o `spietato`
+(ritmo serrato, ogni errore lascia un segno, la morte e' sul tavolo). Il modo e' una lente
+sul narratore: tono, ritmo, quanto il mondo concede alle soluzioni improbabili, come si
+inclinano i PNG. Non tocca le regole: le difficolta' restano quelle del manuale, i dadi li
+tira il programma, la scheda non cambia. Entra nel prompt di sistema come parte del blocco
+in cache, quindi non costa nulla a ogni turno e si riscrive solo quando lo si cambia. Una
+campagna puo' avere i suoi modi in `meccanica/modi.json`. `python main.py --doc modi`.
+
 ## Quanto costa un turno, e perche' costa poco
 
 Un turno di gioco e' una chiamata del narratore su un contesto composto dal
@@ -746,6 +757,7 @@ master/
   validate.py     verifica della campagna: errori, avvisi, consigli con file, punto e rimedio; nessuna chiamata, nessuna scrittura
   relazioni.py    le relazioni dei PNG: scala degli stadi (default o dal manuale), passo per enum, etichetta per il narratore
   fili.py         l'eta' dei fili aperti: etichette [sN] messe dal codice, fili stantii da chiudere o rilanciare
+  modi.py         i modi di gioco: la lente sul narratore (tre predefiniti o meccanica/modi.json), nel prompt in cache
   docs.py         la documentazione a sezioni (--doc): quattro generate da schemi e prompt, quattro scritte in docs/sezioni/
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina

@@ -183,6 +183,23 @@ class Campaign:
         slug = self.active_pg
         return next((s for s in self.sheets() if s["slug"] == slug), None) if slug else None
 
+    # --- modo di gioco: la lente scelta dal giocatore, per campagna (modi.py) --------------------------
+
+    def mode_name(self) -> str | None:
+        value = self._state().get("modo")
+        return value.strip().lower() if isinstance(value, str) and value.strip() else None
+
+    def set_mode(self, name: str) -> str:
+        from . import modi
+
+        chosen = modi.trova(self, name)
+        if chosen is None:
+            raise ValueError(f"Modo sconosciuto '{name}'. Esistono: {', '.join(modi.nomi(self))}")
+        state = self._state()
+        state["modo"] = str(chosen["nome"]).strip().lower()
+        self._save_state(state)
+        return state["modo"]
+
     # --- spese: ogni chiamata lascia una riga, il contatore a schermo le somma ------------------
     #
     # Il costo si calcola dai token che l'API restituisce a ogni risposta (ingresso, uscita, cache
