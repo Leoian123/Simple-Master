@@ -52,7 +52,12 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 - **Fatto quando.** `esempio` e `Vampire` passano senza errori; il report dice in una riga
   cosa correggere e dove.
 
-### 0.2 Doc a sezioni per l'agente
+### 0.2 Doc a sezioni per l'agente — FATTO (2026-10-20)
+> `master/docs.py`, `--doc [sezione] [--rigenera]`, `docs/sezioni/` (otto sezioni: quattro
+> generate da `PROFILE_SCHEMA`, `TOOLS` e dai prompt, quattro a mano), `CLAUDE.md` con la
+> tabella "se tocchi X leggi Y", `tests/test_docs.py` (12 test). Trovato leggendo
+> `campaigns/Vampire/ambientazione/scena.md`: lo scriba ha passato `presenti` come stringa e
+> `write_scene` l'ha spezzata in lettere ("J, o, n, a, t, h, a, n"): un caso per la 0.4.
 - **Lezione.** `agent-setup.md` + `/sections/<key>.md`: l'agente carica solo la sezione che
   gli serve e vale la regola *«se un campo non è nella doc della sezione, non esiste»*. Il
   nostro README è 690 righe e si legge intero.
@@ -83,7 +88,10 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 - **Dove.** `tests/test_scriba_ostile.py`: un client finto che risponde con `tool_use`
   validi ma scorretti — `update_sheet` su `esperienza.*`, `award_xp` senza riga `pe`
   negli appunti, `tick_clock` su un orologio inesistente, `append_file` sul `.md` di una
-  scheda, `set_section` fuori da `avventura.md`, due `set_scene` — e la verifica che ogni
+  scheda, `set_section` fuori da `avventura.md`, due `set_scene`, `set_scene` con `presenti`
+  stringa invece di elenco (visto su Vampire: la scena mostrava le lettere del nome),
+  `upsert_glossary` verso un file in cui il termine non viene scritto (i 25 avvisi di
+  Vampire) — e la verifica che ogni
   tentativo torni `is_error` e lasci i file intatti (`ToolExecutor` in `tools.py`,
   `_run_scribe` in `engine.py`).
 - **Fatto quando.** Ogni violazione elencata è respinta e il turno resta valido.

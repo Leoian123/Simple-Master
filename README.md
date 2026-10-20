@@ -617,6 +617,22 @@ Il menu del .bat ha la voce 7 per aprire la cartella e la 8 per elenco e pulizia
 - Soglie modificabili nel `.env`: `MASTER_LOG_KEEP_DAYS`, `MASTER_LOG_ARCHIVE_DAYS`,
   `MASTER_LOG_MAX_FILES`, `MASTER_LOG_MAX_MB`.
 
+### La documentazione a sezioni
+
+Chi deve toccare un dato (una persona o un agente) non rilegge questo README: carica la
+sezione che gli serve e vale la regola *se un campo non e' nella sezione, non esiste*.
+
+```bash
+python main.py --doc            # l'elenco
+python main.py --doc scheda     # una sezione: campagna, scheda, appunti, strumenti-scriba, dadi, stato, glossario, verifica
+```
+
+Le sezioni che hanno uno schema nel codice (`scheda`, `appunti`, `strumenti-scriba`, `dadi`)
+sono generate da quello schema e dai prompt (`master/docs.py`): dopo aver cambiato un tool,
+un campo o un prompt, `--doc --rigenera` riscrive i file in `docs/sezioni/` e un test pretende
+che siano aggiornati. Le altre sono scritte a mano nella stessa cartella. `CLAUDE.md` dice
+quale sezione leggere prima di toccare cosa.
+
 ### Automatismi per Claude Code
 
 Sono configurati in `.claude/settings.json` e `.claude/skills/diagnosi-registri/`:
@@ -683,11 +699,13 @@ master/
   sanitize.py     Sanitizer: fusione dei doppioni, gratuita e approfondita
   tidy.py         GlossaryTidier: allinea il glossario ai file, poi lo pulisce e ordina con una chiamata veloce
   validate.py     verifica della campagna: errori, avvisi, consigli con file, punto e rimedio; nessuna chiamata, nessuna scrittura
+  docs.py         la documentazione a sezioni (--doc): quattro generate da schemi e prompt, quattro scritte in docs/sezioni/
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina
   logbook.py      registro con marca temporale in log/: chiamate API, tool, blocchi, errori con traceback
   ui.py           pagina web minimale (http.server) e API JSON
 main.py           avvio, .env, CLI
+docs/sezioni/        una pagina per ogni dato che ha una forma (python main.py --doc <sezione>)
 campaigns/esempio/   glossario.md + meccanica/, ambientazione/, schede/kael.json
 tests/               un file per area, tutti senza rete (client finto o risposte preparate)
 tests/golden/        manuale base ed espansione inventati, con casi piantati a risposta nota

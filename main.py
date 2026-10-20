@@ -9,6 +9,7 @@ Di norma si usa SimpleMaster.bat. Da terminale:
     python main.py --campaign campaigns/mia --prepare manuale.pdf   # dal manuale ai file di campagna
     python main.py --campaign campaigns/mia --tidy-glossary         # solo riordino del glossario
     python main.py --campaign campaigns/mia --validate [--json]     # errori, avvisi e consigli sui file (senza chiamate)
+    python main.py --doc [scheda|dadi|...]                          # la documentazione a sezioni (--rigenera riscrive le generate)
 
 Ogni esecuzione scrive un registro in log/ (vedi master/logbook.py).
 """
@@ -89,6 +90,10 @@ def main(argv: list[str] | None = None) -> int:
                        help="errori, avvisi e consigli con file, punto e rimedio; con --campaign una sola, altrimenti tutte "
                             "(e stampa solo chi ha errori o avvisi: e' la forma usata dall'hook SessionStart). Esce con 2 se ci sono errori")
     check.add_argument("--json", action="store_true", help="con --validate: uscita JSON (counts, errors, warnings, recommendations)")
+    doc = parser.add_argument_group("documentazione", "una sezione per ogni dato che ha una forma, per chi deve toccarlo")
+    doc.add_argument("--doc", nargs="?", const="", metavar="SEZIONE",
+                     help="stampa una sezione (senza nome: l'elenco). Regola: se un campo non e' nella sezione, non esiste")
+    doc.add_argument("--rigenera", action="store_true", help="con --doc: riscrive in docs/sezioni/ le sezioni generate dal codice")
     logs = parser.add_argument_group("registri", "gestione ordinata dei file in log/")
     logs.add_argument("--logs", choices=["list", "clean", "dismiss", "purge", "diagnose", "examined"],
                       help="list: elenca con errori e interruzioni; clean: rotazione (archivia vecchi, cancella scaduti); "
@@ -106,6 +111,8 @@ def main(argv: list[str] | None = None) -> int:
         return _manage_logs(args)
     if args.validate:
         return _validate(args)
+    if args.doc is not None:
+        return _doc(args)
 
     process = ("nuova" if args.new else "preparazione" if args.prepare else "riordino" if args.tidy_glossary
                else "sanifica" if args.sanitize else "gioco")
@@ -152,6 +159,32 @@ def _validate(args: argparse.Namespace) -> int:
     elif text:
         print(text)
     return 2 if any(r.errors for r in reports) else 0
+
+
+def _doc(args: argparse.Namespace) -> int:
+    """Le sezioni della documentazione: sola lettura (o la riscrittura delle generate), senza registro."""
+    from master import docs
+
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+    if args.rigenera:
+        changed = docs.regenerate()
+        print("Rigenerate: " + (", ".join(changed) if changed else "nessuna (erano gia' aggiornate)"))
+        return 0
+    if not args.doc:
+        print(docs.listing())
+        stale = docs.stale()
+        if stale:
+            print(f"ATTENZIONE: sezioni generate non aggiornate su disco: {', '.join(stale)} (python main.py --doc --rigenera)")
+        return 0
+    try:
+        print(docs.render(args.doc.strip().lower()))
+    except (KeyError, FileNotFoundError) as exc:
+        print(str(exc).strip("'\""), file=sys.stderr)
+        return 2
+    return 0
 
 
 def _manage_logs(args: argparse.Namespace) -> int:
