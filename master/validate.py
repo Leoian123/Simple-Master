@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from .campaign import DIARY, MECHANICS_DIR, PREP_DIR, SETTING_DIR, SHEETS_DIR, STATE_FILE, Campaign
-from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_dice
+from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_dice, verifica_esempi
 from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
 from .modi import FILE_NAME as MODES_NAME, modi_problems
 from .trigger import FILE_NAME as TRIGGER_NAME, problems as trigger_problems, sheet_path_problems
@@ -245,8 +245,8 @@ def _profile_problems(data: Any) -> list[tuple[str, str]]:
         elif name in names:
             out.append((f"{at}.nome", f"'{name}' e' gia' usato da un altro tipo: il marcatore prenderebbe il primo"))
         names.add(name)
-        if kind.get("tipo") not in ("successi", "somma"):
-            out.append((f"{at}.tipo", "dev'essere `successi` o `somma`"))
+        if kind.get("tipo") not in ("successi", "somma", "sotto"):
+            out.append((f"{at}.tipo", "dev'essere `successi`, `somma` o `sotto`"))
         dado = kind.get("dado")
         if not _is_int(dado) or dado < 2:
             out.append((f"{at}.dado", "le facce del dado devono essere un intero da 2 in su"))
@@ -270,6 +270,39 @@ def _profile_problems(data: Any) -> list[tuple[str, str]]:
             out.append((f"{at}.speciali", "null, oppure {nome, quanti_da, sostituiscono} con il percorso nella scheda"))
         if kind.get("esiti") is not None:
             out += [(f"{at}.esiti{where}", problem) for where, problem in esiti_problems(kind["esiti"])]
+        soglie = kind.get("soglie")
+        if soglie is not None:
+            if not isinstance(soglie, list):
+                out.append((f"{at}.soglie", "dev'essere un elenco di gradi {nome, frazione, guida}"))
+            else:
+                seen: set[str] = set()
+                for j, s in enumerate(soglie):
+                    if not isinstance(s, dict):
+                        out.append((f"{at}.soglie[{j}]", "un grado e' {nome, frazione, guida}"))
+                        continue
+                    name_s = str(s.get("nome") or "").strip().lower()
+                    if not name_s:
+                        out.append((f"{at}.soglie[{j}].nome", "manca il nome del grado"))
+                    elif name_s in seen:
+                        out.append((f"{at}.soglie[{j}].nome", f"'{name_s}' e' gia' usato da un altro grado"))
+                    seen.add(name_s)
+                    f = s.get("frazione")
+                    if not isinstance(f, (int, float)) or isinstance(f, bool) or not 0 < f <= 1:
+                        out.append((f"{at}.soglie[{j}].frazione", "una frazione del valore fra 0 e 1"))
+        rule = kind.get("fallimento_critico")
+        if rule is not None:
+            if not isinstance(rule, dict) or not _is_int(rule.get("da")) or (dado and not 1 <= rule["da"] <= dado):
+                out.append((f"{at}.fallimento_critico", "null, oppure {da, sotto_valore, altrimenti_da} con `da` una faccia del dado"))
+            else:
+                for key in ("sotto_valore", "altrimenti_da"):
+                    if rule.get(key) is not None and not _is_int(rule[key]):
+                        out.append((f"{at}.fallimento_critico.{key}", "null o un intero"))
+        crit = kind.get("successo_critico_fino_a")
+        if crit is not None and (not _is_int(crit) or crit < 1):
+            out.append((f"{at}.successo_critico_fino_a", "null, oppure un totale da 1 in su"))
+        esempi = kind.get("esempi")
+        if esempi is not None and not isinstance(esempi, list):
+            out.append((f"{at}.esempi", "dev'essere un elenco di campioni"))
         events = kind.get("eventi")
         if events is None:
             continue
@@ -299,11 +332,16 @@ def _check_dice(campaign: Campaign, report: ValidationReport) -> None:
                        "le regole parlano di tiri ma il profilo non c'e': il narratore scrive i dadi per esteso",
                        "nella pagina della campagna premi 'Ricava i dadi dalle regole' (una chiamata, una volta)")
         return
-    for at, problem in _profile_problems(data):
+    shape = _profile_problems(data)
+    for at, problem in shape:
         report.add("error", f"{name}:{at}" if at else name, "profilo dei dadi malformato", problem,
                    "correggi il campo, oppure cancella il file e ricava di nuovo il profilo")
     if not isinstance(data, dict) or not isinstance(data.get("tiri"), list):
         return
+    if not shape:
+        for at, problem in verifica_esempi(data):
+            report.add("error", f"{name}:{at}", "campione del profilo che non torna", problem,
+                       "o il tipo di tiro e' descritto male o il campione sbaglia l'esito: correggi secondo le regole, o ricava di nuovo il profilo")
     sheet_info = campaign.active_sheet()
     if sheet_info is None:
         return

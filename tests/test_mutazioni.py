@@ -61,9 +61,16 @@ PROFILO: dict[str, Any] = {
          "eventi": [{"nome": "bestiale", "faccia": 1, "quando": "fallito", "solo_speciali": True, "effetto": "compulsione"}],
          "esiti": [{"nome": "fallito", "da_margine": None, "a_margine": -1, "riuscito": False, "guida": "non riesce"},
                    {"nome": "vittoria costosa", "da_margine": 0, "a_margine": 0, "riuscito": True, "guida": "riesce a un prezzo"},
-                   {"nome": "riuscito", "da_margine": 1, "a_margine": None, "riuscito": True, "guida": "riesce"}]},
+                   {"nome": "riuscito", "da_margine": 1, "a_margine": None, "riuscito": True, "guida": "riesce"}],
+         "esempi": [{"marcatore": "x | riserva | dadi 3 | difficolta 2 | fame 0", "dadi": [7, 7, 2],
+                     "atteso": {"valore": 2, "esito": "vittoria costosa", "riuscito": True}}]},
         {"nome": "prova", "uso": "d20 piu' bonus", "tipo": "somma", "dado": 20, "dadi_fissi": 1, "successo_da": None,
-         "vantaggio": True, "nome_zero_successi": "", "coppie": None, "speciali": None, "eventi": [], "esiti": []},
+         "vantaggio": True, "nome_zero_successi": "", "coppie": None, "speciali": None, "eventi": [], "esiti": [], "esempi": []},
+        {"nome": "percentuale", "uso": "d100 sotto il valore", "tipo": "sotto", "dado": 100, "dadi_fissi": 1, "successo_da": None,
+         "vantaggio": False, "nome_zero_successi": "", "coppie": None, "speciali": None, "eventi": [], "esiti": [],
+         "soglie": [{"nome": "estremo", "frazione": 0.2, "guida": "x"}, {"nome": "difficile", "frazione": 0.5, "guida": ""}],
+         "fallimento_critico": {"da": 96, "sotto_valore": 50, "altrimenti_da": 100}, "successo_critico_fino_a": 1,
+         "esempi": [{"marcatore": "x | percentuale | valore 60", "dadi": [25], "atteso": {"valore": 25, "esito": "difficile", "riuscito": True}}]},
     ],
     "fonte": "test",
 }
@@ -146,7 +153,8 @@ def codice_dadi(camp: Campaign) -> bool:
             spec = f"azione | {kind['nome']}" + (" | dadi 3" if kind.get("dadi_fissi") is None else "")
             if kind.get("tipo") == "somma":
                 spec += " | bonus +1"
-            dice.roll(spec + " | difficolta 2", profile, sheet)
+            spec += " | valore 60" if kind.get("tipo") == "sotto" else " | difficolta 2"
+            dice.roll(spec, profile, sheet)
             if kind.get("vantaggio"):
                 dice.roll(spec + " | vantaggio", profile, sheet)
     return True
@@ -293,8 +301,8 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (DADI, "tiri.0.eventi.0.nome", DELETE, None, "accetta", "nome di default"),
     (DADI, "tiri.0.eventi.0.solo_speciali", DELETE, None, "accetta", "falso per default"),
     (DADI, "tiri.0.eventi.0.effetto", DELETE, None, "accetta", "facoltativo"),
-    (DADI, "tiri.0.esiti", DELETE, None, "accetta", "valgono le fasce predefinite"),
-    (DADI, "tiri.0.esiti", [], None, "accetta", "idem"),
+    (DADI, "tiri.0.esiti", DELETE, "errore", "accetta", "oltre: valgono le fasce predefinite e il campione che cita 'vittoria costosa' non torna piu'"),
+    (DADI, "tiri.0.esiti", [], "errore", "accetta", "oltre: idem"),
     (DADI, "tiri.0.esiti", "x", "errore", "rifiuta", "si itera una stringa"),
     (DADI, "tiri.0.esiti.0", "x", "errore", "rifiuta", "una fascia non oggetto"),
     (DADI, "tiri.0.esiti.0.nome", DELETE, "errore", "accetta", "oltre: il codice mostra 'fallito'/'riuscito' al posto del nome"),
@@ -306,6 +314,29 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (DADI, "tiri.0.esiti.0.riuscito", True, None, "accetta", "una scala tutta riuscita resta monotona: lecita, i nomi li decide il manuale"),
     (DADI, "tiri.0.esiti.2.riuscito", False, "errore", "accetta", "oltre: una fascia fallita sopra una riuscita; il codice la applica com'e'"),
     (DADI, "tiri.0.esiti.2.guida", DELETE, None, "accetta", "la guida e' facoltativa"),
+    (DADI, "tiri.2.soglie", "x", "errore", "rifiuta", "si ordina una stringa"),
+    (DADI, "tiri.2.soglie", DELETE, "errore", "accetta", "oltre: senza gradi il campione che cita 'difficile' non torna piu'"),
+    (DADI, "tiri.2.soglie.0", "x", "errore", "rifiuta", "un grado non oggetto"),
+    (DADI, "tiri.2.soglie.0.nome", DELETE, "errore", "accetta", "oltre: il grado si chiama 'grado'"),
+    (DADI, "tiri.2.soglie.1.nome", "estremo", "errore", "accetta", "oltre: due gradi omonimi"),
+    (DADI, "tiri.2.soglie.0.frazione", 1.5, "errore", "accetta", "oltre: un grado oltre il valore"),
+    (DADI, "tiri.2.soglie.0.frazione", "x", "errore", "rifiuta", "float() fallisce"),
+    (DADI, "tiri.2.soglie.0.guida", DELETE, None, "accetta", "guida facoltativa"),
+    (DADI, "tiri.2.fallimento_critico", "x", "errore", "rifiuta", ".get su una stringa"),
+    (DADI, "tiri.2.fallimento_critico", DELETE, None, "accetta", "nessun fallimento critico"),
+    (DADI, "tiri.2.fallimento_critico.da", "x", "errore", "accetta", "oltre: con valore 60 vale `altrimenti_da`, `da` si leggerebbe solo sotto 50"),
+    (DADI, "tiri.2.fallimento_critico.sotto_valore", DELETE, None, "accetta", "soglia fissa"),
+    (DADI, "tiri.2.fallimento_critico.altrimenti_da", DELETE, None, "accetta", "idem"),
+    (DADI, "tiri.2.successo_critico_fino_a", "x", "errore", "rifiuta", "int() fallisce"),
+    (DADI, "tiri.2.successo_critico_fino_a", DELETE, None, "accetta", "nessun successo critico"),
+    (DADI, "tiri.0.esempi", "x", "errore", "accetta", "oltre: i campioni servono alla verifica, il gioco non li legge"),
+    (DADI, "tiri.1.esempi", DELETE, None, "accetta", "nessun campione"),
+    (DADI, "tiri.0.esempi.0.marcatore", "x | banana", "errore", "accetta", "oltre: il campione non si esegue"),
+    (DADI, "tiri.0.esempi.0.dadi", [7], "errore", "accetta", "oltre: facce insufficienti"),
+    (DADI, "tiri.0.esempi.0.atteso", DELETE, "errore", "accetta", "oltre: campione senza atteso"),
+    (DADI, "tiri.0.esempi.0.atteso.valore", 9, "errore", "accetta", "oltre: il campione non torna"),
+    (DADI, "tiri.0.esempi.0.atteso.esito", "riuscito bene", "errore", "accetta", "oltre: idem"),
+    (DADI, "tiri.0.esempi.0.atteso.riuscito", False, "errore", "accetta", "oltre: idem"),
     # --- stato.json ---
     (STATO, "", "{", "errore", "rifiuta", "illeggibile: il programma riparte senza stato"),
     (STATO, "", "[1]", "errore", "rifiuta", "non e' un oggetto"),

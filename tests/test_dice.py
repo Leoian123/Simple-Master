@@ -153,6 +153,97 @@ class TestEsiti(unittest.TestCase):
         self.assertIn("esiti", json.dumps(dice.PROFILE_SCHEMA))  # il manuale le puo' dare
 
 
+D100 = {"tiri": [{"nome": "percentuale", "tipo": "sotto", "dado": 100, "dadi_fissi": 1,
+                  "soglie": [{"nome": "estremo", "frazione": 0.2, "guida": "da manuale: estremo"}, {"nome": "difficile", "frazione": 0.5, "guida": ""}],
+                  "fallimento_critico": {"da": 96, "sotto_valore": 50, "altrimenti_da": 100}, "successo_critico_fino_a": 1,
+                  "eventi": [{"nome": "colpo di fortuna", "faccia": 7, "quando": "riuscito", "solo_speciali": False, "effetto": ""}]}]}
+
+
+class TestSotto(unittest.TestCase):
+    """Roll-under: si riesce con un totale fino al valore; i gradi sono frazioni del valore."""
+
+    def test_grades_fumble_and_crit(self) -> None:
+        for face, esito, won in ((1, "successo critico", True), (10, "estremo", True), (12, "estremo", True), (13, "difficile", True),
+                                 (30, "difficile", True), (31, "riuscito", True), (60, "riuscito", True), (61, "fallito", False),
+                                 (99, "fallito", False), (100, "fallimento critico", False)):
+            with self.subTest(face=face), fixed(face):
+                r = dice.roll("Ascoltare | percentuale | valore 60", D100)
+                self.assertEqual((r["esito"], r["success"], r["value"]), (esito, won, face))
+        with fixed(96):  # con valore sotto 50 il fallimento critico comincia a 96
+            self.assertEqual(dice.roll("x | percentuale | valore 40", D100)["esito"], "fallimento critico")
+        with fixed(25):
+            r = dice.roll("Ascoltare | percentuale | valore 60", D100)
+        self.assertEqual(r["text"], "[Tiro] Ascoltare — 1d100: 25 -> totale 25 contro valore 60: DIFFICILE (margine 35). Guida: Riesce come previsto dalle regole.")
+        with fixed(10):
+            self.assertIn("Guida: da manuale: estremo", dice.roll("x | percentuale | valore 60", D100)["text"])
+        with fixed(70):
+            self.assertIn("FALLITO (mancano 10)", dice.roll("x | percentuale | valore 60", D100)["text"])
+        with fixed(7):
+            r = dice.roll("x | percentuale | valore 60 | bonus -20", D100)  # il bonus modifica il valore
+        self.assertEqual((r["target"], r["esito"], r["notes"]), (40, "estremo", ["COLPO DI FORTUNA"]))
+        self.assertIn("(valore 60 -20 = 40)", r["text"])
+        with self.assertRaises(ValueError):
+            dice.roll("x | percentuale | difficolta 60", D100)  # serve `valore`
+
+    def test_prompt_shows_the_shape_and_the_scale(self) -> None:
+        text = dice.prompt_section(D100)
+        self.assertIn("[[tiro: <nome> | percentuale | valore <V>]]", text)
+        self.assertIn("esiti sul totale: successo critico (fino a 1) · estremo (fino a 0.2 del valore) · difficile (fino a 0.5 del valore) · riuscito (fino al valore) · fallito (oltre) · fallimento critico (da 96 con valore sotto 50, altrimenti da 100)", text)
+
+
+class TestCampioni(unittest.TestCase):
+    """I campioni del profilo si eseguono a dadi fissi: zero chiamate, e il profilo o torna o si dice."""
+
+    def profile(self, **over):
+        kind = {**POOL["tiri"][0], "esempi": [
+            {"marcatore": "x | riserva | dadi 3 | difficolta 2 | fame 0", "dadi": [7, 7, 2], "atteso": {"valore": 2, "esito": "riuscito di misura", "riuscito": True}},
+            {"marcatore": "x | riserva | dadi 2 | difficolta 1 | fame 0", "dadi": [2, 3], "atteso": {"valore": 0, "esito": "fallito", "riuscito": False}}]}
+        kind.update(over)
+        return {"tiri": [kind, {**D100["tiri"][0], "esempi": [{"marcatore": "x | percentuale | valore 60", "dadi": [25], "atteso": {"valore": 25, "esito": "difficile", "riuscito": None}}]}]}
+
+    def test_samples_that_match_have_no_problems(self) -> None:
+        self.assertEqual(dice.verifica_esempi(self.profile()), [])
+        self.assertEqual(dice.verifica_esempi({"tiri": [{**POOL["tiri"][0]}]}), [])  # senza campioni nulla da dire
+
+    def test_samples_name_what_does_not_match(self) -> None:
+        bad = self.profile(esempi=[
+            {"marcatore": "x | riserva | dadi 3 | difficolta 2 | fame 0", "dadi": [7, 7, 2], "atteso": {"valore": 3, "esito": "riuscito bene", "riuscito": False}},
+            {"marcatore": "x | banana", "dadi": [1], "atteso": {"valore": None, "esito": None, "riuscito": None}},
+            {"marcatore": "x | riserva | dadi 3 | difficolta 2 | fame 0", "dadi": [7], "atteso": {"valore": None, "esito": None, "riuscito": None}},
+            "x"])
+        paths = [p for p, _ in dice.verifica_esempi(bad)]
+        self.assertEqual(paths, ["tiri[0].esempi[0].atteso.valore", "tiri[0].esempi[0].atteso.esito", "tiri[0].esempi[0].atteso.riuscito",
+                                 "tiri[0].esempi[1].marcatore", "tiri[0].esempi[2].marcatore", "tiri[0].esempi[3]"])
+        self.assertIn("piu' di 1 dadi", dict(dice.verifica_esempi(bad))["tiri[0].esempi[2].marcatore"])
+        self.assertIs(dice._die.__name__, "_die")  # il dado vero torna al suo posto
+
+
+class TestCampioniNellEstrazione(Base):
+    def test_extraction_retries_once_when_samples_fail_and_flags_what_still_fails(self) -> None:
+        dice.profile_path(self.camp).unlink()
+        bad = {"sistema": "x", "note": "", "tiri": [{**POOL["tiri"][0], "speciali": None, "esempi": [
+            {"marcatore": "x | riserva | dadi 3 | difficolta 2 | fame 0", "dadi": [7, 7, 2], "atteso": {"valore": 5, "esito": None, "riuscito": None}}]}]}
+        good = {"sistema": "x", "note": "", "tiri": [{**POOL["tiri"][0], "speciali": None, "esempi": [
+            {"marcatore": "x | riserva | dadi 3 | difficolta 2 | fame 0", "dadi": [7, 7, 2], "atteso": {"valore": 2, "esito": None, "riuscito": True}}]}]}
+        client = ScriptedClient([[_b(type="text", text=json.dumps(bad))], [_b(type="text", text=json.dumps(good))]])
+        profile = dice.extract_profile(self.camp, client, "claude-sonnet-5")
+        self.assertEqual(len(client.calls), 2)
+        complaint = client.calls[1]["messages"][-1]["content"]
+        self.assertIn("tiri[0].esempi[0].atteso.valore: atteso 5, il programma da' 2", complaint)
+        self.assertEqual(client.calls[1]["messages"][1]["role"], "assistant")  # il primo profilo resta sotto gli occhi
+        self.assertNotIn("campioni_falliti", profile)
+        self.assertEqual(dice.load_profile(self.camp)["tiri"][0]["esempi"][0]["atteso"]["valore"], 2)
+        # se non torna nemmeno la seconda volta: si salva comunque, segnando, e la verifica lo dice
+        dice.profile_path(self.camp).unlink()
+        client = ScriptedClient([[_b(type="text", text=json.dumps(bad))], [_b(type="text", text=json.dumps(bad))]])
+        profile = dice.extract_profile(self.camp, client, "claude-sonnet-5")
+        self.assertEqual(profile["campioni_falliti"], ["tiri[0].esempi[0].atteso.valore: atteso 5, il programma da' 2"])
+        from master.validate import validate
+
+        errors = validate(self.camp).errors
+        self.assertEqual([(f.title, f.path) for f in errors], [("campione del profilo che non torna", "meccanica/dadi.json:tiri[0].esempi[0].atteso.valore")])
+
+
 class TestProfile(Base):
     def test_example_campaign_rolls_by_its_own_rules(self) -> None:
         profile = dice.load_profile(self.camp)

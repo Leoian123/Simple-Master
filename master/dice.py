@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import secrets
 from typing import Any
@@ -116,6 +117,18 @@ def esiti_problems(esiti: Any) -> list[tuple[str, str]]:
     return out
 
 
+# I tiri "sotto il valore" (d100 di CoC, BRP, Delta Green, WFRP, Mythras): riesce se il totale e' fino al
+# valore della scheda; i gradi sono frazioni del valore (`soglie`), il fallimento critico una faccia alta
+# (`fallimento_critico`, che puo' dipendere dal valore), il successo critico una faccia bassa. La guida di un
+# grado la da' il manuale (`soglie[].guida`); per gli esiti fissi vale questa.
+GUIDA_SOTTO = {
+    "successo critico": "Riesce nel modo migliore possibile: un vantaggio concreto in piu'.",
+    "riuscito": "Riesce come previsto dalle regole.",
+    "fallito": "Non riesce; la situazione resta aperta.",
+    "fallimento critico": "Fallisce malamente: una conseguenza concreta, secondo le regole.",
+}
+
+
 def _esiti_di(kind: dict[str, Any] | None, tipo: str) -> list[dict[str, Any]]:
     given = (kind or {}).get("esiti")
     return given if given else DEFAULT_ESITI[tipo]
@@ -181,7 +194,7 @@ def parse(spec: str, profile: dict[str, Any] | None = None) -> dict[str, Any]:
     if len(parts) < 2:
         raise ValueError("Tiro non valido: servono un nome e i dadi, es. 'Attacco | 2d6+1 | difficolta 8'")
     out: dict[str, Any] = {"name": parts[0][:120], "kind": None, "notation": None, "dice": None, "bonus": 0,
-                           "target": None, "count_at": None, "special": None, "advantage": 0}
+                           "target": None, "count_at": None, "special": None, "advantage": 0, "value": None}
     kind = _kind(profile, parts[1])
     if kind is not None:
         out["kind"] = kind
@@ -201,6 +214,8 @@ def parse(spec: str, profile: dict[str, Any] | None = None) -> dict[str, Any]:
             continue
         elif low.startswith("diff"):
             out["target"] = number
+        elif low.startswith("val"):
+            out["value"] = number
         elif low.startswith("dadi"):
             out["dice"] = number
         elif low.startswith("bonus") or low.startswith("mod"):
@@ -293,6 +308,46 @@ def _roll_sum(p: dict[str, Any], kind: dict[str, Any] | None) -> dict[str, Any]:
             "won": won, "fascia": fascia}
 
 
+def _fumble_from(kind: dict[str, Any], value: int) -> int | None:
+    rule = kind.get("fallimento_critico")
+    if not rule:
+        return None
+    below = rule.get("sotto_valore")
+    if below is not None and value < int(below):
+        return int(rule["da"])
+    return int(rule.get("altrimenti_da") or rule["da"])
+
+
+def _roll_under(p: dict[str, Any], kind: dict[str, Any]) -> dict[str, Any]:
+    """Tiro sotto il valore: riesce con un totale fino al valore; i gradi sono frazioni del valore."""
+    sides = int(kind.get("dado") or 100)
+    count = int(p["dice"] or kind.get("dadi_fissi") or 1)
+    _check(count, sides)
+    if p["value"] is None:
+        raise ValueError("Un tiro sotto il valore ha bisogno di `valore <V>` nel marcatore: il valore letto dalla scheda")
+    value = int(p["value"]) + int(p["bonus"])
+    rolls = [_die(sides) for _ in range(count)]
+    total = sum(rolls)
+    fumble = _fumble_from(kind, value)
+    crit_to = kind.get("successo_critico_fino_a")
+    grade: dict[str, Any] | None = None
+    if fumble is not None and total >= fumble:
+        esito, won = "fallimento critico", False
+    elif crit_to is not None and total <= int(crit_to):
+        esito, won = "successo critico", True
+    else:
+        esito, won = ("riuscito", True) if total <= value else ("fallito", False)
+        for s in sorted(kind.get("soglie") or [], key=lambda s: float(s["frazione"])):
+            if total <= math.floor(value * float(s["frazione"])):
+                grade, esito, won = s, str(s.get("nome") or "grado"), True
+                break
+    guida = str((grade or {}).get("guida") or GUIDA_SOTTO.get(esito) or GUIDA_SOTTO["riuscito" if won else "fallito"])
+    notes = _events(kind.get("eventi"), rolls, won, False, only_special=False)
+    detail = f"{count}d{sides}: {', '.join(map(str, rolls))}" + (f" (valore {int(p['value'])} {int(p['bonus']):+d} = {value})" if p["bonus"] else "")
+    return {"rolls": rolls, "special_rolls": [], "value": total, "unit": "totale", "detail": detail, "notes": notes, "won": won,
+            "fascia": {"nome": esito, "riuscito": won, "guida": guida}, "target": value, "target_label": "valore"}
+
+
 def roll(spec: str, profile: dict[str, Any] | None = None, sheet: Any = None) -> dict[str, Any]:
     """Tira secondo il marcatore e il profilo. `sheet` serve per i dadi speciali presi dalla scheda."""
     p = parse(spec, profile)
@@ -312,17 +367,20 @@ def roll(spec: str, profile: dict[str, Any] | None = None, sheet: Any = None) ->
             except (ValueError, TypeError):
                 from_sheet = None
         out = _roll_successes(p, kind, from_sheet)
+    elif kind is not None and kind.get("tipo") == "sotto":
+        out = _roll_under(p, kind)
     else:
         out = _roll_sum(p, kind)
-    target = p["target"]
+    under = out.get("target_label") == "valore"
+    target = out["target"] if under else p["target"]
     verdict, esito, guida = "", "", ""
     if target is not None:
-        margin = out["value"] - target
+        margin = (target - out["value"]) if under else (out["value"] - target)
         fascia = out["fascia"] or {}
         esito = str(fascia.get("nome") or ("riuscito" if out["won"] else "fallito"))
         guida = str(fascia.get("guida") or "")
         measure = f"margine {margin}" if out["won"] or margin >= 0 else f"mancano {-margin}"
-        verdict = f" contro difficolta' {target}: {esito.upper()} ({measure})"
+        verdict = f" contro {'valore' if under else 'difficolta' + chr(39)} {target}: {esito.upper()} ({measure})"
     head = f"{out['value']} successi" if out["unit"] == "successi" else f"totale {out['value']}"
     text = (f"[Tiro] {p['name']} — {out['detail']} -> {head}{verdict}" + "".join(f". {n}" for n in out["notes"]) + "."
             + (f" Guida: {guida}" if guida else ""))
@@ -350,6 +408,9 @@ def prompt_section(profile: dict[str, Any] | None) -> str:
         if k.get("tipo") == "successi":
             shape = f"[[tiro: <nome> | {name}" + ("" if k.get("dadi_fissi") else " | dadi <N>") + " | difficolta <D>]]"
             how = f"d{k.get('dado')}, successo da {k.get('successo_da')}"
+        elif k.get("tipo") == "sotto":
+            shape = f"[[tiro: <nome> | {name} | valore <V>]]"
+            how = f"{k.get('dadi_fissi') or 1}d{k.get('dado')} sotto il valore della scheda; `| bonus <+K>` modifica il valore"
         else:
             shape = f"[[tiro: <nome> | {name} | bonus <+K> | difficolta <D>]]"
             how = f"{k.get('dadi_fissi') or 1}d{k.get('dado')} + bonus" + ("; aggiungi `| vantaggio` o `| svantaggio` quando le regole lo danno" if k.get("vantaggio") else "")
@@ -358,12 +419,33 @@ def prompt_section(profile: dict[str, Any] | None) -> str:
             how += (f"; i dadi {special.get('nome')} li mette il programma leggendo `{special.get('quanti_da')}` dalla scheda"
                     f" (per forzarli: `| {special.get('nome')} <N>`)")
         lines.append(f"- `{name}` ({how}): {shape}" + (f" — {k['uso']}" if k.get("uso") else ""))
-        lines.append(f"  esiti per margine: {scala_esiti(k)}")
+        if k.get("tipo") == "sotto":
+            lines.append(f"  esiti sul totale: {scala_sotto(k)}")
+        else:
+            lines.append(f"  esiti per margine: {scala_esiti(k)}")
     if profile.get("note"):
         lines.append(f"Da ricordare: {profile['note']}")
     lines.append("Con una difficolta' l'esito arriva con il NOME della fascia e una guida: narra quella, non reinterpretare il margine.")
     lines.append("Se nessun tipo si adatta puoi ancora scrivere i dadi per esteso: [[tiro: <nome> | 1d6 | difficolta 4]].")
     return "\n".join(lines) + "\n"
+
+
+def scala_sotto(kind: dict[str, Any]) -> str:
+    """La scala di un tiro sotto il valore in una riga, dal migliore al peggiore."""
+    parts = []
+    crit = kind.get("successo_critico_fino_a")
+    if crit is not None:
+        parts.append(f"successo critico (fino a {crit})")
+    for s in sorted(kind.get("soglie") or [], key=lambda s: float(s["frazione"])):
+        parts.append(f"{s.get('nome')} (fino a {s['frazione']} del valore)")
+    parts.append("riuscito (fino al valore) · fallito (oltre)")
+    rule = kind.get("fallimento_critico") or {}
+    if rule.get("da") is not None:
+        if rule.get("sotto_valore") is not None:
+            parts.append(f"fallimento critico (da {rule['da']} con valore sotto {rule['sotto_valore']}, altrimenti da {rule.get('altrimenti_da') or rule['da']})")
+        else:
+            parts.append(f"fallimento critico (da {rule['da']})")
+    return " · ".join(parts)
 
 
 def scala_esiti(kind: dict[str, Any] | None, tipo: str | None = None) -> str:
@@ -409,6 +491,35 @@ _ESITO = {
     "required": ["nome", "da_margine", "a_margine", "riuscito", "guida"],
     "additionalProperties": False,
 }
+_SOGLIA = {
+    "type": "object",
+    "properties": {
+        "nome": {"type": "string", "description": "Il nome del grado nel manuale (es. 'successo estremo')"},
+        "frazione": {"type": "number", "description": "Il grado vale se il totale e' fino a questa frazione del valore (es. 0.5 = meta', 0.2 = un quinto)"},
+        "guida": {"type": "string", "description": "Come narrare questo grado, in una frase; stringa vuota se il manuale non lo dice"},
+    },
+    "required": ["nome", "frazione", "guida"],
+    "additionalProperties": False,
+}
+_ESEMPIO = {
+    "type": "object",
+    "properties": {
+        "marcatore": {"type": "string", "description": "Un marcatore completo, come lo scriverebbe il narratore: `<nome> | <tipo> | dadi N | difficolta D` (per i dadi speciali forzali: `| <nome dei dadi speciali> 2`)"},
+        "dadi": {"type": "array", "items": {"type": "integer"}, "description": "Le facce uscite, in ordine, tante quante il tiro ne usa"},
+        "atteso": {
+            "type": "object",
+            "properties": {
+                "valore": {**_NULLABLE_INT, "description": "Successi o totale attesi"},
+                "esito": {"type": ["string", "null"], "description": "Il nome dell'esito atteso (fascia o grado), minuscolo"},
+                "riuscito": {"type": ["boolean", "null"], "description": "Se l'azione riesce"},
+            },
+            "required": ["valore", "esito", "riuscito"],
+            "additionalProperties": False,
+        },
+    },
+    "required": ["marcatore", "dadi", "atteso"],
+    "additionalProperties": False,
+}
 PROFILE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -421,7 +532,7 @@ PROFILE_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "nome": {"type": "string", "description": "Una parola minuscola, come la usa il manuale (una per ogni modo di tirare)"},
                     "uso": {"type": "string", "description": "Quando si usa, in una frase"},
-                    "tipo": {"type": "string", "enum": ["successi", "somma"], "description": "successi = si contano i dadi riusciti; somma = si sommano i dadi e un bonus"},
+                    "tipo": {"type": "string", "enum": ["successi", "somma", "sotto"], "description": "successi = si contano i dadi riusciti; somma = si sommano i dadi e un bonus contro una difficolta'; sotto = si riesce con un totale fino al valore della scheda (d100 roll-under)"},
                     "dado": {"type": "integer", "description": "Facce del dado"},
                     "dadi_fissi": {**_NULLABLE_INT, "description": "Numero di dadi se e' sempre lo stesso; null se dipende dai tratti"},
                     "successo_da": {**_NULLABLE_INT, "description": "Per `successi`: un dado riesce da questo valore in su"},
@@ -443,13 +554,24 @@ PROFILE_SCHEMA: dict[str, Any] = {
                         "additionalProperties": False,
                     },
                     "eventi": {"type": "array", "items": _EVENT},
+                    "soglie": {"type": "array", "items": _SOGLIA, "description": "Solo per `sotto`: i gradi di successo come frazioni del valore (es. difficile 0.5, estremo 0.2); [] altrimenti"},
+                    "fallimento_critico": {
+                        "type": ["object", "null"],
+                        "description": "Solo per `sotto`: da quale totale il tiro e' un fallimento critico; `sotto_valore`/`altrimenti_da` se la soglia dipende dal valore (es. 96 sotto 50, altrimenti 100)",
+                        "properties": {"da": {"type": "integer"}, "sotto_valore": _NULLABLE_INT, "altrimenti_da": _NULLABLE_INT},
+                        "required": ["da", "sotto_valore", "altrimenti_da"],
+                        "additionalProperties": False,
+                    },
+                    "successo_critico_fino_a": {**_NULLABLE_INT, "description": "Solo per `sotto`: un totale fino a questo e' un successo critico (es. 1); null altrimenti"},
+                    "esempi": {"type": "array", "items": _ESEMPIO, "description": "Da 2 a 4 casi con dadi fissi ed esito atteso SECONDO LE REGOLE: il programma li esegue e rifiuta un profilo che non li rispetta"},
                     "esiti": {
                         "type": "array",
                         "description": "Le fasce che il manuale da' all'esito in base al MARGINE (successi o totale oltre la difficolta', negativo se sotto): devono coprire tutti i margini senza buchi, la piu' bassa aperta in basso (da_margine null) e la piu' alta in alto (a_margine null). [] se il manuale non gradua l'esito: valgono fasce predefinite",
                         "items": _ESITO,
                     },
                 },
-                "required": ["nome", "uso", "tipo", "dado", "dadi_fissi", "successo_da", "vantaggio", "nome_zero_successi", "coppie", "speciali", "eventi", "esiti"],
+                "required": ["nome", "uso", "tipo", "dado", "dadi_fissi", "successo_da", "vantaggio", "nome_zero_successi", "coppie", "speciali", "eventi", "esiti",
+                             "soglie", "fallimento_critico", "successo_critico_fino_a", "esempi"],
                 "additionalProperties": False,
             },
         },
@@ -465,7 +587,68 @@ del gioco. Un tipo di tiro per ogni modo diverso di tirare (di solito da uno a t
 fornita, usa i suoi percorsi per `quanti_da`. Se le regole non parlano di qualcosa, lascialo null o vuoto.
 `esiti`: solo se il manuale gradua l'esito in base al margine (es. fallimento, successo, successo con margine
 ampio, vittoria costosa): una fascia per grado, con il nome del manuale e una frase su come si narra; le fasce
-coprono tutti i margini senza buchi, la piu' bassa aperta in basso e la piu' alta in alto. Altrimenti []."""
+coprono tutti i margini senza buchi, la piu' bassa aperta in basso e la piu' alta in alto. Altrimenti [].
+`tipo` sotto: per i sistemi in cui si riesce tirando FINO AL valore della scheda (d100 roll-under): i gradi in
+`soglie` come frazioni del valore, il fallimento critico e il successo critico come totali.
+`esempi`: per ogni tipo di tiro da 2 a 4 casi con le facce uscite e l'esito che le regole prevedono (valore,
+nome dell'esito, riuscito). Il programma li esegue: un profilo i cui esempi non tornano viene rifatto."""
+
+
+class _DadiFissi:
+    """Sostituisce il dado con una sequenza data: i campioni si eseguono senza caso."""
+
+    def __init__(self, faces: list[int]):
+        self.faces = list(faces)
+        self.spent = 0
+
+    def __enter__(self):
+        global _die
+        self._real = _die
+        it = iter(self.faces)
+
+        def fixed(sides: int) -> int:
+            self.spent += 1
+            try:
+                return int(next(it))
+            except StopIteration:
+                raise ValueError(f"il tiro usa piu' di {len(self.faces)} dadi: aggiungi facce a `dadi`") from None
+
+        _die = fixed
+        return self
+
+    def __exit__(self, *exc):
+        global _die
+        _die = self._real
+        return False
+
+
+def verifica_esempi(profile: dict[str, Any] | None) -> list[tuple[str, str]]:
+    """(percorso, problema) per ogni campione del profilo che il programma non riproduce. Zero chiamate."""
+    out: list[tuple[str, str]] = []
+    if not isinstance(profile, dict) or not isinstance(profile.get("tiri"), list):
+        return out
+    for i, kind in enumerate(profile["tiri"]):
+        if not isinstance(kind, dict):
+            continue
+        for j, ex in enumerate(kind.get("esempi") or []):
+            at = f"tiri[{i}].esempi[{j}]"
+            if not isinstance(ex, dict) or not isinstance(ex.get("dadi"), list) or not isinstance(ex.get("atteso"), dict):
+                out.append((at, "un campione e' {marcatore, dadi: [facce], atteso: {valore, esito, riuscito}}"))
+                continue
+            try:
+                with _DadiFissi(ex["dadi"]):
+                    r = roll(str(ex.get("marcatore") or ""), profile)
+            except (ValueError, TypeError, KeyError) as exc:
+                out.append((f"{at}.marcatore", str(exc)))
+                continue
+            atteso = ex["atteso"]
+            if atteso.get("valore") is not None and int(atteso["valore"]) != r["value"]:
+                out.append((f"{at}.atteso.valore", f"atteso {atteso['valore']}, il programma da' {r['value']}"))
+            if atteso.get("esito") is not None and str(atteso["esito"]).strip().lower() != r["esito"].lower():
+                out.append((f"{at}.atteso.esito", f"atteso '{atteso['esito']}', il programma da' '{r['esito'] or 'nessun esito'}'"))
+            if atteso.get("riuscito") is not None and bool(atteso["riuscito"]) != bool(r["success"]):
+                out.append((f"{at}.atteso.riuscito", f"atteso {atteso['riuscito']}, il programma da' {r['success']}"))
+    return out
 
 
 def rules_about_dice(campaign: Campaign) -> str:
@@ -503,10 +686,33 @@ def extract_profile(campaign: Campaign, client: Any, model: str, sheet_json: str
     from .models import cost_usd
 
     campaign.record_spend("dadi", model, cost_usd(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0))
-    profile = parse_json_object("\n".join(b.text for b in response.content if b.type == "text"))
+    raw = "\n".join(b.text for b in response.content if b.type == "text")
+    profile = parse_json_object(raw)
     if not profile.get("tiri"):
         log.warning("profilo dadi: il modello non ha trovato tipi di tiro")
         return None
+    problems = verifica_esempi(profile)
+    if problems:
+        # i campioni non tornano: una seconda chiamata con l'errore sotto gli occhi, poi si salva comunque, segnando
+        log.warning("profilo dadi: %d campioni non tornano, rifaccio una volta: %s", len(problems), "; ".join(f"{p}: {m}" for p, m in problems[:4]))
+        complaint = ("Il programma ha eseguito i tuoi `esempi` con le facce indicate e questi non tornano:\n"
+                     + "\n".join(f"- {p}: {m}" for p, m in problems)
+                     + "\nRifai il profilo INTERO: o il tipo di tiro e' descritto male, o il campione sbaglia l'esito "
+                       "secondo le regole. Correggi cio' che non rispetta le regole, non il campione per far tornare i conti.")
+        response = create_message(client, max_seconds=300, model=model, max_tokens=4000, system=PROFILE_PROMPT,
+                                  messages=[{"role": "user", "content": content}, {"role": "assistant", "content": raw},
+                                            {"role": "user", "content": complaint}],
+                                  output_config={"format": {"type": "json_schema", "schema": PROFILE_SCHEMA}})
+        usage = getattr(response, "usage", None)
+        campaign.record_spend("dadi", model, cost_usd(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0))
+        second = parse_json_object("\n".join(b.text for b in response.content if b.type == "text"))
+        if second.get("tiri"):
+            profile = second
+        problems = verifica_esempi(profile)
+        if problems:
+            log.warning("profilo dadi: %d campioni non tornano ancora: salvo e la verifica li segnala", len(problems))
+            profile["campioni_falliti"] = [f"{p}: {m}" for p, m in problems]
+    profile.pop("campioni_falliti", None) if not problems else None
     profile["fonte"] = "ricavato dalle regole in meccanica/ (sezioni su tiri e dadi)"
     save_profile(campaign, profile)
     log.info("profilo dadi salvato: %s", ", ".join(k["nome"] for k in profile["tiri"]))

@@ -268,6 +268,17 @@ e' riuscita. Le fasce devono coprire tutti i margini senza buchi: la verifica lo
 Un profilo ricavato prima di questa funzione non ha `esiti` e usa le predefinite;
 "Ricava i dadi dalle regole" lo rifa' con quelle del manuale.
 
+**Tre forme di tiro.** `somma` (dadi piu' bonus contro una difficolta'), `successi` (si contano
+i dadi riusciti) e `sotto` (si riesce con un totale fino al valore della scheda, come il d100
+di Call of Cthulhu, BRP, Delta Green, WFRP: `[[tiro: Ascoltare | percentuale | valore 65]]`,
+con i gradi a frazioni del valore, il fallimento critico e il successo critico del manuale).
+
+**Il profilo si valida eseguendo campioni.** Insieme al profilo il modello da' per ogni tipo
+di tiro da 2 a 4 casi con le facce uscite e l'esito che le regole prevedono; il programma li
+esegue a dadi fissi prima di salvare, rifa' la chiamata una volta se non tornano, e la verifica
+li riesegue a zero chiamate a ogni avvio: un profilo che non rispetta i suoi campioni e' un
+errore, non una speranza.
+
 ## Orologi: i fili che avanzano li conta il programma
 
 Una minaccia o un progetto che matura nel tempo e' un orologio a segmenti in

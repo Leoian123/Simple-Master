@@ -23,7 +23,7 @@ che superano un valore (`successi`). Tutto il resto e' nel profilo.
 |---|---|---|---|
 | `nome` | string | si | Una parola minuscola, come la usa il manuale (una per ogni modo di tirare) |
 | `uso` | string | si | Quando si usa, in una frase |
-| `tipo` | string (`successi`, `somma`) | si | successi = si contano i dadi riusciti; somma = si sommano i dadi e un bonus |
+| `tipo` | string (`successi`, `somma`, `sotto`) | si | successi = si contano i dadi riusciti; somma = si sommano i dadi e un bonus contro una difficolta'; sotto = si riesce con un totale fino al valore della scheda (d100 roll-under) |
 | `dado` | integer | si | Facce del dado |
 | `dadi_fissi` | integer o null | si | Numero di dadi se e' sempre lo stesso; null se dipende dai tratti |
 | `successo_da` | integer o null | si | Per `successi`: un dado riesce da questo valore in su |
@@ -32,6 +32,10 @@ che superano un valore (`successi`). Tutto il resto e' nel profilo.
 | `coppie` | object o null | si | Se le coppie di una faccia valgono successi in piu' |
 | `speciali` | object o null | si | Dadi di tipo diverso dentro il tiro, il cui numero viene da un valore della scheda |
 | `eventi` | elenco di object | si | Ogni elemento: `nome` (Il nome che il manuale da' all'evento), `faccia` (La faccia del dado che lo fa scattare), `quando` (sempre; solo se il tiro e' riuscito; solo se e' fallito; solo se c'e' un critico (coppie)), `solo_speciali` (true se conta solo quando la faccia esce su un dado speciale), `effetto` (Promemoria breve dell'effetto, o stringa vuota). |
+| `soglie` | elenco di object | si | Solo per `sotto`: i gradi di successo come frazioni del valore (es. difficile 0.5, estremo 0.2); [] altrimenti Ogni elemento: `nome` (Il nome del grado nel manuale (es. 'successo estremo')), `frazione` (Il grado vale se il totale e' fino a questa frazione del valore (es. 0.5 = meta', 0.2 = un quinto)), `guida` (Come narrare questo grado, in una frase; stringa vuota se il manuale non lo dice). |
+| `fallimento_critico` | object o null | si | Solo per `sotto`: da quale totale il tiro e' un fallimento critico; `sotto_valore`/`altrimenti_da` se la soglia dipende dal valore (es. 96 sotto 50, altrimenti 100) |
+| `successo_critico_fino_a` | integer o null | si | Solo per `sotto`: un totale fino a questo e' un successo critico (es. 1); null altrimenti |
+| `esempi` | elenco di object | si | Da 2 a 4 casi con dadi fissi ed esito atteso SECONDO LE REGOLE: il programma li esegue e rifiuta un profilo che non li rispetta Ogni elemento: `marcatore` (Un marcatore completo, come lo scriverebbe il narratore: `<nome> | <tipo> | dadi N | difficolta D` (per i dadi speciali forzali: `| <nome dei dadi speciali> 2`)), `dadi` (Le facce uscite, in ordine, tante quante il tiro ne usa), `atteso`. |
 | `esiti` | elenco di object | si | Le fasce che il manuale da' all'esito in base al MARGINE (successi o totale oltre la difficolta', negativo se sotto): devono coprire tutti i margini senza buchi, la piu' bassa aperta in basso (da_margine null) e la piu' alta in alto (a_margine null). [] se il manuale non gradua l'esito: valgono fasce predefinite Ogni elemento: `nome` (Il nome che il manuale da' a questo esito (es. 'vittoria costosa')), `da_margine` (Margine minimo compreso; null = aperta in basso), `a_margine` (Margine massimo compreso; null = aperta in alto), `riuscito` (true se in questa fascia l'azione riesce), `guida` (Come narrare questo esito secondo il manuale, in una frase). |
 
 `coppie`: `faccia`; `successi_extra` Successi IN PIU' per ogni coppia, oltre a quelli dei due dadi; `nome`.
@@ -50,6 +54,34 @@ Una faccia che, quando esce, fa scattare qualcosa con un nome (critico caotico, 
 | `effetto` | string | si | Promemoria breve dell'effetto, o stringa vuota |
 
 `quando` vale uno tra: `sempre`, `riuscito`, `fallito`, `critico`.
+
+## Tiri sotto il valore (`tipo: "sotto"`)
+
+Per i sistemi in cui si riesce tirando FINO AL valore della scheda (d100 di CoC, BRP, Delta Green, WFRP,
+Mythras). Il marcatore porta il valore: `[[tiro: <nome> | <tipo> | valore <V>]]` (`| bonus <+K>` modifica il
+valore). I gradi sono `soglie` a frazioni del valore (es. difficile 0.5, estremo 0.2), il `fallimento_critico`
+un totale alto (`{da, sotto_valore, altrimenti_da}`: 96 con valore sotto 50, altrimenti 100), il
+`successo_critico_fino_a` un totale basso. L'esito e' il nome del grado o uno fra successo critico / riuscito /
+fallito / fallimento critico, con la guida del grado se il manuale la da'. `esiti` non si applica a `sotto`.
+
+| parametro | tipo | obbligatorio | significato |
+|---|---|---|---|
+| `nome` | string | si | Il nome del grado nel manuale (es. 'successo estremo') |
+| `frazione` | number | si | Il grado vale se il totale e' fino a questa frazione del valore (es. 0.5 = meta', 0.2 = un quinto) |
+| `guida` | string | si | Come narrare questo grado, in una frase; stringa vuota se il manuale non lo dice |
+
+## I campioni (`tiri[i].esempi[j]`)
+
+Da 2 a 4 casi per tipo di tiro, ricavati insieme al profilo: un marcatore completo, le facce uscite e l'esito
+che le regole prevedono. `dice.verifica_esempi` li esegue a dadi fissi: `extract_profile` rifa' la chiamata una
+volta se non tornano e poi salva comunque segnando `campioni_falliti`; la verifica li riesegue a zero chiamate
+e segnala ogni campione che non torna come errore. Il gioco non li legge.
+
+| parametro | tipo | obbligatorio | significato |
+|---|---|---|---|
+| `marcatore` | string | si | Un marcatore completo, come lo scriverebbe il narratore: `<nome> \| <tipo> \| dadi N \| difficolta D` (per i dadi speciali forzali: `\| <nome dei dadi speciali> 2`) |
+| `dadi` | elenco di integer | si | Le facce uscite, in ordine, tante quante il tiro ne usa |
+| `atteso` | object | si |  |
 
 ## Le fasce dell'esito (`tiri[i].esiti[j]`)
 
@@ -77,6 +109,7 @@ Uno per messaggio, su una riga sua, in coda alla narrazione. La pagina lo mostra
 [[tiro: <nome> | <tipo di tiro del profilo> | dadi N | bonus +K | difficolta D]]
 [[tiro: <nome> | <tipo> | dadi N | <nome dei dadi speciali> N]]      per forzare i dadi speciali
 [[tiro: <nome> | <tipo> | bonus +K | difficolta D | vantaggio]]      o svantaggio, se il tipo lo ammette
+[[tiro: <nome> | <tipo sotto> | valore <V>]]                       roll-under: riesce fino al valore
 [[tiro: <nome> | 2d6+1 | difficolta 8]]                             senza profilo: dadi per esteso
 [[tiro: <nome> | 6d10 | successi 6+ | difficolta 3]]                senza profilo: riserva a successi
 ```

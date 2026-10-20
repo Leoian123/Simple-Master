@@ -117,6 +117,21 @@ class TestDice(Base):
         self.assertIn("meccanica/dadi.json:tiri[1].tipo", paths)
         self.assertIn("meccanica/dadi.json:tiri[1].dado", paths)
 
+    def test_under_profile_fields_and_samples_are_checked(self) -> None:
+        self.write_json("meccanica/dadi.json", {"sistema": "x", "note": "", "tiri": [
+            {"nome": "p", "tipo": "sotto", "dado": 100, "dadi_fissi": 1, "soglie": [{"nome": "a", "frazione": 2, "guida": ""}, {"nome": "a", "frazione": 0.5, "guida": ""}],
+             "fallimento_critico": {"da": 101, "sotto_valore": None, "altrimenti_da": None}, "successo_critico_fino_a": 0,
+             "esempi": [{"marcatore": "x | p | valore 50", "dadi": [20], "atteso": {"valore": 20, "esito": "fallito", "riuscito": None}}]}]})
+        paths = [f.path for f in validate(self.camp).errors]
+        for expected in ("meccanica/dadi.json:tiri[0].soglie[0].frazione", "meccanica/dadi.json:tiri[0].soglie[1].nome",
+                         "meccanica/dadi.json:tiri[0].fallimento_critico", "meccanica/dadi.json:tiri[0].successo_critico_fino_a"):
+            self.assertIn(expected, paths)
+        self.assertNotIn("meccanica/dadi.json:tiri[0].esempi[0].atteso.esito", paths)  # i campioni si eseguono solo a forma giusta
+        self.write_json("meccanica/dadi.json", {"sistema": "x", "note": "", "tiri": [
+            {"nome": "p", "tipo": "sotto", "dado": 100, "dadi_fissi": 1, "soglie": [], "fallimento_critico": None, "successo_critico_fino_a": None,
+             "esempi": [{"marcatore": "x | p | valore 50", "dadi": [20], "atteso": {"valore": 20, "esito": "fallito", "riuscito": None}}]}]})
+        self.assertEqual([f.path for f in validate(self.camp).errors], ["meccanica/dadi.json:tiri[0].esempi[0].atteso.esito"])
+
     def test_bands_that_do_not_tile_are_an_error_with_the_path(self) -> None:
         self.write_json("meccanica/dadi.json", {"sistema": "x", "note": "", "tiri": [
             {"nome": "d20", "tipo": "somma", "dado": 20, "dadi_fissi": 1, "esiti": [
