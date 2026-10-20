@@ -228,6 +228,20 @@ class App:
 
         threading.Thread(target=work, name="sanificazione", daemon=True).start()
 
+    def validate(self, name: str) -> dict[str, Any]:
+        """Verifica una campagna dal menu: sola lettura, subito. Il rapporto va nel riquadro dell'avanzamento."""
+        path = self._resolve(name)
+        if not path.is_dir():
+            raise FileNotFoundError(f"Campagna inesistente: {name}")
+        if self.prep["running"]:
+            raise RuntimeError("Un'altra elaborazione e' gia' in corso")
+        from .validate import validate
+
+        report = validate(Campaign(path))
+        log.info("verifica %s: %s", path.name, report.headline())
+        self.prep = {"running": False, "lines": report.lines(), "done": True, "error": None, "campaign": path.name, "kind": "Verifica"}
+        return report.as_dict()
+
     # --- stato per la pagina ------------------------------------------------------------------
 
     def state(self) -> dict[str, Any]:
@@ -573,7 +587,7 @@ body.sheet textarea:focus{border-color:var(--moss)}
 
 <template id="card-tpl">
   <div class="card"><div class="top"><span class="n"></span><span class="tag"></span></div><span class="d"></span>
-    <div class="acts"><button class="btn gold enter" type="button">Entra</button><button class="btn prep-toggle" type="button">Prepara da manuale</button><button class="btn sanitize" type="button" title="Fonde le sezioni sullo stesso soggetto, toglie i blocchi ripetuti e le voci di glossario doppie">Sanifica doppioni</button></div>
+    <div class="acts"><button class="btn gold enter" type="button">Entra</button><button class="btn prep-toggle" type="button">Prepara da manuale</button><button class="btn sanitize" type="button" title="Fonde le sezioni sullo stesso soggetto, toglie i blocchi ripetuti e le voci di glossario doppie">Sanifica doppioni</button><button class="btn validate" type="button" title="Controlla i file della campagna senza chiamate: errori, avvisi e consigli con il rimedio">Verifica</button></div>
     <div class="prepform" hidden>
       <div class="row"><input class="src" placeholder="Percorso del PDF o URL" aria-label="Fonte"><button class="btn browse" type="button" title="Apre Esplora risorse">Sfoglia&hellip;</button></div>
       <div class="explorer" hidden><div class="crumbs"></div><div class="entries"></div></div>
@@ -627,6 +641,9 @@ function renderHome(){
     el.querySelector('.sanitize').onclick=async()=>{
       if(!confirm('Sanificare "'+c.name+'"? Il passo gratuito fonde i titoli equivalenti e toglie i blocchi ripetuti. Il passo approfondito usa poche chiamate API: invia solo i titoli per riconoscere le sezioni sullo stesso soggetto, poi ripulisce le sezioni fuse. La stima del costo compare nell’avanzamento.'))return;
       try{await api('/api/sanitize',{campaign:c.name,deep:true});prepShown=0;await load();pollPrep()}catch(e){err.textContent=e.message}};
+    el.querySelector('.validate').disabled=!!c.preparing;
+    el.querySelector('.validate').onclick=async()=>{err.textContent='';
+      try{await api('/api/validate',{campaign:c.name});prepShown=0;await load();pollPrep()}catch(e){err.textContent=e.message}};
     const src=el.querySelector('.src'), browse=el.querySelector('.browse'), ex=el.querySelector('.explorer');
     browse.onclick=async()=>{browse.disabled=true;err.textContent='';
       try{const r=await api('/api/browse',{initial:src.value.replace(/[\\\/][^\\\/]*$/,'')});if(r.path)src.value=r.path}
@@ -923,6 +940,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 elif path == "/api/sanitize":
                     app.start_sanitize(str(body.get("campaign", "")), bool(body.get("deep", True)))
                     self._json(HTTPStatus.OK, {"started": True})
+                elif path == "/api/validate":
+                    self._json(HTTPStatus.OK, app.validate(str(body.get("campaign", ""))))
                 elif path == "/api/settings":
                     self._json(HTTPStatus.OK, app.update_settings(body))
                 elif path == "/api/browse":

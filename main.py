@@ -8,6 +8,7 @@ Di norma si usa SimpleMaster.bat. Da terminale:
     python main.py --new campaigns/mia      # crea una campagna (copia dell'esempio)
     python main.py --campaign campaigns/mia --prepare manuale.pdf   # dal manuale ai file di campagna
     python main.py --campaign campaigns/mia --tidy-glossary         # solo riordino del glossario
+    python main.py --campaign campaigns/mia --validate [--json]     # errori, avvisi e consigli sui file (senza chiamate)
 
 Ogni esecuzione scrive un registro in log/ (vedi master/logbook.py).
 """
@@ -83,6 +84,11 @@ def main(argv: list[str] | None = None) -> int:
                       help="toglie l'informazione duplicata: titoli equivalenti, blocchi ripetuti, voci di glossario doppie (gratuito)")
     prep.add_argument("--deep", action="store_true",
                       help="con --sanitize: riconosce anche le sezioni sullo stesso soggetto con nomi diversi (usa l'API)")
+    check = parser.add_argument_group("verifica", "controlla i file di una campagna senza chiamate e senza scrivere")
+    check.add_argument("--validate", action="store_true",
+                       help="errori, avvisi e consigli con file, punto e rimedio; con --campaign una sola, altrimenti tutte "
+                            "(e stampa solo chi ha errori o avvisi: e' la forma usata dall'hook SessionStart). Esce con 2 se ci sono errori")
+    check.add_argument("--json", action="store_true", help="con --validate: uscita JSON (counts, errors, warnings, recommendations)")
     logs = parser.add_argument_group("registri", "gestione ordinata dei file in log/")
     logs.add_argument("--logs", choices=["list", "clean", "dismiss", "purge", "diagnose", "examined"],
                       help="list: elenca con errori e interruzioni; clean: rotazione (archivia vecchi, cancella scaduti); "
@@ -98,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.logs:
         return _manage_logs(args)
+    if args.validate:
+        return _validate(args)
 
     process = ("nuova" if args.new else "preparazione" if args.prepare else "riordino" if args.tidy_glossary
                else "sanifica" if args.sanitize else "gioco")
@@ -120,6 +128,30 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     finally:
         log.info("FINE %s", process)
+
+
+def _validate(args: argparse.Namespace) -> int:
+    """La verifica non apre un registro: e' sola lettura e gira anche all'avvio di ogni sessione di Claude Code."""
+    import json
+
+    from master.validate import hook_text, validate, validate_all
+
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # i rilievi citano i file com'e' scritto dentro
+    except (AttributeError, ValueError):
+        pass
+    if args.campaign:
+        reports = [validate(Campaign(args.campaign))]
+        text = reports[0].text()
+    else:
+        reports = validate_all(ROOT / "campaigns")
+        text = hook_text(reports)
+    if args.json:
+        payload = reports[0].as_dict() if args.campaign else [r.as_dict() for r in reports]
+        print(json.dumps(payload, ensure_ascii=False, indent=1))
+    elif text:
+        print(text)
+    return 2 if any(r.errors for r in reports) else 0
 
 
 def _manage_logs(args: argparse.Namespace) -> int:

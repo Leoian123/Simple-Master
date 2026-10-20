@@ -1,5 +1,7 @@
 # Simple Master
 
+> Prossimi passi e priorità: `ROADMAP.md`.
+
 Master minimalista per campagne di gioco di ruolo, guidato da Claude.
 Python puro, dipendenze minime (l'SDK `anthropic` e `pypdf` per i manuali). Lo
 stato della storia vive in file Markdown e JSON; il programma compone da quei
@@ -351,6 +353,33 @@ ripetuti. Il pulsante "Sanifica doppioni" sulla scheda della campagna (o
    gruppi non validi. Le sezioni fuse passano poi dal consolidamento per
    sezioni, con stima del costo e cache per contenuto.
 
+## Verifica della campagna: errori, avvisi, consigli
+
+Prima di giocare, o dopo aver toccato i file a mano, la campagna si controlla senza
+chiamate e senza scrivere nulla: pulsante "Verifica" sulla scheda della campagna nel
+menu, oppure
+
+```bash
+python main.py --campaign campaigns/mia --validate
+```
+
+Tre livelli, ognuno con il file (e dentro il file la sezione o la chiave), il problema e
+il rimedio in una riga:
+
+| Livello | Significa | Esempi |
+|---|---|---|
+| **errori** | la campagna non funziona come deve; esce con codice 2 | un JSON illeggibile (scheda, `stato.json`, `dadi.json`); un profilo dei dadi che non rispetta la forma, o un `quanti_da` che nella scheda non esiste; totali dell'esperienza scritti a mano; punti di sessione assegnati due volte; orologi fuori misura; memoria consolidata oltre i turni giocati |
+| **avvisi** | funziona, ma puo' sbagliare in gioco | una voce di glossario verso un file sparito o un termine che nel file non c'e' (il contesto del turno non trova la sezione); una voce doppia; una sezione in quarantena dopo la fusione di due manuali |
+| **consigli** | migliorie facoltative | ricavare i dadi dalle regole, consolidare la memoria, scrivere la scena o i fili aperti, una scheda ancora solo testo |
+
+`--json` da' la stessa cosa come dati (`counts`, `errors`, `warnings`, `recommendations`,
+ciascun rilievo con `path`, `title`, `message`, `fix`): e' la forma per un agente che lavora
+a ciclo "modifica, verifica, correggi" finche' `counts.errors` e' zero. Senza `--campaign`
+controlla tutte le campagne e stampa solo chi ha errori o avvisi, pochi per livello: e'
+quello che fa l'hook all'apertura di ogni sessione di Claude Code (vedi sotto). I criteri
+sono quelli dei moduli che possiedono i dati (riordino del glossario, dadi, scheda, stato,
+paternita'); qui si guarda soltanto, le correzioni restano ai loro comandi.
+
 ## Avvio a un clic: `Avvia.bat`
 
 Doppio clic e si gioca. Lo script controlla Python, crea l'ambiente virtuale
@@ -595,6 +624,8 @@ Sono configurati in `.claude/settings.json` e `.claude/skills/diagnosi-registri/
 - **All'apertura di una sessione** di Claude Code gira `--logs diagnose`: le
   interruzioni e gli errori non ancora esaminati vengono messi davanti a Claude,
   con file, numero di riga e contesto. Se non c'e' nulla di nuovo, silenzio.
+  Subito dopo gira `--validate` su tutte le campagne: errori e avvisi (pochi per
+  livello, il resto con `--campaign ... --validate`). Se tutto e' in ordine, silenzio.
 - **Alla chiusura della sessione** gira la rotazione (`--logs clean`).
 - **La skill `diagnosi-registri`** guida Claude quando qualcosa si e' fermato:
   leggere le righe indicate, spiegare la causa, correggere, poi segnare i
@@ -651,6 +682,7 @@ master/
   resolve.py      Resolver: quale testo vale dove due manuali si toccano; controlli e quarantena
   sanitize.py     Sanitizer: fusione dei doppioni, gratuita e approfondita
   tidy.py         GlossaryTidier: allinea il glossario ai file, poi lo pulisce e ordina con una chiamata veloce
+  validate.py     verifica della campagna: errori, avvisi, consigli con file, punto e rimedio; nessuna chiamata, nessuna scrittura
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina
   logbook.py      registro con marca temporale in log/: chiamate API, tool, blocchi, errori con traceback

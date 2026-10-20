@@ -8,6 +8,12 @@
             "command": "PY=.venv/Scripts/python.exe; [ -x \"$PY\" ] || PY=python; \"$PY\" main.py --logs diagnose 2>/dev/null || true",
             "timeout": 20,
             "statusMessage": "Diagnosi dei registri di Simple Master..."
+          },
+          {
+            "type": "command",
+            "command": "PY=.venv/Scripts/python.exe; [ -x \"$PY\" ] || PY=python; \"$PY\" main.py --validate 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "Verifica delle campagne di Simple Master..."
           }
         ]
       }
