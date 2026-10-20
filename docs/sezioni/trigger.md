@@ -1,0 +1,64 @@
+# I trigger
+
+<!-- Sezione GENERATA da `python main.py --doc --rigenera`: non modificarla a mano, cambia il codice che la produce. -->
+
+`meccanica/trigger.json` e' un elenco di regole `condizioni -> effetti` che il programma valuta a ogni turno,
+prima della chiamata del narratore, in testa al messaggio del turno: dopo le scadenze degli orologi e prima
+della consegna degli orologi pieni (un trigger puo' riempirne uno nello stesso turno). Le condizioni leggono
+solo cio' che il programma possiede; gli effetti sono tipizzati; nessun testo da giudicare, nessuno script,
+nessuna chiamata. Un file che non rispetta la forma viene ignorato intero, e la verifica lo dice.
+
+```json
+{"trigger": [
+  {"nome": "rischio di frenesia", "ricorrente": true,
+   "quando": [{"scheda": "stato.fame", "op": ">=", "valore": 4}],
+   "effetti": [{"avviso": "Fame a 4 o piu': a ogni tentazione serve una prova, secondo le regole"}]},
+  {"nome": "la Bestia si avvicina",
+   "quando": [{"scheda": "stato.umanita", "op": "<", "valore": 5}],
+   "effetti": [{"orologio": "La Bestia", "avanza": 1, "segmenti": 6, "conseguenza": "Jonathan perde una notte"}]}
+]}
+```
+
+## Una regola
+
+| campo | significato |
+|---|---|
+| `nome` | unico; e' cio' che il narratore legge in `[TRIGGER nome: ...]` |
+| `quando` | da 1 a 5 condizioni, tutte vere insieme (AND); non esiste OR: due regole |
+| `effetti` | da 1 a 3 effetti, applicati in ordine |
+| `ricorrente` | `true`: scatta a ogni turno in cui vale; `false` (default): una volta sola, poi il nome finisce in `stato.json` -> `trigger_scattati` |
+
+Al massimo 100 regole per campagna.
+
+## Le condizioni (`quando[j]`: una sola chiave fra queste, piu' `op` e `valore`)
+
+| chiave | legge |
+|---|---|
+| `scheda` | un valore della scheda del personaggio attivo, per percorso (es. `stato.fame`); se il percorso non esiste la condizione e' falsa |
+| `orologio` | i segmenti pieni di un orologio attivo, per nome; se l'orologio non esiste la condizione e' falsa |
+| `relazione` | il numero della relazione di un PNG (-100..100); se non e' mai stata contata, falsa |
+| `stadio` | lo stadio della relazione di un PNG, per nome (es. `Ostile`), confronto solo con `==` / `!=` |
+| `esito` | il nome della fascia dell'ultimo tiro, solo nel turno in cui l'esito arriva (es. `fallito`), `==` / `!=` |
+| `contatore` | `turni` (giocati dal personaggio) o `sessione` (in corso) |
+
+`op`: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contiene`. Con `<`, `<=`, `>`, `>=` il valore e' un numero; `contiene` cerca un
+elemento in un elenco (o un pezzo in un testo); `stadio` ed `esito` ammettono solo `==` / `!=` con un nome.
+Un confronto fra tipi diversi e' falso, mai un errore: una regola scritta male non scatta.
+
+## Gli effetti (`effetti[j]`: una sola chiave fra queste)
+
+| chiave | fa |
+|---|---|
+| `avviso` | una riga al narratore in testa al messaggio del turno: `[TRIGGER <nome>: avviso]` |
+| `orologio` | fa avanzare l'orologio di `avanza` segmenti (anche negativi); se non esiste e c'e' `segmenti`, lo crea (con `conseguenza`) |
+| `relazione` | muove la relazione del PNG di un passo: `verso` sale|scende, `forza` lieve|media|forte |
+
+L'avviso arriva al narratore come `[TRIGGER <nome>: testo]`, come gli orologi pieni; gli altri effetti
+cambiano `stato.json` e si vedono dove si vedono gli orologi e le relazioni. Nessun effetto tocca la scheda:
+i numeri del personaggio li muove solo lo scriba, su indicazione del narratore.
+
+## Verifica
+
+La verifica segnala come errore un file illeggibile o malformato (con il percorso della regola) e un percorso
+`scheda` che nella scheda attiva non esiste (la regola non scatterebbe mai). Nel codice: `trigger.problems(data)`,
+`trigger.carica(campaign)`, `trigger.valuta(campaign, messaggio_del_turno)`.

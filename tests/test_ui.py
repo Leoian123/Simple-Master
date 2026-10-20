@@ -90,6 +90,22 @@ class TestUI(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("menu principale", err["error"])
 
+    def test_validate_from_the_menu_reports_in_the_progress_box(self) -> None:
+        self.camps.joinpath("esempio", "stato.json").write_text("{non json", encoding="utf-8")
+        status, report = self.call("POST", "/api/validate", {"campaign": "esempio"})
+        self.assertEqual(status, 200)
+        self.assertEqual(report["counts"]["errors"], 1)
+        self.assertEqual(report["errors"][0]["path"], "stato.json")
+        # il rapporto compare nel riquadro dell'avanzamento, gia' concluso, senza thread
+        status, prep = self.call("GET", "/api/prepare/status")
+        self.assertEqual((prep["kind"], prep["running"], prep["done"], prep["campaign"]), ("Verifica", False, True, "esempio"))
+        self.assertIn("1 errore", prep["lines"][0])
+        self.assertTrue(any("stato.json" in line for line in prep["lines"]))
+        status, err = self.call("POST", "/api/validate", {"campaign": "inesistente"})
+        self.assertEqual(status, 400)
+        page = self.call("GET", "/")[1]
+        self.assertIn('class="btn validate"', page)
+
     def test_enter_play_leave(self) -> None:
         status, r = self.call("POST", "/api/campaign", {"name": "esempio"})
         self.assertEqual((status, r["campaign"]), (200, "esempio"))

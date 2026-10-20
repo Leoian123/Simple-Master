@@ -1,5 +1,7 @@
 # Simple Master
 
+> Prossimi passi e priorità: `ROADMAP.md`.
+
 Master minimalista per campagne di gioco di ruolo, guidato da Claude.
 Python puro, dipendenze minime (l'SDK `anthropic` e `pypdf` per i manuali). Lo
 stato della storia vive in file Markdown e JSON; il programma compone da quei
@@ -166,6 +168,12 @@ gioco e' diviso in due chiamate che non si parlano:
 Lo scriba parte a ogni turno, anche quando gli appunti dicono `nulla`: aggiorna
 comunque `scena.md` (`set_scene`), il documento da cui riparte il turno dopo. Se
 fallisce il turno resta valido e gli appunti partono con quelli del turno dopo.
+Il codice non si fida dello scriba: i punti esperienza passano solo se gli appunti
+hanno la riga `pe` (mai di sua iniziativa), una voce di glossario e' rifiutata se il
+termine non compare nel file indicato (prima la sezione, poi la voce), la scena e'
+rifiutata se `presenti` non e' un elenco. Ogni rifiuto torna allo scriba come errore e
+ha un secondo giro per correggersi; `tests/test_scriba_ostile.py` prova tutte le
+scappatoie con un modello finto che rispetta lo schema.
 Sotto ogni risposta il costo riporta la quota dello scriba. Il costruttore di schede
 non usa lo scriba: salva lui, alla conferma del giocatore.
 
@@ -218,6 +226,16 @@ compute, Generative Agents) e il risultato di un benchmark su narratori LLM: i
 conflitti di fatti sono l'errore piu' comune, e la memoria compressa peggiora
 proprio la fedelta' a cio' che ha fatto il giocatore.
 
+### Da non perdere: cosa la memoria non puo' lasciar cadere
+
+`ambientazione/da-non-perdere.md` e' un elenco corto, una riga per fatto: una promessa, un
+debito, una ferita che resta, un grado, un segreto svelato. Cio' che sarebbe stonato se un
+PNG lo dimenticasse. Lo si scrive a mano; il consolidamento lo riceve per intero, lo tratta
+come stabilito e puo' aggiungere al massimo due righe per corsa (si toglie solo a mano). Il
+contesto del turno porta le righe che il turno tocca, l'apertura di una sessione tutte: una
+promessa fatta nella sessione 1 e' davanti al narratore nella sessione 4 anche se il
+glossario non la indicizza.
+
 ## Dadi: li tira il programma, con le regole del manuale
 
 Il master non genera numeri casuali credibili e non deve decidere lui se un'azione
@@ -236,9 +254,35 @@ profilo. Per una campagna preparata prima di questa funzione, in pagina compare
 
 Il master chiude la narrazione con `[[tiro: Intelligenza + Investigare | riserva |
 dadi 5 | difficolta 3]]`; la pagina lo mostra come pulsante; il programma tira e
-l'esito (`[Tiro] ... 5d10: 7, 6, 4 | fame: 2, 9 -> 3 successi ... RIUSCITO`)
-diventa il messaggio del giocatore. Tirare non costa chiamate. `/tira 2d6+1` nel
-campo di testo fa un tiro libero.
+l'esito (`[Tiro] ... 5d10: 7, 6, 4 | fame: 2, 9 -> 3 successi ... RIUSCITO DI MISURA
+(margine 0). Guida: ...`) diventa il messaggio del giocatore. Tirare non costa
+chiamate. `/tira 2d6+1` nel campo di testo fa un tiro libero.
+
+**L'esito ha un nome e una guida.** Con una difficolta', il margine cade in una fascia:
+il manuale puo' darle (`esiti` nel profilo: "fallito", "vittoria costosa", "riuscito"...,
+con una frase su come si narra ciascuna, ricavate insieme al profilo), altrimenti valgono
+fasce predefinite (per le riserve: fallito / riuscito di misura / riuscito / riuscito bene;
+per le somme una scala piu' larga). Il narratore riceve il nome della fascia e la sua
+guida e narra quella, invece di reinterpretare un numero; e' la fascia a dire se l'azione
+e' riuscita. Le fasce devono coprire tutti i margini senza buchi: la verifica lo controlla.
+Un profilo ricavato prima di questa funzione non ha `esiti` e usa le predefinite;
+"Ricava i dadi dalle regole" lo rifa' con quelle del manuale.
+
+**Tre forme di tiro.** `somma` (dadi piu' bonus contro una difficolta'), `successi` (si contano
+i dadi riusciti) e `sotto` (si riesce con un totale fino al valore della scheda, come il d100
+di Call of Cthulhu, BRP, Delta Green, WFRP: `[[tiro: Ascoltare | percentuale | valore 65]]`,
+con i gradi a frazioni del valore, il fallimento critico e il successo critico del manuale).
+
+**Tieni ed esplosioni.** `tieni` tira N dadi e ne tiene i piu' alti o i piu' bassi; con gli esiti
+letti sul dado tenuto non serve una difficolta' (Forged in the Dark: `[[tiro: Scavalcare | azione |
+dadi 2]]` -> "CON CONSEGUENZE"); `esplode_su` ritira e somma una faccia alta (Savage Worlds, L5R)
+o aggiunge un dado alla riserva (il "10 again").
+
+**Il profilo si valida eseguendo campioni.** Insieme al profilo il modello da' per ogni tipo
+di tiro da 2 a 4 casi con le facce uscite e l'esito che le regole prevedono; il programma li
+esegue a dadi fissi prima di salvare, rifa' la chiamata una volta se non tornano, e la verifica
+li riesegue a zero chiamate a ogni avvio: un profilo che non rispetta i suoi campioni e' un
+errore, non una speranza.
 
 ## Orologi: i fili che avanzano li conta il programma
 
@@ -248,6 +292,60 @@ riceve in testa al messaggio del turno (non nel prompt, che resta in cache), li
 crea e li fa avanzare con una riga negli appunti, lo scriba esegue con
 `set_clock` / `tick_clock`. Quando uno si riempie la conseguenza arriva al
 narratore al turno dopo, una volta sola, e l'orologio sparisce.
+
+## Relazioni dei PNG: il numero lo conta il programma, il narratore legge l'etichetta
+
+Ogni PNG ha un atteggiamento verso il personaggio da -100 a 100, in `stato.json`. Il
+narratore non vede il numero: nel contesto del turno ogni PNG nominato porta l'etichetta
+del suo stadio (`Mira Sol (png · Diffidente)`), su una scala che tassella tutta la fascia
+(Nemico, Ostile, Diffidente, Neutrale, Cordiale, Amico, Devoto; un manuale con i suoi nomi
+la sovrascrive con `meccanica/relazioni.json`). Il numero cambia solo per quello che il
+narratore dichiara negli appunti, `- relazione: <png> sale|scende (lieve|media|forte) —
+motivo`, e solo per interazioni dirette e sostanziali: lo scriba lo trascrive con
+`shift_relationship`, dicendo verso e forza, mai un numero; il codice applica il passo
+(3, 8, 15) e clampa. Il consolidamento della memoria puo' muoverlo di un passo medio per i
+PNG toccati nei turni riletti. Zero chiamate in piu'. `python main.py --doc relazioni`.
+
+## Scadenze: il tempo passa anche se nessuno lo conta
+
+Un orologio puo' avere una scadenza: il narratore scrive `entro N turni` nella riga degli
+appunti, lo scriba la passa a `set_clock`, e il programma conta i turni giocati da quando
+l'orologio e' nato. Passata la scadenza senza che nessuno lo abbia riempito, l'orologio si
+riempie da solo e la conseguenza arriva al narratore come `[OROLOGIO PIENO: ... (il tempo e'
+passato)]`. Il narratore vede quanto resta accanto a ogni orologio attivo (`Guardia 2/6 (entro
+7 turni)`).
+
+I fili aperti in `ambientazione/avventura.md` portano l'eta': ogni riga ha `[sN]`, la sessione
+in cui e' nata, messa dal codice a ogni scrittura (lo scriba e il consolidamento scrivono il
+testo, il programma conserva le etichette delle righe che c'erano). Un filo fermo da due
+sessioni e' stantio: all'apertura della sessione il narratore lo riceve come `[FILI STANTII:
+...]` e deve chiuderlo con un fatto o rilanciarlo; il consolidamento lo riceve fra i documenti
+con lo stesso invito. Nessun filo sopravvive in silenzio per sempre.
+
+## Modi di gioco: una lente, non una regola
+
+Nella testata del tavolo si sceglie il modo: `quieto` (tono caldo, ritmo disteso, gli errori
+costano tempo), `classico` (il tono del manuale, conseguenze proporzionate) o `spietato`
+(ritmo serrato, ogni errore lascia un segno, la morte e' sul tavolo). Il modo e' una lente
+sul narratore: tono, ritmo, quanto il mondo concede alle soluzioni improbabili, come si
+inclinano i PNG. Non tocca le regole: le difficolta' restano quelle del manuale, i dadi li
+tira il programma, la scheda non cambia. Entra nel prompt di sistema come parte del blocco
+in cache, quindi non costa nulla a ogni turno e si riscrive solo quando lo si cambia. Una
+campagna puo' avere i suoi modi in `meccanica/modi.json`. `python main.py --doc modi`.
+
+## Trigger: le regole del manuale che il programma puo' contare
+
+`meccanica/trigger.json` e' un elenco di regole `condizioni -> effetti`, scritte come dati.
+Le condizioni leggono solo cio' che il programma possiede: un valore della scheda
+(`stato.fame >= 4`), un orologio, la relazione o lo stadio di un PNG, l'esito dell'ultimo
+tiro, i contatori di turni e sessioni. Gli effetti sono tipizzati: un avviso al narratore
+(`[TRIGGER rischio di frenesia: ...]` in testa al messaggio del turno, come gli orologi
+pieni), un orologio che avanza o nasce, una relazione che si muove di un passo. A ogni
+turno, prima della chiamata del narratore, il codice le valuta tutte e applica gli effetti;
+una regola non ricorrente scatta una volta sola. Niente testo da giudicare, niente script,
+nessuna chiamata: la regola della frenesia arriva al narratore dal contatore della scheda,
+non dalla sua memoria. Si scrivono a mano; un file malformato si ignora intero e la
+verifica lo dice. `python main.py --doc trigger`.
 
 ## Quanto costa un turno, e perche' costa poco
 
@@ -351,6 +449,33 @@ ripetuti. Il pulsante "Sanifica doppioni" sulla scheda della campagna (o
    gruppi non validi. Le sezioni fuse passano poi dal consolidamento per
    sezioni, con stima del costo e cache per contenuto.
 
+## Verifica della campagna: errori, avvisi, consigli
+
+Prima di giocare, o dopo aver toccato i file a mano, la campagna si controlla senza
+chiamate e senza scrivere nulla: pulsante "Verifica" sulla scheda della campagna nel
+menu, oppure
+
+```bash
+python main.py --campaign campaigns/mia --validate
+```
+
+Tre livelli, ognuno con il file (e dentro il file la sezione o la chiave), il problema e
+il rimedio in una riga:
+
+| Livello | Significa | Esempi |
+|---|---|---|
+| **errori** | la campagna non funziona come deve; esce con codice 2 | un JSON illeggibile (scheda, `stato.json`, `dadi.json`); un profilo dei dadi che non rispetta la forma, o un `quanti_da` che nella scheda non esiste; totali dell'esperienza scritti a mano; punti di sessione assegnati due volte; orologi fuori misura; memoria consolidata oltre i turni giocati |
+| **avvisi** | funziona, ma puo' sbagliare in gioco | una voce di glossario verso un file sparito o un termine che nel file non c'e' (il contesto del turno non trova la sezione); una voce doppia; una sezione in quarantena dopo la fusione di due manuali |
+| **consigli** | migliorie facoltative | ricavare i dadi dalle regole, consolidare la memoria, scrivere la scena o i fili aperti, una scheda ancora solo testo |
+
+`--json` da' la stessa cosa come dati (`counts`, `errors`, `warnings`, `recommendations`,
+ciascun rilievo con `path`, `title`, `message`, `fix`): e' la forma per un agente che lavora
+a ciclo "modifica, verifica, correggi" finche' `counts.errors` e' zero. Senza `--campaign`
+controlla tutte le campagne e stampa solo chi ha errori o avvisi, pochi per livello: e'
+quello che fa l'hook all'apertura di ogni sessione di Claude Code (vedi sotto). I criteri
+sono quelli dei moduli che possiedono i dati (riordino del glossario, dadi, scheda, stato,
+paternita'); qui si guarda soltanto, le correzioni restano ai loro comandi.
+
 ## Avvio a un clic: `Avvia.bat`
 
 Doppio clic e si gioca. Lo script controlla Python, crea l'ambiente virtuale
@@ -433,23 +558,32 @@ Come funziona (map -> reduce -> consolida):
    infinita. I blocchi validi lasciati da versioni precedenti nella cartella
    `preparazione/` di una campagna vengono importati nella cache condivisa
    abbinandoli per pagine.
-3. **Unione.** Le sezioni entrano nei file con le classi di `files.py` (sezioni con
-   lo stesso titolo si accodano), le voci nel glossario. Nasce anche
+3. **Unione, nello spazio del manuale.** Le sezioni entrano con le classi di
+   `files.py` (sezioni con lo stesso titolo si accodano) e le voci nel glossario,
+   ma non nella campagna: ogni manuale ha il suo spazio di lavoro in
+   `preparazione/fonti/<manuale>/`, dove il suo testo resta separato da quello
+   degli altri. Un blocco gia' fuso non si accoda una seconda volta. Nasce anche
    `fonte-<nome>.md`: indice per pagine del manuale, per tornare all'originale.
 4. **Consolidamento per sezioni.** Solo le sezioni il cui titolo compare in piu'
    blocchi hanno testo accodato da ripulire: vengono inviate a gruppi di circa
    45.000 caratteri (in batch quando i gruppi sono almeno due), e l'esito
-   sostituisce solo quelle sezioni. Il resto del file non viaggia e non si paga:
+   sostituisce solo quelle sezioni. Il resto non viaggia e non si paga:
    sul manuale di Vampiri sono 20 sezioni su 355, circa 82.000 caratteri invece
-   di 877.000. Ogni sezione ripulita deve conservare almeno un terzo della
-   lunghezza, altrimenti resta com'era. Esito in cache per contenuto
-   (`cache/manuali/consolidati/`). `--no-consolidate` per saltarlo del tutto.
-   La fusione e' ripetibile: rilanciando sulla stessa campagna il testo gia'
-   presente non si accoda di nuovo. I titoli `#` e `##` dentro il testo di una
-   sezione vengono abbassati a `###`, perche' la sezione e' l'unita' che il
-   master legge e aggiorna.
+   di 877.000. Si ripulisce solo il testo del manuale in corso: cio' che la
+   campagna aveva gia' e cio' che viene da altri manuali non passa dal modello.
+   Ogni sezione ripulita deve conservare almeno un terzo della lunghezza,
+   altrimenti resta com'era. Esito in cache per contenuto
+   (`cache/manuali/consolidati/`); una sezione gia' ripulita e non piu' toccata
+   non viene rimandata al modello. `--no-consolidate` per saltarlo del tutto.
+   I titoli `#` e `##` dentro il testo di una sezione vengono abbassati a `###`,
+   perche' la sezione e' l'unita' che il master legge e aggiorna.
+5. **Composizione della campagna.** Le sezioni della campagna si compongono dagli
+   spazi di tutti i manuali in ordine canonico: prima il testo che la campagna
+   aveva gia', poi i manuali dal piu' vecchio al piu' recente. Preparare base ed
+   espansione in un ordine o nell'altro da' lo stesso risultato, e una corsa
+   interrotta lascia la campagna com'era. Vedi "Paternita' del dato" qui sotto.
 
-5. **Riordino del glossario.** Un sotto-tool parte alla fine (o da solo con
+6. **Riordino del glossario.** Un sotto-tool parte alla fine (o da solo con
    `--tidy-glossary`). Prima, senza API: aggiunge una voce per ogni file della
    campagna che non ne ha una, aggiorna quelle dei file gia' indicizzati, toglie
    le voci che puntano a file spariti e segnala quelle il cui termine non compare
@@ -462,6 +596,91 @@ Come funziona (map -> reduce -> consolida):
 
 Opzioni: `--pages 10-120` per una parte del manuale, `--effort low` per
 risparmiare. A fine corsa stampa blocchi, chiamate e token usati.
+
+### Paternita' del dato
+
+Ogni sezione, voce di glossario e profilo dei dadi conosce i suoi genitori. Il
+registro `preparazione/paternita.json` (modulo `lineage.py`) tiene per ogni dato
+l'impronta del testo e da dove viene: quale manuale, quali pagine, oppure la
+campagna stessa.
+
+- **Niente da dichiarare.** Non si dice al programma quale manuale e' il base e
+  quale l'espansione. Alla prima preparazione di un volume una chiamata breve
+  legge dalle sue prime pagine titolo, gioco, edizione e anno, e li salva nella
+  cache del manuale (`manuale.json`): non si richiedono piu'. L'ordine canonico
+  viene dall'anno; un manuale senza data conta come il piu' vecchio, e se i dati
+  non si ricavano la preparazione prosegue lo stesso.
+- **Un'altra edizione e' un altro gioco.** Se il volume dichiara un'edizione
+  diversa da quella dei manuali dello stesso gioco gia' nella campagna, viene
+  rifiutato prima di spendere per l'estrazione: non c'e' niente da conciliare.
+  Vale solo quando entrambe le edizioni sono scritte nei volumi; nel dubbio non
+  si rifiuta. `--altra-edizione` per fonderlo lo stesso.
+- **Il testo scritto fuori dalla preparazione non si riscrive.** Una sezione che
+  c'era gia', o che il master o il giocatore hanno cambiato, si riconosce
+  dall'impronta diversa: quel testo diventa la prima parte della sezione
+  (`preparazione/fonti/_campagna/`) e i manuali si accodano dopo. Una sezione
+  tolta non rinasce rilanciando lo stesso manuale.
+- **Glossario.** Una voce definita da piu' manuali tiene la descrizione e il file
+  del piu' vecchio: un'espansione che cita di passaggio un personaggio non
+  sposta la sua voce lontano dalla sua sezione. Le voci che c'erano gia', o
+  corrette in gioco, restano com'erano.
+- **Dadi.** Con piu' manuali il profilo dei tiri e' in cache per contenuto delle
+  regole che parlano di tiri: si rifa' solo se un manuale le cambia.
+- **Campagne gia' preparate.** Alla prima corsa i manuali gia' fusi si
+  riconoscono dagli indici `fonte-*.md`; se i loro blocchi sono ancora nella
+  cache condivisa, da li' si ricava senza chiamate quali sezioni e quali pagine
+  vengono da ciascuno. Rilanciare un manuale adottato non lo duplica.
+
+- **Scontri possibili.** A fine preparazione il programma cerca, senza chiamate,
+  i punti in cui il manuale tocca testo di un'altra origine: le sezioni con lo
+  stesso titolo, e quelle che nominano nel corpo una voce di glossario la cui
+  sezione viene da altrove (un'errata alle Riparazioni scritta dentro "Nuove
+  regole per le officine"). Per ogni sezione tiene al massimo i tre termini piu'
+  specifici. E' una ricerca larga: sul golden dataset trova tutti i 21 scontri
+  piantati e 5 coppie in piu'.
+
+### Quale testo vale
+
+Mettere le parti in ordine non basta quando la parte nuova corregge la vecchia:
+il master legge una sezione sola, spesso solo l'inizio, e troverebbe prima la
+regola superata. Per ogni punto in cui un manuale tocca testo di un'altra
+origine, una chiamata (modulo `resolve.py`) stabilisce il rapporto tra i due
+testi, e il codice agisce di conseguenza:
+
+| Rapporto | Cosa succede |
+|---|---|
+| `nessuno`, `estende`, `variante` | il testo nuovo si accoda, la regola standard resta per prima |
+| `identica` | il testo nuovo non entra: non porta nulla |
+| `sostituisce`, `contraddice` | le modifiche si applicano al testo in vigore: vince il piu' recente |
+
+Il modello non riscrive la sezione. Cita il passo da cambiare, dice che cosa
+diventa e cita la fonte nel testo nuovo; se il testo nuovo ripresenta
+l'argomento per intero, prende il posto del vecchio parola per parola. Tutto
+cio' che non e' toccato resta identico, anche in una tabella di trenta righe.
+
+- **Controlli fatti dal codice.** Il passo da cambiare deve comparire una volta
+  sola nella sezione, la fonte deve esistere nel testo nuovo, e nel testo che
+  subentra non puo' nascere un numero che non sia in uno dei due. Un piano che
+  non supera i controlli non entra: resta la composizione semplice e il caso
+  finisce nel registro e nel resoconto come quarantena. Nessuno viene
+  interpellato.
+- **Spareggio.** Se il testo nuovo corregge senza dichiararlo, vince comunque
+  il piu' recente, e la decisione resta segnata nel registro.
+- **Chi puo' correggere chi.** Un manuale piu' vecchio non corregge uno piu'
+  recente. Il testo scritto dal giocatore o nato in gioco non viene corretto
+  da nessun manuale: i manuali vi si accodano.
+- **Una decisione si paga una volta.** Ogni decisione sta nel registro della
+  campagna e in una cache condivisa per contenuto (`cache/manuali/risoluzioni/`):
+  rilanciare, o preparare gli stessi manuali in un'altra campagna, non costa. I
+  confronti partono in batch a meta' prezzo come l'estrazione.
+- `--no-resolve` lascia le versioni una dopo l'altra, come nella sola
+  composizione.
+
+Sul golden dataset, con Opus 5 a effort `medium`: 28 casi su 28, nessuna
+quarantena, 25 confronti per circa 0,22 dollari a tariffa piena. Il dataset e'
+inventato e il prompt e' stato messo a punto guardandolo: su un'espansione vera
+il risultato sara' peggiore, e i casi che finiranno in quarantena vanno aggiunti
+al dataset.
 
 ## Registri (log): dove e perche' si ferma qualcosa
 
@@ -494,6 +713,22 @@ Il menu del .bat ha la voce 7 per aprire la cartella e la 8 per elenco e pulizia
 - Soglie modificabili nel `.env`: `MASTER_LOG_KEEP_DAYS`, `MASTER_LOG_ARCHIVE_DAYS`,
   `MASTER_LOG_MAX_FILES`, `MASTER_LOG_MAX_MB`.
 
+### La documentazione a sezioni
+
+Chi deve toccare un dato (una persona o un agente) non rilegge questo README: carica la
+sezione che gli serve e vale la regola *se un campo non e' nella sezione, non esiste*.
+
+```bash
+python main.py --doc            # l'elenco
+python main.py --doc scheda     # una sezione: campagna, scheda, appunti, strumenti-scriba, dadi, stato, glossario, verifica
+```
+
+Le sezioni che hanno uno schema nel codice (`scheda`, `appunti`, `strumenti-scriba`, `dadi`)
+sono generate da quello schema e dai prompt (`master/docs.py`): dopo aver cambiato un tool,
+un campo o un prompt, `--doc --rigenera` riscrive i file in `docs/sezioni/` e un test pretende
+che siano aggiornati. Le altre sono scritte a mano nella stessa cartella. `CLAUDE.md` dice
+quale sezione leggere prima di toccare cosa.
+
 ### Automatismi per Claude Code
 
 Sono configurati in `.claude/settings.json` e `.claude/skills/diagnosi-registri/`:
@@ -501,6 +736,8 @@ Sono configurati in `.claude/settings.json` e `.claude/skills/diagnosi-registri/
 - **All'apertura di una sessione** di Claude Code gira `--logs diagnose`: le
   interruzioni e gli errori non ancora esaminati vengono messi davanti a Claude,
   con file, numero di riga e contesto. Se non c'e' nulla di nuovo, silenzio.
+  Subito dopo gira `--validate` su tutte le campagne: errori e avvisi (pochi per
+  livello, il resto con `--campaign ... --validate`). Se tutto e' in ordine, silenzio.
 - **Alla chiusura della sessione** gira la rotazione (`--logs clean`).
 - **La skill `diagnosi-registri`** guida Claude quando qualcosa si e' fermato:
   leggere le righe indicate, spiegare la causa, correggere, poi segnare i
@@ -552,16 +789,27 @@ master/
   context.py      compose(): il contesto di ogni turno di gioco, composto dai documenti
   memory.py       Consolidator: il livello lento (cronaca, fili aperti, memoria dei PNG, scena)
   dice.py         tiri e profilo dei dadi ricavato dal manuale
-  prepare.py      Preparer: manuale -> blocchi -> JSON strutturato -> file di campagna + glossario
+  prepare.py      Preparer: manuale -> blocchi -> JSON strutturato -> spazio del manuale -> campagna
+  lineage.py      Lineage: paternita' del dato, uno spazio per manuale, composizione in ordine canonico
+  resolve.py      Resolver: quale testo vale dove due manuali si toccano; controlli e quarantena
   sanitize.py     Sanitizer: fusione dei doppioni, gratuita e approfondita
   tidy.py         GlossaryTidier: allinea il glossario ai file, poi lo pulisce e ordina con una chiamata veloce
+  validate.py     verifica della campagna: errori, avvisi, consigli con file, punto e rimedio; nessuna chiamata, nessuna scrittura
+  relazioni.py    le relazioni dei PNG: scala degli stadi (default o dal manuale), passo per enum, etichetta per il narratore
+  fili.py         l'eta' dei fili aperti: etichette [sN] messe dal codice, fili stantii da chiudere o rilanciare
+  modi.py         i modi di gioco: la lente sul narratore (tre predefiniti o meccanica/modi.json), nel prompt in cache
+  fatti.py        i fatti da non perdere: lettura, aggiunta con tetto e senza doppioni, pertinenza al turno
+  trigger.py      i trigger: regole condizioni->effetti su scheda, orologi, relazioni, esiti; valutate dal codice a ogni turno
+  docs.py         la documentazione a sezioni (--doc): quattro generate da schemi e prompt, quattro scritte in docs/sezioni/
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina
   logbook.py      registro con marca temporale in log/: chiamate API, tool, blocchi, errori con traceback
   ui.py           pagina web minimale (http.server) e API JSON
 main.py           avvio, .env, CLI
+docs/sezioni/        una pagina per ogni dato che ha una forma (python main.py --doc <sezione>)
 campaigns/esempio/   glossario.md + meccanica/, ambientazione/, schede/kael.json
 tests/               un file per area, tutti senza rete (client finto o risposte preparate)
+tests/golden/        manuale base ed espansione inventati, con casi piantati a risposta nota
 ```
 
 ## Test
@@ -571,4 +819,29 @@ poi `.venv\Scripts\python -m pip install -r requirements.txt`):
 
 ```bash
 .venv/Scripts/python -m unittest discover -s tests -v
+```
+
+Il validatore e il codice sono tenuti d'accordo da un test di mutazione
+(`tests/test_mutazioni.py`): da una campagna pulita si altera un campo alla volta di
+`dadi.json`, `stato.json` e della scheda, e per ognuno si confronta cio' che fa il codice
+(accetta, o si ferma / butta via il dato) con cio' che dice la verifica. Dove il codice
+rifiuta, la verifica deve dire errore; dove la verifica e' piu' severa del codice la riga lo
+dichiara. Un campo nuovo senza la sua mutazione e' un rosso.
+
+La preparazione da piu' manuali si misura su un golden dataset: un manuale base e
+un'espansione inventati (`tests/golden/`), dove ogni sezione dell'espansione ha un
+rapporto noto con il manuale base (nuova, identica, estende, sostituisce, variante,
+contraddice) e un esito atteso. La misura e' gratuita e stampa quanti casi passano,
+per categoria:
+
+```bash
+.venv/Scripts/python tests/misura_golden.py
+```
+
+Con `--vero` aggiunge lo stadio a pagamento, la risoluzione con il modello delle
+impostazioni (circa 0,22 dollari la prima volta, poi le decisioni stanno in cache
+finche' il prompt non cambia):
+
+```bash
+.venv/Scripts/python tests/misura_golden.py --vero
 ```

@@ -24,7 +24,9 @@ QUIET = NARRATION + "\n<appunti>nulla</appunti>"
 def scribe_writes():
     return [write("s1", "- Kael ferito dalla guardia del molo."),
             tool("s2", "update_sheet", changes=[{"path": "stato.punti_ferita.attuale", "value": 9}]),
-            tool("s3", "upsert_glossary", term="Guardia del molo", kind="png", description="Corrotta dalla Gilda", file="ambientazione/npc.md")]
+            _b(type="tool_use", id="s3", name="set_section",
+               input={"name": "ambientazione/npc.md", "section": "Guardia del molo", "text": "Corrotta dalla Gilda delle Maree."}),
+            tool("s4", "upsert_glossary", term="Guardia del molo", kind="png", description="Corrotta dalla Gilda", file="ambientazione/npc.md")]
 
 
 def scribe_calls(client):
@@ -59,7 +61,7 @@ class TestScribe(Base):
         self.assertEqual(Sheet(self.camp, "kael").get("stato.punti_ferita.attuale"), 9)
         self.assertIn("ferito dalla guardia", self.camp.file("ambientazione/diario.md").read())
         self.assertIsNotNone(self.camp.glossary.get("Guardia del molo"))
-        self.assertEqual(result.files_changed, ["ambientazione/diario.md", "schede/kael.json", "glossario.md"])
+        self.assertEqual(result.files_changed, ["ambientazione/diario.md", "schede/kael.json", "ambientazione/npc.md", "glossario.md"])
         self.assertGreater(result.scribe_cost_usd, 0)
         self.assertGreater(result.cost_usd, result.scribe_cost_usd)
         self.assertEqual(engine.messages, [])  # nessuna conversazione che resta

@@ -183,6 +183,35 @@ class Campaign:
         slug = self.active_pg
         return next((s for s in self.sheets() if s["slug"] == slug), None) if slug else None
 
+    # --- trigger: le regole non ricorrenti gia' scattate (trigger.py) ----------------------------------
+
+    def triggers_fired(self) -> set[str]:
+        data = self._state().get("trigger_scattati")
+        return {str(x).strip().lower() for x in data} if isinstance(data, list) else set()
+
+    def mark_triggers_fired(self, names: list[str]) -> None:
+        state = self._state()
+        current = state.get("trigger_scattati") if isinstance(state.get("trigger_scattati"), list) else []
+        state["trigger_scattati"] = sorted({str(x).strip().lower() for x in [*current, *names]})
+        self._save_state(state)
+
+    # --- modo di gioco: la lente scelta dal giocatore, per campagna (modi.py) --------------------------
+
+    def mode_name(self) -> str | None:
+        value = self._state().get("modo")
+        return value.strip().lower() if isinstance(value, str) and value.strip() else None
+
+    def set_mode(self, name: str) -> str:
+        from . import modi
+
+        chosen = modi.trova(self, name)
+        if chosen is None:
+            raise ValueError(f"Modo sconosciuto '{name}'. Esistono: {', '.join(modi.nomi(self))}")
+        state = self._state()
+        state["modo"] = str(chosen["nome"]).strip().lower()
+        self._save_state(state)
+        return state["modo"]
+
     # --- spese: ogni chiamata lascia una riga, il contatore a schermo le somma ------------------
     #
     # Il costo si calcola dai token che l'API restituisce a ogni risposta (ingresso, uscita, cache
@@ -254,7 +283,12 @@ class Campaign:
         state["orologi"] = clocks
         self._save_state(state)
 
-    def set_clock(self, name: str, segments: int, consequence: str = "", filled: int = 0) -> dict:
+    def played_turns(self) -> int:
+        """I turni giocati dal personaggio attivo, archivio compreso: l'orologio delle scadenze."""
+        return len(self.all_turns(self.active_pg)) if self.active_pg else 0
+
+    def set_clock(self, name: str, segments: int, consequence: str = "", filled: int = 0, deadline: int | None = None) -> dict:
+        """`deadline`: entro quanti turni la conseguenza arriva comunque, anche se nessuno fa avanzare l'orologio."""
         name = name.strip()
         if not name:
             raise ValueError("Un orologio ha bisogno di un nome")
@@ -268,9 +302,36 @@ class Campaign:
         old = clocks.get(name, {})
         clock = {"segmenti": int(segments), "pieni": max(0, min(int(filled or old.get("pieni", 0)), int(segments))),
                  "conseguenza": consequence.strip() or old.get("conseguenza", "")}
+        if deadline is not None:
+            if int(deadline) < 1:
+                raise ValueError("La scadenza di un orologio e' almeno 1 turno")
+            clock["scadenza_turni"] = int(deadline)
+            clock["creato_turno"] = self.played_turns()
+        elif "scadenza_turni" in old:
+            clock["scadenza_turni"], clock["creato_turno"] = old["scadenza_turni"], old.get("creato_turno", 0)
         clocks[name] = clock
         self._save_clocks(clocks)
         return clock
+
+    def clock_remaining(self, clock: dict) -> int | None:
+        """Turni che restano prima della scadenza, o None se l'orologio non ne ha una."""
+        if "scadenza_turni" not in clock:
+            return None
+        return int(clock["scadenza_turni"]) - (self.played_turns() - int(clock["creato_turno"]))
+
+    def expire_clocks(self) -> list[str]:
+        """Gli orologi con scadenza passata si riempiono da soli: il tempo e' passato anche se nessuno li ha toccati."""
+        clocks = self.clocks()
+        expired = []
+        for name, clock in clocks.items():
+            remaining = self.clock_remaining(clock)
+            if remaining is not None and remaining <= 0 and clock["pieni"] < clock["segmenti"]:
+                clock["pieni"] = clock["segmenti"]
+                clock["scaduto"] = True
+                expired.append(name)
+        if expired:
+            self._save_clocks(clocks)
+        return expired
 
     def tick_clock(self, name: str, amount: int = 1) -> dict:
         clocks = self.clocks()
@@ -283,7 +344,12 @@ class Campaign:
         return {"nome": key, **clock}
 
     def clocks_line(self) -> str:
-        return "; ".join(f"{k} {c['pieni']}/{c['segmenti']}" for k, c in self.clocks().items())
+        parts = []
+        for k, c in self.clocks().items():
+            remaining = self.clock_remaining(c)
+            due = "" if remaining is None else f" (entro {remaining} turni)" if remaining > 0 else " (scaduto)"
+            parts.append(f"{k} {c['pieni']}/{c['segmenti']}{due}")
+        return "; ".join(parts)
 
     def pop_full_clocks(self) -> list[str]:
         """Gli orologi pieni: si consegnano una volta e si tolgono."""
@@ -291,7 +357,88 @@ class Campaign:
         full = {k: c for k, c in clocks.items() if c["pieni"] >= c["segmenti"]}
         if full:
             self._save_clocks({k: c for k, c in clocks.items() if k not in full})
-        return [f"{k}: {c.get('conseguenza') or 'si compie'}" for k, c in full.items()]
+        return [f"{k}: {c.get('conseguenza') or 'si compie'}" + (" (il tempo e' passato)" if c.get("scaduto") else "")
+                for k, c in full.items()]
+
+    # --- fili aperti: prosa in avventura.md, con l'eta' di ogni riga messa dal codice (fili.py) --------
+
+    @staticmethod
+    def threads_title(name: str) -> str:
+        return f"Fili aperti di {name}"
+
+    def open_threads(self, name: str) -> str:
+        from .campaign import SETTING_DIR as _s  # noqa: F401  (stesso modulo: evita l'import circolare in testa)
+
+        adventure = self.file(f"{SETTING_DIR}/avventura.md")
+        return (adventure.get_section(self.threads_title(name)) or "") if adventure.exists() else ""
+
+    def stale_threads(self, name: str) -> list[str]:
+        """I fili fermi da almeno due sessioni: da chiudere o rilanciare, mai da lasciare li'."""
+        from . import fili
+
+        return fili.stale(self.open_threads(name), self.session_number)
+
+    # --- relazioni dei PNG: un numero per PNG, mosso per enum, letto come stadio -------------------
+    #
+    # `stato.json` -> "png": {"<nome>": {"relazione": -100..100}}. La scala degli stadi e il passo di
+    # un movimento stanno in relazioni.py; qui solo il dato e chi puo' muoverlo.
+
+    def relations(self) -> dict[str, dict]:
+        data = self._state().get("png")
+        return data if isinstance(data, dict) else {}
+
+    def _relation_key(self, name: str) -> str | None:
+        wanted = name.strip().lower()
+        return next((k for k in self.relations() if k.lower() == wanted), None)
+
+    def relation(self, name: str) -> int | None:
+        """Il valore per un PNG, o None se il programma non lo ha mai contato."""
+        key = self._relation_key(name)
+        if key is None:
+            return None
+        from . import relazioni
+
+        entry = self.relations()[key]
+        try:
+            return relazioni.clampa(entry.get("relazione", 0))
+        except (TypeError, ValueError, AttributeError):
+            return None
+
+    def shift_relation(self, name: str, verso: str, forza: str, reason: str = "") -> dict:
+        """Muove la relazione di un PNG di un passo (enum -> numero, clampato). Un PNG nuovo parte da 0."""
+        from . import relazioni
+
+        name = name.strip()
+        if not name:
+            raise ValueError("Serve il nome del PNG")
+        delta = relazioni.passo(verso, forza)
+        state = self._state()
+        png = state.get("png") if isinstance(state.get("png"), dict) else {}
+        key = self._relation_key(name) or name
+        entry = png.get(key) if isinstance(png.get(key), dict) else {}
+        try:
+            before = relazioni.clampa(entry.get("relazione", 0))
+        except (TypeError, ValueError):
+            before = 0
+        after = relazioni.clampa(before + delta)
+        png[key] = {**entry, "relazione": after}
+        state["png"] = png
+        self._save_state(state)
+        stadi = relazioni.carica(self)
+        return {"nome": key, "prima": before, "relazione": after, "stadio_prima": relazioni.stadio(before, stadi),
+                "stadio": relazioni.stadio(after, stadi), "motivo": reason.strip()}
+
+    def relations_line(self) -> str:
+        """Per lo scriba e il consolidamento: `Mira Sol: Diffidente (-25); ...`."""
+        from . import relazioni
+
+        stadi = relazioni.carica(self)
+        parts = []
+        for name in self.relations():
+            value = self.relation(name)
+            if value is not None:
+                parts.append(f"{name}: {relazioni.stadio(value, stadi)} ({value})")
+        return "; ".join(parts)
 
     # --- il giocato: un solo archivio per conversazione, trascrizione e ripresa insieme -----------
     #

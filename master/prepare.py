@@ -5,10 +5,14 @@ il testo grezzo: vogliamo i file di campagna e il glossario. Il processo e' un
 map-reduce:
 
     map         ogni blocco di pagine -> JSON: sezioni per file + voci glossario + riassunto
-    reduce      le sezioni entrano nei file con CampaignFile.set_section,
-                le voci nel glossario con Glossary.upsert
-    consolida   i file in cui sezioni omonime si sono accodate vengono riordinati
-                dall'API in una chiamata (unisce doppioni, toglie ripetizioni)
+    reduce      le sezioni entrano nello spazio di lavoro del manuale con
+                CampaignFile.set_section, le voci nel suo glossario con Glossary.upsert
+    consolida   le sezioni in cui pezzi omonimi si sono accodati vengono riordinate
+                dall'API (unisce doppioni, toglie ripetizioni), sempre dentro il manuale
+    componi     la campagna si compone dagli spazi di tutti i manuali, in ordine
+                canonico, e ogni dato registra i suoi genitori (vedi lineage.py)
+    risolvi     dove due manuali si toccano, una chiamata dice quale testo vale e il
+                codice applica e controlla le modifiche (vedi resolve.py)
 
 ## Precisione e costo (pratiche documentate da Anthropic)
 - Batch API per l'estrazione: i blocchi mancanti partono in un unico batch a
@@ -52,6 +56,7 @@ from .campaign import MECHANICS_DIR, PREP_DIR, SETTING_DIR, Campaign
 from .engine import DEFAULT_MODEL
 from .files import split_sections
 from .glossary import GlossaryEntry
+from .lineage import ComposeReport, Lineage, fingerprint
 from .logbook import PROJECT_ROOT, describe_error, short, usage_line
 from .models import cost_usd
 
@@ -169,6 +174,48 @@ ordine, in Markdown, senza commenti prima o dopo.
 
 CONSOLIDATE_GROUP_CHARS = 45_000  # un gruppo di sezioni per chiamata: l'uscita resta sotto il tetto
 
+MANUAL_FILE = "manuale.json"  # i dati della pubblicazione, nella cache del manuale: si chiedono una volta sola
+FRONT_PAGES = 8               # frontespizio e colophon stanno qui
+FRONT_CHARS = 8_000
+
+MANUAL_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "titolo": {"type": "string"},
+        "gioco": {"type": "string"},
+        "edizione": {"type": ["integer", "null"]},
+        "anno": {"type": ["integer", "null"]},
+    },
+    "required": ["titolo", "gioco", "edizione", "anno"],
+    "additionalProperties": False,
+}
+
+MANUAL_PROMPT = """\
+Ricevi le prime pagine di un manuale di gioco di ruolo. Ricava i DATI DELLA PUBBLICAZIONE
+e restituisci SOLO un JSON:
+- `titolo`: il titolo del volume, com'e' scritto sul frontespizio.
+- `gioco`: il nome del gioco o della linea a cui il volume appartiene, senza numero di edizione.
+- `edizione`: il numero dell'edizione del GIOCO, solo se e' scritto nel testo ("quinta edizione",
+  "5th Edition", "V5" -> 5). Se non e' scritto, null: non dedurlo, e non confonderlo con la
+  ristampa o con la versione del volume.
+- `anno`: l'anno di pubblicazione di questo volume (il copyright o la data di stampa piu'
+  recente). Se non e' scritto, null.
+"""
+
+
+class EditionMismatch(ValueError):
+    """Il manuale e' di un'edizione diversa da quella dei manuali gia' nella campagna."""
+
+
+def front_matter(path: Path) -> str:
+    """Il testo delle prime pagine: dove un volume dice chi e', di quale edizione e di che anno."""
+    if path.suffix.lower() != ".pdf":
+        return path.read_text(encoding="utf-8", errors="replace")[:FRONT_CHARS]
+    from pypdf import PdfReader
+
+    pages = PdfReader(str(path)).pages
+    return "\n".join((pages[i].extract_text() or "") for i in range(min(FRONT_PAGES, len(pages))))[:FRONT_CHARS]
+
 
 @dataclass
 class Chunk:
@@ -205,6 +252,10 @@ class PrepReport:
     glossary_entries: int = 0
     warnings: list[str] = field(default_factory=list)
     tidy: str = ""
+    consolidated_sections: list[tuple[str, str]] = field(default_factory=list)  # (file, titolo) ripuliti in questa corsa
+    composition: str = ""
+    clashes: str = ""
+    resolution: Any = None  # ResolveReport: cosa si e' deciso dove due manuali si toccano
 
     def summary(self) -> str:
         lines = [
@@ -217,6 +268,14 @@ class PrepReport:
             f"File toccati: {', '.join(self.files_touched) or '-'}",
             f"Voci glossario aggiunte o aggiornate: {self.glossary_entries}",
         ]
+        if self.composition:
+            lines.append("Campagna: " + self.composition)
+        if self.clashes:
+            lines.append("Scontri possibili: " + self.clashes)
+        if self.resolution is not None and self.resolution.steps:
+            lines.append(self.resolution.summary().capitalize())
+            lines += [f"  in quarantena: {s['file']} § {s['titolo']} <- {s['sezione']}: {s.get('perche', '')}"
+                      for s in self.resolution.steps if s["esito"] == "quarantena"]
         if self.pages_skipped:
             lines.append(f"Pagine scartate perche' senza valore (vuote, immagini, indici): {self.pages_skipped}")
         if self.estimate:
@@ -440,6 +499,8 @@ class Preparer:
         self.poll_seconds = poll_seconds
         self.block_timeout = block_timeout
         self._client = client
+        self._stage: Campaign | None = None  # lo spazio di lavoro del manuale in corso (vedi lineage.py)
+        self._stage_key = ""
 
     @property
     def client(self) -> Any:
@@ -461,6 +522,8 @@ class Preparer:
         tidy_effort: str | None = "low",
         batch: bool | None = None,
         progress: Callable[[str], None] = print,
+        other_edition: bool = False,
+        resolve: bool = True,
     ) -> PrepReport:
         use_batch = self.batch if batch is None else batch
         log.info("preparazione: fonte=%s campagna=%s modalita'=%s pagine=%s modello=%s effort=%s batch=%s",
@@ -472,8 +535,30 @@ class Preparer:
             log.error("preparazione INTERROTTA: fonte non leggibile (%s)", describe_error(exc), exc_info=True)
             raise
         report = PrepReport(source=str(path))
-        cache_dir = self.cache_root / source_key(path) / f"{CACHE_VERSION}-{mode}-c{DEFAULT_CHARS_PER_CHUNK}-p{DEFAULT_PAGES_PER_CHUNK}"
+        key = source_key(path)
+        cache_dir = self.cache_root / key / f"{CACHE_VERSION}-{mode}-c{DEFAULT_CHARS_PER_CHUNK}-p{DEFAULT_PAGES_PER_CHUNK}"
         cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Il manuale si fonde nel suo spazio di lavoro, non nella campagna: la campagna si compone alla fine
+        # da tutti i manuali, in ordine canonico. Una corsa interrotta lascia la campagna com'era.
+        lineage = Lineage(self.campaign)
+        adopted = lineage.adopt(self.cache_root)
+        if adopted:
+            progress(f"  paternita': riconosciuti {len(adopted)} manuali gia' presenti nella campagna")
+        try:
+            return self._run(path, key, cache_dir, lineage, report, mode, pages, consolidate, tidy, tidy_effort, use_batch,
+                             progress, other_edition, resolve)
+        finally:
+            self._stage = None
+            lineage.save()
+
+    def _run(self, path: Path, key: str, cache_dir: Path, lineage: Lineage, report: PrepReport, mode: str, pages: str | None,
+             consolidate: bool, tidy: bool, tidy_effort: str | None, use_batch: bool, progress: Callable[[str], None],
+             other_edition: bool = False, resolve: bool = True) -> PrepReport:
+        meta = self._manual_meta(path, key, report, progress)
+        self._check_edition(lineage, key, meta, other_edition)  # prima di spendere per l'estrazione
+        stager = self._stager(lineage, key, path.name, cache_dir.name, meta)
+        stage = stager.campaign
 
         stats: dict[str, int] = {}
         try:
@@ -541,9 +626,10 @@ class Preparer:
                 progress(f"  blocco {chunk.index}/{len(chunks)} ({chunk.label}): dalla cache, nessun costo")
             before = report.glossary_entries
             for sec in data.get("sezioni", []):
-                key = (str(sec.get("file", "")), str(sec.get("titolo", "")).strip().lower())
-                seen_titles[key] = seen_titles.get(key, 0) + 1
-            self.merge(data, report)
+                seen = (str(sec.get("file", "")), str(sec.get("titolo", "")).strip().lower())
+                seen_titles[seen] = seen_titles.get(seen, 0) + 1
+            if lineage.take_block(key, chunk.cache_name, chunk.label, data):  # un blocco gia' fuso non si accoda di nuovo
+                stager.merge(data, report)
             log.info("blocco %d/%d: %d sezioni, %d voci glossario", chunk.index, len(chunks),
                      len(data.get("sezioni", [])), report.glossary_entries - before)
             summaries.append((chunk, data.get("riassunto", "")))
@@ -551,37 +637,39 @@ class Preparer:
         self.write_source_index(path, summaries, report)
         log.info("preparazione: indice della fonte scritto")
 
-        # sanificazione gratuita: titoli equivalenti fusi, blocchi identici tolti, glossario senza doppioni.
-        # Le sezioni fuse qui entrano nel consolidamento qui sotto insieme a quelle ripetute nei blocchi.
+        # sanificazione gratuita del manuale: titoli equivalenti fusi, blocchi identici tolti, glossario senza
+        # doppioni. Le sezioni fuse qui entrano nel consolidamento qui sotto insieme a quelle ripetute nei blocchi.
         from .sanitize import Sanitizer
 
-        clean = Sanitizer(self.campaign).run_free()
-        if clean.merged_sections or clean.removed_blocks or clean.merged_glossary:
-            progress(f"  sanificazione: {len(clean.merged_sections)} sezioni fuse per titolo equivalente, "
-                     f"{clean.removed_blocks} blocchi ripetuti tolti, {len(clean.merged_glossary)} voci di glossario unite")
+        clean = Sanitizer(stage).run_free()
         for name, lows in clean.touched.items():
             for low in lows:
                 seen_titles[(name, low)] = max(seen_titles.get((name, low), 0), 2)
 
         if consolidate:
             # Solo le sezioni comparse in piu' blocchi hanno testo accodato da ripulire: il resto
-            # del file non si tocca e non si paga. Vale anche se la fusione e' avvenuta in una
-            # corsa precedente, perche' il conteggio viene dai blocchi in cache.
+            # non si tocca e non si paga. Si ripulisce il testo di QUESTO manuale: cio' che la campagna
+            # aveva gia' e cio' che viene da altri manuali non passa dal modello.
             targets: dict[str, list[str]] = {}
             for (name, low), count in seen_titles.items():
                 if count >= 2 and name in TARGET_FILES:
                     targets.setdefault(name, []).append(low)
             for name in TARGET_FILES:
-                if name not in targets and self.campaign.file(name).exists() and any(k[0] == name for k in seen_titles):
+                if name not in targets and stage.file(name).exists() and any(k[0] == name for k in seen_titles):
                     report.consolidations_skipped += 1
                     log.info("consolidamento %s saltato: nessuna sezione ripetuta, nulla da unire", name)
+            targets = lineage.needs_consolidation(key, stage, targets)  # quelle gia' ripulite e non piu' toccate no
             if targets:
+                stager._client = self.client
                 try:
-                    self.consolidate_sections(targets, cache_dir, report, progress, use_batch)
+                    stager.consolidate_sections(targets, cache_dir, report, progress, use_batch)
                 except Exception as exc:
                     log.error("preparazione INTERROTTA al consolidamento: %s | rilanciando riprende da dove era",
                               describe_error(exc), exc_info=True)
                     raise
+                lineage.mark_consolidated(key, stage, report.consolidated_sections)
+
+        self._compose(lineage, report, progress, clean, resolve=resolve, use_batch=use_batch, state_dir=cache_dir)
 
         if tidy:
             from .tidy import GlossaryTidier
@@ -598,22 +686,31 @@ class Preparer:
             report.tidy = tidy_report.summary()
 
         # a manuale smontato, la meccanica dei tiri diventa dati: i dadi li tirera' il codice.
-        # Il profilo sta nella cache del manuale: lo stesso manuale su un'altra campagna non lo ripaga.
+        # Con un solo manuale il profilo sta nella sua cache: lo stesso manuale su un'altra campagna non lo
+        # ripaga. Con piu' manuali il profilo dipende dalle regole di tutti, quindi la chiave e' il loro testo:
+        # si rifa' solo se un manuale ha cambiato le sezioni che parlano di tiri.
         try:
             from . import dice
 
-            cached = cache_dir / dice.PROFILE_NAME
+            rules = dice.rules_about_dice(self.campaign)
+            digest = fingerprint(rules) if rules else ""
+            several = len(lineage.data["manuali"]) > 1
+            cached = self.cache_root / "dadi" / f"{CACHE_VERSION}-{digest}.json" if several else cache_dir / dice.PROFILE_NAME
             profile = self._load_json(cached)
-            if profile is not None:  # anche "nessun tiro trovato" resta in cache: non si ripaga la domanda
+            if several and lineage.data["dadi"].get("regole") == digest and dice.load_profile(self.campaign):
+                pass  # le regole sui tiri sono quelle da cui il profilo in campagna e' stato ricavato
+            elif profile is not None:  # anche "nessun tiro trovato" resta in cache: non si ripaga la domanda
                 if profile.get("tiri"):
                     dice.save_profile(self.campaign, profile)
-                    progress("  dadi: profilo dei tiri ripreso dalla cache del manuale")
-            elif dice.rules_about_dice(self.campaign):
+                    progress("  dadi: profilo dei tiri ripreso dalla cache")
+            elif rules:
                 progress("  dadi: ricavo il profilo dei tiri dalle regole estratte")
                 profile = dice.extract_profile(self.campaign, self.client, self.model)
                 report.calls += 1
+                cached.parent.mkdir(parents=True, exist_ok=True)
                 cached.write_text(json.dumps(profile or {"tiri": []}, ensure_ascii=False, indent=1), encoding="utf-8")
                 progress("  dadi: " + (", ".join(k["nome"] for k in profile["tiri"]) if profile else "nessun tipo di tiro trovato nelle regole"))
+            lineage.data["dadi"] = {"regole": digest}
         except Exception as exc:  # la campagna resta giocabile: senza profilo il narratore scrive i dadi per esteso
             log.warning("profilo dadi non ricavato: %s", describe_error(exc))
             report.warnings.append(f"profilo dei dadi non ricavato: {exc}")
@@ -622,6 +719,141 @@ class Preparer:
                  report.chunks, report.chunks_from_cache, report.chunks_batched, report.calls, report.input_tokens,
                  report.output_tokens, ", ".join(report.files_touched) or "-", len(report.warnings))
         return report
+
+    # --- invio di piu' richieste indipendenti ------------------------------------------
+
+    def _send(self, requests: dict[str, dict[str, Any]], state_file: Path, report: PrepReport,
+              progress: Callable[[str], None], use_batch: bool) -> dict[str, Any]:
+        """Manda richieste che non dipendono l'una dall'altra: in batch a meta' prezzo quando si puo',
+        altrimenti poche alla volta in parallelo. Ritorna solo le risposte riuscite."""
+        if use_batch and supports_batches(self.client) and len(requests) >= 2:
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            return self._run_batch(requests, state_file, report, progress, "confronti tra testi")
+        from concurrent.futures import ThreadPoolExecutor
+
+        def one(item: tuple[str, dict[str, Any]]) -> tuple[str, Any]:
+            try:
+                return item[0], create_message(self.client, max_seconds=self.block_timeout, **item[1])
+            except Exception as exc:  # una richiesta fallita non ferma le altre: quel confronto resta da fare
+                log.warning("richiesta %s non riuscita: %s", item[0], describe_error(exc))
+                return item[0], None
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            answers = dict(pool.map(one, requests.items()))
+        report.calls += sum(1 for message in answers.values() if message is not None)
+        return {cid: message for cid, message in answers.items() if message is not None}
+
+    # --- dati della pubblicazione ---------------------------------------------------
+
+    def _manual_meta(self, path: Path, key: str, report: PrepReport, progress: Callable[[str], None]) -> dict[str, Any]:
+        """Titolo, gioco, edizione e anno del volume, dalle sue prime pagine: una chiamata breve, una volta per
+        manuale. Servono a mettere i manuali in ordine e a non mescolare edizioni diverse, senza chiederlo a
+        nessuno. Se non si ricavano la preparazione prosegue: un manuale senza data conta come il piu' vecchio."""
+        cached = self.cache_root / key / MANUAL_FILE
+        meta = self._load_json(cached)
+        if meta is not None:
+            return meta
+        meta = {}
+        try:
+            text = front_matter(path)
+            if len(text.strip()) < MIN_PAGE_CHARS:
+                raise ValueError("le prime pagine non hanno testo leggibile")
+            response = create_message(self.client, max_seconds=min(self.block_timeout or 120, 120), model=self.model,
+                                      max_tokens=4000, system=MANUAL_PROMPT, messages=[{"role": "user", "content": text}],
+                                      output_config={"format": {"type": "json_schema", "schema": MANUAL_SCHEMA}})
+            self._count(report, response)
+            data = parse_json_object("\n".join(b.text for b in response.content if b.type == "text"))
+            year, edition = data.get("anno"), data.get("edizione")
+            meta = {"titolo": str(data.get("titolo") or "").strip(), "gioco": str(data.get("gioco") or "").strip(),
+                    "edizione": edition if type(edition) is int and edition > 0 else None,
+                    "anno": year if type(year) is int and 1970 <= year <= 2100 else None}
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            cached.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+            log.info("pubblicazione: %s | gioco=%s edizione=%s anno=%s", meta["titolo"] or path.name, meta["gioco"] or "-",
+                     meta["edizione"] or "-", meta["anno"] or "-")
+            progress(f"  pubblicazione: {meta['titolo'] or path.name}" + (f", {meta['anno']}" if meta["anno"] else ", anno non indicato")
+                     + (f", edizione {meta['edizione']}" if meta["edizione"] else ""))
+        except Exception as exc:
+            log.warning("dati della pubblicazione non ricavati: %s", describe_error(exc))
+            report.warnings.append(f"dati della pubblicazione non ricavati ({exc}): il manuale conta come senza data")
+        return meta
+
+    @staticmethod
+    def _check_edition(lineage: Lineage, key: str, meta: dict[str, Any], other_edition: bool) -> None:
+        clash = lineage.other_edition(key, meta)
+        if clash is None or other_edition:
+            return
+        message = (f"{meta.get('titolo') or key} e' dell'edizione {meta.get('edizione')} di {meta.get('gioco')}, ma la campagna e' "
+                   f"costruita sull'edizione {clash.get('edizione')} ({clash.get('titolo') or clash.get('nome')}): sono giochi diversi, "
+                   "non c'e' niente da conciliare. Manuale rifiutato; per fonderlo lo stesso usa --altra-edizione.")
+        log.error("preparazione RIFIUTATA: %s", message)
+        raise EditionMismatch(message)
+
+    # --- spazio di lavoro del manuale e composizione della campagna ----------------
+
+    def _stager(self, lineage: Lineage, key: str, name: str, variant: str, meta: dict[str, Any] | None = None) -> "Preparer":
+        """Un Preparer che lavora nello spazio del manuale: stessa fusione e stesso consolidamento, altro bersaglio."""
+        self._stage, self._stage_key = lineage.open_manual(key, name, variant, meta), key
+        return Preparer(self._stage, client=self._client, model=self.model, effort=self.effort, max_tokens=self.max_tokens,
+                        cache_root=self.cache_root, batch=self.batch, poll_seconds=self.poll_seconds, block_timeout=self.block_timeout)
+
+    def _compose(self, lineage: Lineage, report: PrepReport, progress: Callable[[str], None], clean: Any = None,
+                 resolve: bool = False, use_batch: bool = False, state_dir: Path | None = None) -> ComposeReport:
+        """Compone la campagna da tutti i manuali, decide quale testo vale dove due manuali si toccano, poi
+        toglie i doppioni che la campagna aveva gia' di suo."""
+        from .sanitize import Sanitizer
+
+        composed = lineage.compose(TARGET_FILES)
+        report.composition = composed.summary().split(": ", 1)[1]
+        report.warnings += composed.warnings
+        progress("  " + composed.summary())
+        clashes = [c for c in lineage.candidates(TARGET_FILES) if c.manual == self._stage_key]
+        if clashes:
+            by_title = sum(1 for c in clashes if c.why == "titolo")
+            report.clashes = (f"{len(clashes)} punti in cui questo manuale tocca testo di altra origine "
+                              f"({by_title} per titolo, {len(clashes) - by_title} per termini nominati)")
+            progress("  scontri possibili: " + report.clashes)
+        if resolve:
+            from .resolve import Resolver
+
+            state = (state_dir or self.cache_root) / "batch-risoluzione.json"
+            solved = Resolver(self.campaign, lineage, lambda requests: self._send(requests, state, report, progress, use_batch),
+                              self.model, self.effort, self.cache_root, TARGET_FILES).run(progress)
+            report.input_tokens += solved.input_tokens
+            report.output_tokens += solved.output_tokens
+            report.resolution = solved
+            if solved.steps:
+                progress("  " + solved.summary())
+        after = Sanitizer(self.campaign).run_free()
+        merged = len(after.merged_sections) + len(clean.merged_sections if clean else [])
+        blocks = after.removed_blocks + (clean.removed_blocks if clean else 0)
+        entries = len(after.merged_glossary) + len(clean.merged_glossary if clean else [])
+        if merged or blocks or entries:
+            progress(f"  sanificazione: {merged} sezioni fuse per titolo equivalente, "
+                     f"{blocks} blocchi ripetuti tolti, {entries} voci di glossario unite")
+        return composed
+
+    def assimilate(self, key: str, name: str, blocks: list[tuple[str, str, dict[str, Any]]], report: PrepReport,
+                   meta: dict[str, Any] | None = None, variant: str = "diretto",
+                   progress: Callable[[str], None] = lambda text: None, other_edition: bool = False,
+                   resolve: bool = False) -> ComposeReport:
+        """Fonde blocchi gia' estratti (nome del blocco, pagine, dati) senza chiamate: e' il tratto della
+        preparazione che viene dopo l'estrazione, lo stesso di `run`. Lo usano i test e la misura sul golden dataset."""
+        from .sanitize import Sanitizer
+
+        lineage = Lineage(self.campaign)
+        lineage.adopt(self.cache_root)
+        self._check_edition(lineage, key, meta or {}, other_edition)
+        try:
+            stager = self._stager(lineage, key, name, variant, meta)
+            for block, pages, data in blocks:
+                if lineage.take_block(key, block, pages, data):
+                    stager.merge(data, report)
+            clean = Sanitizer(stager.campaign).run_free()
+            return self._compose(lineage, report, progress, clean, resolve=resolve)
+        finally:
+            self._stage = None
+            lineage.save()
 
     # --- cache dei blocchi ------------------------------------------------------
 
@@ -689,6 +921,9 @@ class Preparer:
 
     def _known_terms(self) -> str:
         entries = self.campaign.glossary.entries()
+        if self._stage is not None:  # i termini dei blocchi gia' fusi di questo manuale non sono ancora nella campagna
+            known = {e.term.lower() for e in entries}
+            entries += [e for e in self._stage.glossary.entries() if e.term.lower() not in known]
         if not entries:
             return "(vuoto)"
         return "\n".join(f"- {e.term} ({e.kind}, {e.file})" for e in entries)
@@ -1056,6 +1291,7 @@ class Preparer:
             if new != old:
                 f.set_section(title, new)
             applied += 1
+            report.consolidated_sections.append((f.name, title))
         if applied:
             self._touch(report, f.name)
             if from_cache:

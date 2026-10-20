@@ -14,6 +14,9 @@ from .glossary import GlossaryEntry
 from .sheet import XP_ROUTES, Sheet, slugify
 
 WHOLE_FILE_LIMIT = 24_000  # caratteri: oltre, read_file senza sezione restituisce l'elenco delle sezioni
+GLOSSARY_KINDS_ABOUT_FILES = {"file", "fonte", "cronaca"}  # voci che descrivono il file, non un termine dentro al file
+SCENE_TEXT_KEYS = ("luogo", "quando", "appena_successo", "domanda_aperta")
+SCENE_LIST_KEYS = ("presenti", "da_richiamare")
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -194,6 +197,8 @@ CLOCK_TOOLS: list[dict[str, Any]] = [
                 "segments": {"type": "integer", "minimum": 0, "maximum": 12, "description": "4 breve, 6 normale, 8 lungo; 0 = togli"},
                 "consequence": {"type": "string", "description": "Cosa succede quando e' pieno, in una frase"},
                 "filled": {"type": "integer", "minimum": 0, "description": "Segmenti gia' pieni (di solito 0)"},
+                "deadline_turns": {"type": "integer", "minimum": 1,
+                                   "description": "Solo se gli appunti dicono 'entro N turni': dopo N turni la conseguenza arriva comunque, anche se l'orologio non e' pieno"},
             },
             "required": ["name", "segments"],
         },
@@ -209,6 +214,29 @@ CLOCK_TOOLS: list[dict[str, Any]] = [
     },
 ]
 TOOLS += CLOCK_TOOLS
+
+RELATION_TOOLS: list[dict[str, Any]] = [
+    {
+        "name": "shift_relationship",
+        "description": (
+            "Muove l'atteggiamento di un PNG verso il personaggio di un passo, in su o in giu'. Il numero lo tiene il "
+            "codice e te lo restituisce come stadio (Diffidente, Cordiale...): tu dici solo il verso e la forza. "
+            "Solo per la riga `relazione` degli appunti del narratore, mai di tua iniziativa."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Il PNG, con il nome esatto tra quelli che ricevi (o nuovo)"},
+                "verso": {"type": "string", "enum": ["sale", "scende"]},
+                "forza": {"type": "string", "enum": ["lieve", "media", "forte"],
+                          "description": "lieve: un gesto; media: un aiuto o un torto concreto; forte: una svolta"},
+                "reason": {"type": "string", "description": "Perche', in una riga"},
+            },
+            "required": ["name", "verso", "forza", "reason"],
+        },
+    },
+]
+TOOLS += RELATION_TOOLS
 
 # Solo per lo scriba del livello veloce: la scena e' il documento da cui riparte il turno dopo.
 SCENE_TOOL: dict[str, Any] = {
@@ -257,6 +285,9 @@ class ToolExecutor:
         self.campaign = campaign
         self.files_read: list[str] = []
         self.files_changed: list[str] = []
+        # Lo scriba puo' muovere l'esperienza solo se il narratore ha lasciato una riga `pe`: lo imposta
+        # il motore a ogni giro. Per chi usa l'esecutore direttamente (test, strumenti) resta aperto.
+        self.xp_allowed = True
 
     def reset(self) -> None:
         self.files_read.clear()
@@ -340,6 +371,11 @@ class ToolExecutor:
     def _do_set_section(self, name: str, section: str, text: str) -> str:
         self._not_a_sheet_view(name)
         f = self.campaign.file(name)
+        if section.strip().lower().startswith("fili aperti di"):
+            from . import fili
+
+            # l'eta' di ogni filo la mette il codice: le righe che c'erano tengono la loro etichetta
+            text = fili.tag_lines(f.get_section(section) or "", text, self.campaign.session_number)
         what = f.set_section(section, text)
         self._touch(self.files_changed, f.name)
         return f"Sezione '{section}' {what} in {f.name}"
@@ -353,7 +389,16 @@ class ToolExecutor:
         return f"Sostituito in {f.name}"
 
     def _do_upsert_glossary(self, term: str, kind: str, description: str, file: str) -> str:
-        self.campaign.resolve(file)  # valida il nome
+        target = self.campaign.file(file)  # valida il nome
+        term = str(term).strip()
+        if not term:
+            raise ValueError("Una voce di glossario ha bisogno di un termine")
+        if str(kind).strip().lower() not in GLOSSARY_KINDS_ABOUT_FILES:
+            # Il glossario e' un indice: una voce il cui termine non sta nel file porta nel contesto del
+            # turno una sezione che non c'e' (su una campagna reale: 25 PNG indicizzati e mai scritti).
+            if not target.exists() or term.lower() not in target.read().lower():
+                raise ValueError(f"'{term}' non compare in {target.name}: scrivi prima la sua sezione con set_section "
+                                 f"(o append_file), poi la voce di glossario. Una voce senza testo non porta nulla nel contesto")
         what = self.campaign.glossary.upsert(GlossaryEntry(term, kind, description, file))
         self._touch(self.files_changed, self.campaign.glossary.file.name)
         return f"Glossario: '{term}' {what}"
@@ -377,13 +422,22 @@ class ToolExecutor:
     def _xp_line(xp: dict[str, int]) -> str:
         return f"Esperienza ora: disponibili {xp['disponibili']} (guadagnati {xp['guadagnati']}, spesi {xp['spesi']})"
 
+    def _xp_gate(self, route: str | None = None) -> None:
+        if route == "creazione":
+            raise ValueError("La via `creazione` e' del costruttore di schede (save_sheet con starting_xp), non dello scriba")
+        if not self.xp_allowed:
+            raise ValueError("Gli appunti del narratore non hanno una riga `pe`: i punti esperienza entrano ed escono solo "
+                             "su sua indicazione, mai di iniziativa dello scriba")
+
     def _do_award_xp(self, amount: int, route: str, reason: str, pg: str | None = None) -> str:
+        self._xp_gate(route)
         sheet = self._sheet(pg)
         xp = sheet.award(amount, route, reason)
         self._sheet_saved(sheet)
         return f"+{int(amount)} a {sheet.name} (via {route}, sessione {self.campaign.session_number}). {self._xp_line(xp)}"
 
     def _do_spend_xp(self, amount: int, reason: str, changes: list[dict[str, Any]], pg: str | None = None) -> str:
+        self._xp_gate()
         sheet = self._sheet(pg)
         xp, done = sheet.spend(amount, reason, changes)
         self._sheet_saved(sheet)
@@ -392,14 +446,33 @@ class ToolExecutor:
     def _do_set_scene(self, **scene: Any) -> str:
         from .memory import SCENE, write_scene
 
+        # La forma la impone lo schema del tool, ma un modello puo' passare `presenti` come frase: su una
+        # campagna reale la scena mostrava "J, o, n, a, t, h, a, n" (la stringa iterata lettera per lettera).
+        for key in SCENE_TEXT_KEYS:
+            if not isinstance(scene.get(key), str):
+                raise ValueError(f"set_scene: `{key}` dev'essere un testo (ricevuto {type(scene.get(key)).__name__})")
+        for key in SCENE_LIST_KEYS:
+            value = scene.get(key)
+            if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+                raise ValueError(f"set_scene: `{key}` dev'essere un elenco di testi, es. [\"Mira Sol\", \"la guardia\"] "
+                                 f"(ricevuto {type(value).__name__})")
         write_scene(self.campaign, scene, "aggiornato dallo scriba a fine turno")
         self._touch(self.files_changed, SCENE)
         return "Scena aggiornata"
 
-    def _do_set_clock(self, name: str, segments: int, consequence: str = "", filled: int = 0) -> str:
-        clock = self.campaign.set_clock(name, segments, consequence, filled)
+    def _do_shift_relationship(self, name: str, verso: str, forza: str, reason: str = "") -> str:
+        moved = self.campaign.shift_relation(name, verso, forza, reason)
         self._touch(self.files_changed, "stato.json")
-        return f"Orologio '{name}': {clock['pieni']}/{clock['segmenti']}" if clock else f"Orologio '{name}' tolto"
+        return (f"Relazione di {moved['nome']}: {moved['stadio_prima']} -> {moved['stadio']} "
+                f"({moved['prima']} -> {moved['relazione']})")
+
+    def _do_set_clock(self, name: str, segments: int, consequence: str = "", filled: int = 0, deadline_turns: int | None = None) -> str:
+        clock = self.campaign.set_clock(name, segments, consequence, filled, deadline_turns)
+        self._touch(self.files_changed, "stato.json")
+        if not clock:
+            return f"Orologio '{name}' tolto"
+        due = f", scade fra {clock['scadenza_turni']} turni" if "scadenza_turni" in clock else ""
+        return f"Orologio '{name}': {clock['pieni']}/{clock['segmenti']}{due}"
 
     def _do_tick_clock(self, name: str, amount: int = 1) -> str:
         clock = self.campaign.tick_clock(name, amount)

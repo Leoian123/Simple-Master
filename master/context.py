@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from . import fatti, relazioni
 from .campaign import MECHANICS_DIR, SETTING_DIR, Campaign
 from .glossary import GlossaryEntry
 from .memory import ADVENTURE, NPC_MEMORY, SCENE
@@ -39,6 +40,7 @@ class TurnContext:
     entities: list[str] = field(default_factory=list)
     rules: list[str] = field(default_factory=list)
     exchanges: int = 0
+    facts: list[str] = field(default_factory=list)
 
     def stats(self) -> str:
         return (f"{len(self.text)} car | entita': {', '.join(self.entities) or '-'} | regole: {', '.join(self.rules) or '-'} "
@@ -127,6 +129,12 @@ def compose(campaign: Campaign, player_text: str, save_name: str, router=None) -
     turns = campaign.read_turns(save_name, LAST_EXCHANGES) if save_name else []
     last_narration = turns[-1]["master"] if turns else ""
 
+    # i fatti da non perdere che questo turno tocca: stabiliti, non si rinegoziano
+    pinned = fatti.pertinenti(fatti.leggi(campaign), [player_text, scene_text, last_narration])
+    if pinned:
+        parts.append("## Da non perdere (fatti stabiliti, non si contraddicono)\n" + "\n".join(f"- {x}" for x in pinned))
+        ctx.facts = list(pinned)
+
     # chi e cosa e' nominato: prima nelle parole del giocatore, poi nella scena, poi nell'ultima narrazione
     sources = [player_text.lower(), scene_text.lower(), last_narration.lower()]
     found: list[tuple[int, int, GlossaryEntry]] = []
@@ -141,6 +149,13 @@ def compose(campaign: Campaign, player_text: str, save_name: str, router=None) -
 
     memory = campaign.file(NPC_MEMORY)
     npc_memory = memory.sections() if memory.exists() else {}
+    stadi = relazioni.carica(campaign)
+
+    def tag(term: str, kind: str) -> str:
+        """`png · Diffidente`: l'etichetta dello stadio accanto al tipo, mai il numero."""
+        value = campaign.relation(term) if kind == "png" else None
+        return kind if value is None else f"{kind} · {relazioni.stadio(value, stadi)}"
+
     world, rules = [], []
     # prima le regole nominate dal giocatore, cercate per titolo anche nelle sottosezioni
     for title, file, body in _rule_blocks(campaign, player_text, set())[:MAX_RULES]:
@@ -159,7 +174,7 @@ def compose(campaign: Campaign, player_text: str, save_name: str, router=None) -
                     rules.append(f"### {entry.term} ({entry.file})\n{body}")
                     ctx.rules.append(entry.term)
         elif len(world) < MAX_ENTITIES:
-            lines = [f"### {entry.term} ({entry.kind}) — {entry.description}"]
+            lines = [f"### {entry.term} ({tag(entry.term, entry.kind)}) — {entry.description}"]
             remembered = next((b for t, b in npc_memory.items() if t and t.lower() == entry.term.lower()), "")
             if remembered:
                 lines.append(remembered.strip())
@@ -193,7 +208,7 @@ def compose(campaign: Campaign, player_text: str, save_name: str, router=None) -
     # i PNG che la memoria conosce e la scena dichiara presenti, anche se il glossario non li ha
     for title, body in npc_memory.items():
         if title and title not in ctx.entities and len(world) < MAX_ENTITIES and _mentions(title, sources[0] + "\n" + sources[1]):
-            world.append(f"### {title} (png)\n{body.strip()}")
+            world.append(f"### {title} ({tag(title, 'png')})\n{body.strip()}")
             ctx.entities.append(title)
     if world:
         parts.append("## Chi e cosa e' in gioco adesso\n" + "\n\n".join(world))

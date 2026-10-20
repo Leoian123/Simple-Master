@@ -55,11 +55,21 @@ class FakePrepClient:
 
     def __init__(self) -> None:
         self.calls: list[dict] = []
+        self.meta_calls: list[dict] = []  # la domanda sui dati della pubblicazione: a parte, non e' un'estrazione
+        self.meta: dict = {"titolo": "Manuale di prova", "gioco": "Gioco di prova", "edizione": None, "anno": None}
+        self.resolve_calls: list[dict] = []  # i confronti tra testi di manuali diversi: a parte anche questi
+        self.plan: dict = {"rapporto": "estende", "dichiarato": False, "motivo": "finto", "tutto": False, "modifiche": [], "aggiunte": []}
         self.messages = SimpleNamespace(create=self._create)
 
     def _create(self, **kwargs):
-        self.calls.append(kwargs)
         usage = SimpleNamespace(input_tokens=100, output_tokens=50)
+        if "DATI DELLA PUBBLICAZIONE" in str(kwargs.get("system")):
+            self.meta_calls.append(kwargs)
+            return SimpleNamespace(stop_reason="end_turn", usage=usage, content=[_block(type="text", text=json.dumps(self.meta))])
+        if "RAPPORTO TRA DUE TESTI" in str(kwargs.get("system")):
+            self.resolve_calls.append(kwargs)
+            return SimpleNamespace(stop_reason="end_turn", usage=usage, content=[_block(type="text", text=json.dumps(self.plan))])
+        self.calls.append(kwargs)
         user_text = kwargs["messages"][0]["content"]
         if isinstance(user_text, list):
             user_text = " ".join(c.get("text", "") for c in user_text)
@@ -415,7 +425,9 @@ class TestPreparer(unittest.TestCase):
                 self.truncate = True
 
             def _create(self, **kwargs):
-                if self.truncate and "Sezioni di `" not in str(kwargs["messages"][0]["content"]):
+                if self.truncate and "Sezioni di `" not in str(kwargs["messages"][0]["content"]) \
+                        and "DATI DELLA PUBBLICAZIONE" not in str(kwargs.get("system")) \
+                        and "RAPPORTO TRA DUE TESTI" not in str(kwargs.get("system")):
                     self.calls.append(kwargs)
                     return SimpleNamespace(stop_reason="max_tokens", usage=SimpleNamespace(input_tokens=1, output_tokens=1),
                                            content=[_block(type="text", text='{"riassunto":"inizio","sezioni":[{"file":"meccanica/regole.md","titolo":"X","testo":"tronc')])

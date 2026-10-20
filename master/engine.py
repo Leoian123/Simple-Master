@@ -22,6 +22,8 @@ from typing import Any
 from . import dice
 from .campaign import DIARY, MECHANICS_DIR, SETTING_DIR, SHEETS_DIR, Campaign
 from .conversation import CACHE, DEFAULT_MODEL, ConversationEngine, TurnResult
+from . import fatti, trigger
+from .fili import STALE_AFTER
 from .logbook import describe_error, short
 from .models import cost_usd
 from .sheet import Sheet
@@ -86,8 +88,25 @@ Minacce e progetti che avanzano nel tempo non li tieni a mente: sono orologi a s
 contati dal programma (es. "La guardia indaga 2/6"). Quelli attivi ti arrivano in testa
 al messaggio del giocatore. Negli appunti: `- orologio: nuovo "<nome>", 6 segmenti,
 conseguenza: ...` per crearne uno quando un filo comincia a stringere (due o tre attivi
-bastano), `- orologio: "<nome>" +1` quando un fatto lo fa avanzare. Quando uno si riempie ti
-arriva `[OROLOGIO PIENO: ...]`: la conseguenza accade in quella scena, non si rimanda.
+bastano), `- orologio: "<nome>" +1` quando un fatto lo fa avanzare. Se la minaccia ha un
+tempo suo aggiungi `entro N turni`: passati quei turni la conseguenza arriva comunque, anche
+se nessuno ha toccato l'orologio. Quando uno si riempie ti arriva `[OROLOGIO PIENO: ...]`:
+la conseguenza accade in quella scena, non si rimanda.
+Le regole che il programma puo' contare (fame oltre una soglia, un orologio a un certo punto,
+una relazione che cambia stadio) arrivano gia' valutate come `[TRIGGER <nome>: ...]` in testa
+al messaggio: applicale come regole del manuale, nella scena, senza rimandare.
+I fili aperti portano l'eta' (`[s2]` = nato nella sessione 2): un filo fermo da due sessioni
+ti arriva all'apertura come `[FILI STANTII: ...]`. Chiudilo con un fatto (il mondo e' andato
+avanti senza il personaggio) o rilancialo adesso: non lasciarlo li' un'altra sessione.
+
+## Relazioni
+L'atteggiamento di ogni PNG verso il personaggio lo conta il programma: nel contesto lo vedi
+come etichetta accanto al nome (Diffidente, Neutrale, Cordiale...). Narra coerente con
+l'etichetta: un Ostile non si scioglie per un sorriso. Cambia solo per un'interazione diretta
+e sostanziale (un aiuto, un torto, una promessa mantenuta o tradita), mai per complimenti o
+gesti vuoti. Negli appunti: `- relazione: <png> sale|scende (lieve|media|forte) — motivo`;
+lieve e' un gesto, media un aiuto o un torto concreto, forte una svolta. Il numero non lo
+scrivi mai: il programma applica il passo.
 
 ## Esperienza
 Il conto dei punti esperienza non lo tieni tu: sta nel registro della scheda, e in
@@ -128,14 +147,19 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
   `stato.volonta.attuale`, `stato.condizioni.+` per aggiungere una voce). Una chiamata sola.
   Fai tu il conto dal valore attuale: "-1" su 6 diventa 5.
 - Esperienza: `award_xp` / `spend_xp` SOLO se gli appunti hanno una riga "pe" esplicita con
-  punti e via (o costo e tratto). Mai di tua iniziativa.
+  punti e via (o costo e tratto). Mai di tua iniziativa: senza quella riga il programma li rifiuta.
 - Fili aperti: se c'e' un "segreto" o i fili cambiano, `set_section` su
   `{SETTING_DIR}/avventura.md`, sezione "Fili aperti di <personaggio>", col testo intero
   aggiornato: tieni le righe ancora valide, togli cio' che e' risolto. Sei righe al massimo.
-- Orologi: riga "orologio" negli appunti -> `set_clock` per uno nuovo, `tick_clock` per farne
-  avanzare uno esistente (usa il nome esatto tra quelli che ricevi). Mai di tua iniziativa.
+- Orologi: riga "orologio" negli appunti -> `set_clock` per uno nuovo (con `deadline_turns` solo se
+  la riga dice "entro N turni"), `tick_clock` per farne avanzare uno esistente (usa il nome esatto
+  tra quelli che ricevi). Mai di tua iniziativa.
+- Relazioni: riga "relazione" negli appunti -> `shift_relationship` con il nome esatto tra quelli
+  che ricevi (o nuovo), verso e forza come scritto. Mai di tua iniziativa, mai un numero.
 - Glossario: `upsert_glossary` per i "nuovo" (al massimo due a turno, tre in un'apertura), una
   frase breve; file `{SETTING_DIR}/npc.md` per i PNG, `{SETTING_DIR}/mondo.md` per i luoghi.
+  PRIMA la sezione nel file (`set_section` con il nome come titolo), POI la voce: il programma
+  rifiuta una voce il cui termine non compare nel file indicato.
 - SCENA: chiama SEMPRE `set_scene`, anche se gli appunti dicono "nulla". E' il documento da cui il
   narratore ripartira' al prossimo turno, senza altra memoria: deve dire dove si e', quando, chi e'
   presente, cosa e' appena successo (comprese le azioni del giocatore, con precisione) e cosa resta
@@ -144,6 +168,7 @@ Non inventare e non aggiungere: se una cosa non e' li', non esiste.
 Stile telegrafico. Dopo gli strumenti non scrivere altro.
 """
 NOTES_RE = re.compile(r"<appunti>(.*?)(?:</appunti>|$)", re.S | re.I)
+XP_LINE_RE = re.compile(r"(?im)^\s*[-*]?\s*pe\s*:")  # la riga degli appunti che autorizza award_xp / spend_xp
 DEFAULT_SCRIBE_MODEL = "claude-haiku-4-5"
 READ_TOOL_NAMES = {"read_file", "lookup_glossary", "list_files"}
 
@@ -245,7 +270,7 @@ class MasterEngine(ConversationEngine):
     def system_blocks(self) -> list[dict[str, Any]]:
         """Primo blocco: non cambia mai. Secondo: la parte stabile della scheda, che cambia solo quando
         il personaggio cresce; se cambia si riscrive lei sola, il primo blocco resta in cache."""
-        blocks = [{"type": "text", "text": self.prompt + self.dice_text(), "cache_control": CACHE}]
+        blocks = [{"type": "text", "text": self.prompt + self.dice_text() + self.mode_text(), "cache_control": CACHE}]
         sheet = self.campaign.active_sheet()
         data = Sheet(self.campaign, sheet["slug"]) if sheet else None
         if data is not None and data.exists:
@@ -254,6 +279,12 @@ class MasterEngine(ConversationEngine):
                            "Stato ed esperienza, che cambiano spesso, li trovi aggiornati nel contesto di ogni turno.\n"
                            "```json\n" + data.stable_json() + "\n```"})
         return blocks
+
+    def mode_text(self) -> str:
+        """La lente del modo di gioco scelto: nel primo blocco, in cache, cambia solo se il giocatore lo cambia."""
+        from . import modi
+
+        return modi.testo(modi.attivo(self.campaign))
 
     def dice_text(self) -> str:
         """Come si chiede un tiro in QUESTA campagna: generato dal profilo ricavato dal manuale."""
@@ -279,7 +310,7 @@ class MasterEngine(ConversationEngine):
         router = self._route_rules if saved_as is None and not spoken.startswith("[Tiro]") else None
         context = compose(self.campaign, spoken if saved_as is None else "", self.save_name or "", router=router)
         self.log.info("turno %d contesto: %s", self.turns, context.stats())
-        return context.text + self._table_state() + ("GIOCATORE: " if saved_as is None else "") + spoken
+        return context.text + self._table_state(spoken) + ("GIOCATORE: " if saved_as is None else "") + spoken
 
     def _after_narration(self, result: TurnResult, spoken: str, saved_as: str | None, calls: int) -> None:
         if result.stop_reason in ("end_turn", "max_tokens"):
@@ -298,12 +329,17 @@ class MasterEngine(ConversationEngine):
         super()._record_spend(result, calls, narrator_cost)
         self.campaign.record_spend("scriba", self.scribe_model, result.scribe_cost_usd, turno=self.turns)
 
-    def _table_state(self) -> str:
+    def _table_state(self, spoken: str = "") -> str:
         """Cio' che il programma conta al posto del narratore, in testa al messaggio del turno.
 
         Sta qui e non nel prompt di sistema perche' cambia spesso: nel prompt invaliderebbe la cache.
+        Ordine: il tempo passa (scadenze), le regole scattano (trigger: possono riempire un orologio),
+        gli orologi pieni si consegnano.
         """
+        self.campaign.expire_clocks()  # il tempo passa anche per gli orologi che nessuno tocca
+        triggered = trigger.valuta(self.campaign, spoken)
         lines = [f"[OROLOGIO PIENO: {c}. La conseguenza accade in questa scena.]" for c in self.campaign.pop_full_clocks()]
+        lines += triggered
         active = self.campaign.clocks_line()
         if active:
             lines.append(f"[Orologi: {active}]")
@@ -344,10 +380,27 @@ class MasterEngine(ConversationEngine):
         number = self.campaign.session_number
         if number > 1:
             # dalla seconda sessione non si rinasce dal background: si riparte da scena, diario e fili aperti
-            brief = OPENING_BRIEF.format(number=number, name=sheet["name"], notes=hint) + self._diary_tail()
+            brief = (OPENING_BRIEF.format(number=number, name=sheet["name"], notes=hint) + self._facts_note()
+                     + self._stale_threads_note(sheet["name"]) + self._diary_tail())
             return self.play(brief, saved_as=OPENING_MARK + (f" {notes}" if notes else ""))
         brief = PRELUDE_BRIEF.format(name=sheet["name"], notes=hint)
         return self.play(brief, saved_as=PRELUDE_MARK + (f" {notes}" if notes else ""))
+
+    def _facts_note(self) -> str:
+        """All'apertura di una sessione i fatti da non perdere arrivano tutti: la scena nuova non li contraddice."""
+        facts = fatti.leggi(self.campaign)
+        if not facts:
+            return ""
+        return f"{NL_}[DA NON PERDERE, fatti stabiliti: " + " | ".join(facts) + f"]{NL_}"
+
+    def _stale_threads_note(self, name: str) -> str:
+        """I fili fermi da due sessioni, una volta, all'apertura: il narratore li chiude o li rilancia."""
+        stale = self.campaign.stale_threads(name)
+        if not stale:
+            return ""
+        return (f"{NL_}[FILI STANTII, fermi da almeno {STALE_AFTER} sessioni: " + " | ".join(stale)
+                + "]{NL_}Per ognuno: chiudilo con un fatto accaduto nel frattempo, o rilancialo in questa apertura. Negli appunti un"
+                " \"segreto\" con i fili aggiornati: quelli chiusi spariscono.{NL_}").replace("{NL_}", NL_)
 
     def _diary_tail(self) -> str:
         """L'ultima parte del diario, gia' nel messaggio: scena e fili aperti sono nel contesto del turno."""
@@ -442,6 +495,7 @@ class MasterEngine(ConversationEngine):
         scene = self.campaign.file(SCENE)
         parts.append("SCENA PRIMA DI QUESTO TURNO:" + NL_ + (scene.read().strip() if scene.exists() else "(nessuna: e' la prima)"))
         parts.append("OROLOGI ATTIVI: " + (self.campaign.clocks_line() or "(nessuno)"))
+        parts.append("RELAZIONI DEI PNG: " + (self.campaign.relations_line() or "(nessuna contata)"))
         parts.append(f'FILI APERTI ATTUALI (sezione "{title}"):' + "\n" + (threads.strip() if threads else "(nessuno)"))
         return "\n\n".join(parts)
 
@@ -461,6 +515,7 @@ class MasterEngine(ConversationEngine):
                                                "(non li ha lasciati: ricava dalla narrazione solo i fatti certi)"))
         messages: list[dict[str, Any]] = [{"role": "user", "content": body}]
         tokens = [0, 0]
+        self.executor.xp_allowed = bool(notes and XP_LINE_RE.search(notes))
         try:
             for round_ in range(2):  # il secondo giro solo per correggere uno strumento fallito
                 response = self.client.messages.create(model=self.scribe_model, max_tokens=4000, system=SCRIBE_PROMPT,
@@ -488,6 +543,8 @@ class MasterEngine(ConversationEngine):
             self.log.error("turno %d SCRIBA FALLITO (%s): appunti tenuti per il prossimo turno: %s",
                            self.turns, describe_error(exc), short(notes or "", 400))
             return 0.0
+        finally:
+            self.executor.xp_allowed = True
         self._unwritten_notes = []
         cost = cost_usd(self.scribe_model, tokens[0], tokens[1])
         self.log.info("turno %d scriba %s | token in/out=%d/%d costo~$%.4f", self.turns, self.scribe_model, tokens[0], tokens[1], cost)

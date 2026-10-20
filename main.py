@@ -8,6 +8,8 @@ Di norma si usa SimpleMaster.bat. Da terminale:
     python main.py --new campaigns/mia      # crea una campagna (copia dell'esempio)
     python main.py --campaign campaigns/mia --prepare manuale.pdf   # dal manuale ai file di campagna
     python main.py --campaign campaigns/mia --tidy-glossary         # solo riordino del glossario
+    python main.py --campaign campaigns/mia --validate [--json]     # errori, avvisi e consigli sui file (senza chiamate)
+    python main.py --doc [scheda|dadi|...]                          # la documentazione a sezioni (--rigenera riscrive le generate)
 
 Ogni esecuzione scrive un registro in log/ (vedi master/logbook.py).
 """
@@ -73,12 +75,25 @@ def main(argv: list[str] | None = None) -> int:
     prep.add_argument("--no-consolidate", action="store_true", help="salta il riordino finale dei file")
     prep.add_argument("--no-batch", action="store_true", help="estrazione immediata a prezzo pieno invece del Batch API a meta' prezzo")
     prep.add_argument("--no-tidy", action="store_true", help="salta il riordino del glossario dopo la preparazione")
+    prep.add_argument("--no-resolve", action="store_true",
+                      help="non decide quale testo vale dove due manuali si toccano: le versioni restano una dopo l'altra")
+    prep.add_argument("--altra-edizione", action="store_true",
+                      help="fonde il manuale anche se e' di un'edizione diversa da quella della campagna (di norma viene rifiutato)")
     prep.add_argument("--tidy-glossary", action="store_true",
                       help="solo riordino del glossario: allinea ai file e pulisce con una chiamata veloce")
     prep.add_argument("--sanitize", action="store_true",
                       help="toglie l'informazione duplicata: titoli equivalenti, blocchi ripetuti, voci di glossario doppie (gratuito)")
     prep.add_argument("--deep", action="store_true",
                       help="con --sanitize: riconosce anche le sezioni sullo stesso soggetto con nomi diversi (usa l'API)")
+    check = parser.add_argument_group("verifica", "controlla i file di una campagna senza chiamate e senza scrivere")
+    check.add_argument("--validate", action="store_true",
+                       help="errori, avvisi e consigli con file, punto e rimedio; con --campaign una sola, altrimenti tutte "
+                            "(e stampa solo chi ha errori o avvisi: e' la forma usata dall'hook SessionStart). Esce con 2 se ci sono errori")
+    check.add_argument("--json", action="store_true", help="con --validate: uscita JSON (counts, errors, warnings, recommendations)")
+    doc = parser.add_argument_group("documentazione", "una sezione per ogni dato che ha una forma, per chi deve toccarlo")
+    doc.add_argument("--doc", nargs="?", const="", metavar="SEZIONE",
+                     help="stampa una sezione (senza nome: l'elenco). Regola: se un campo non e' nella sezione, non esiste")
+    doc.add_argument("--rigenera", action="store_true", help="con --doc: riscrive in docs/sezioni/ le sezioni generate dal codice")
     logs = parser.add_argument_group("registri", "gestione ordinata dei file in log/")
     logs.add_argument("--logs", choices=["list", "clean", "dismiss", "purge", "diagnose", "examined"],
                       help="list: elenca con errori e interruzioni; clean: rotazione (archivia vecchi, cancella scaduti); "
@@ -94,6 +109,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.logs:
         return _manage_logs(args)
+    if args.validate:
+        return _validate(args)
+    if args.doc is not None:
+        return _doc(args)
 
     process = ("nuova" if args.new else "preparazione" if args.prepare else "riordino" if args.tidy_glossary
                else "sanifica" if args.sanitize else "gioco")
@@ -116,6 +135,56 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     finally:
         log.info("FINE %s", process)
+
+
+def _validate(args: argparse.Namespace) -> int:
+    """La verifica non apre un registro: e' sola lettura e gira anche all'avvio di ogni sessione di Claude Code."""
+    import json
+
+    from master.validate import hook_text, validate, validate_all
+
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # i rilievi citano i file com'e' scritto dentro
+    except (AttributeError, ValueError):
+        pass
+    if args.campaign:
+        reports = [validate(Campaign(args.campaign))]
+        text = reports[0].text()
+    else:
+        reports = validate_all(ROOT / "campaigns")
+        text = hook_text(reports)
+    if args.json:
+        payload = reports[0].as_dict() if args.campaign else [r.as_dict() for r in reports]
+        print(json.dumps(payload, ensure_ascii=False, indent=1))
+    elif text:
+        print(text)
+    return 2 if any(r.errors for r in reports) else 0
+
+
+def _doc(args: argparse.Namespace) -> int:
+    """Le sezioni della documentazione: sola lettura (o la riscrittura delle generate), senza registro."""
+    from master import docs
+
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+    if args.rigenera:
+        changed = docs.regenerate()
+        print("Rigenerate: " + (", ".join(changed) if changed else "nessuna (erano gia' aggiornate)"))
+        return 0
+    if not args.doc:
+        print(docs.listing())
+        stale = docs.stale()
+        if stale:
+            print(f"ATTENZIONE: sezioni generate non aggiornate su disco: {', '.join(stale)} (python main.py --doc --rigenera)")
+        return 0
+    try:
+        print(docs.render(args.doc.strip().lower()))
+    except (KeyError, FileNotFoundError) as exc:
+        print(str(exc).strip("'\""), file=sys.stderr)
+        return 2
+    return 0
 
 
 def _manage_logs(args: argparse.Namespace) -> int:
@@ -182,8 +251,14 @@ def _run(args: argparse.Namespace, log: logging.Logger) -> int:
         s = Settings.load(ROOT / "impostazioni.json")
         preparer = Preparer(Campaign(args.campaign), model=args.model or s.model_for("prepare"),
                             effort=args.effort or s.effort_for("prepare"), batch=s.prep_batch and not args.no_batch)
-        report = preparer.run(args.prepare, mode=args.mode, pages=args.pages,
-                              consolidate=not args.no_consolidate, tidy=not args.no_tidy)
+        from master.prepare import EditionMismatch
+
+        try:
+            report = preparer.run(args.prepare, mode=args.mode, pages=args.pages, consolidate=not args.no_consolidate,
+                                  tidy=not args.no_tidy, other_edition=args.altra_edizione, resolve=not args.no_resolve)
+        except EditionMismatch as exc:
+            print(f"\n{exc}")
+            return 2
         print("\n" + report.summary())
         return 0
 
