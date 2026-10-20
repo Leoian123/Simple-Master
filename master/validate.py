@@ -303,6 +303,20 @@ def _profile_problems(data: Any) -> list[tuple[str, str]]:
         esempi = kind.get("esempi")
         if esempi is not None and not isinstance(esempi, list):
             out.append((f"{at}.esempi", "dev'essere un elenco di campioni"))
+        keep = kind.get("tieni")
+        if keep is not None:
+            if not isinstance(keep, dict) or not _is_int(keep.get("quanti")) or keep["quanti"] < 1:
+                out.append((f"{at}.tieni", "null, oppure {quanti (intero da 1), quale (alto|basso)}"))
+            elif keep.get("quale") not in ("alto", "basso"):
+                out.append((f"{at}.tieni.quale", "`alto` o `basso`"))
+        on = kind.get("esiti_su")
+        if on is not None and on not in ("margine", "dado"):
+            out.append((f"{at}.esiti_su", "`margine` o `dado`"))
+        if on == "dado" and not kind.get("esiti"):
+            out.append((f"{at}.esiti", "con `esiti_su: dado` servono le fasce: sono i valori del dado tenuto"))
+        explode = kind.get("esplode_su")
+        if explode is not None and (not _is_int(explode) or explode < 2 or (dado and explode > dado)):
+            out.append((f"{at}.esplode_su", "null, oppure una faccia del dado da 2 in su (a 1 esploderebbe sempre)"))
         events = kind.get("eventi")
         if events is None:
             continue

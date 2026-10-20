@@ -132,6 +132,15 @@ class TestDice(Base):
              "esempi": [{"marcatore": "x | p | valore 50", "dadi": [20], "atteso": {"valore": 20, "esito": "fallito", "riuscito": None}}]}]})
         self.assertEqual([f.path for f in validate(self.camp).errors], ["meccanica/dadi.json:tiri[0].esempi[0].atteso.esito"])
 
+    def test_keep_and_explode_fields_are_checked(self) -> None:
+        self.write_json("meccanica/dadi.json", {"sistema": "x", "note": "", "tiri": [
+            {"nome": "a", "tipo": "somma", "dado": 6, "dadi_fissi": 1, "tieni": {"quanti": 0, "quale": "alto"}, "esiti_su": "dado", "esiti": [], "esplode_su": 1},
+            {"nome": "b", "tipo": "somma", "dado": 6, "dadi_fissi": 1, "tieni": {"quanti": 1, "quale": "medio"}, "esiti_su": "x", "esplode_su": 7}]})
+        paths = [f.path for f in validate(self.camp).errors]
+        for expected in ("meccanica/dadi.json:tiri[0].tieni", "meccanica/dadi.json:tiri[0].esiti", "meccanica/dadi.json:tiri[0].esplode_su",
+                         "meccanica/dadi.json:tiri[1].tieni.quale", "meccanica/dadi.json:tiri[1].esiti_su", "meccanica/dadi.json:tiri[1].esplode_su"):
+            self.assertIn(expected, paths)
+
     def test_bands_that_do_not_tile_are_an_error_with_the_path(self) -> None:
         self.write_json("meccanica/dadi.json", {"sistema": "x", "note": "", "tiri": [
             {"nome": "d20", "tipo": "somma", "dado": 20, "dadi_fissi": 1, "esiti": [

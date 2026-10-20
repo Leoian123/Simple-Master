@@ -65,12 +65,20 @@ PROFILO: dict[str, Any] = {
          "esempi": [{"marcatore": "x | riserva | dadi 3 | difficolta 2 | fame 0", "dadi": [7, 7, 2],
                      "atteso": {"valore": 2, "esito": "vittoria costosa", "riuscito": True}}]},
         {"nome": "prova", "uso": "d20 piu' bonus", "tipo": "somma", "dado": 20, "dadi_fissi": 1, "successo_da": None,
-         "vantaggio": True, "nome_zero_successi": "", "coppie": None, "speciali": None, "eventi": [], "esiti": [], "esempi": []},
+         "vantaggio": True, "nome_zero_successi": "", "coppie": None, "speciali": None, "eventi": [], "esiti": [], "esplode_su": 20,
+         "esempi": [{"marcatore": "x | prova | bonus +1 | difficolta 15", "dadi": [20, 5], "atteso": {"valore": 26, "esito": "riuscito bene", "riuscito": True}}]},
         {"nome": "percentuale", "uso": "d100 sotto il valore", "tipo": "sotto", "dado": 100, "dadi_fissi": 1, "successo_da": None,
          "vantaggio": False, "nome_zero_successi": "", "coppie": None, "speciali": None, "eventi": [], "esiti": [],
          "soglie": [{"nome": "estremo", "frazione": 0.2, "guida": "x"}, {"nome": "difficile", "frazione": 0.5, "guida": ""}],
          "fallimento_critico": {"da": 96, "sotto_valore": 50, "altrimenti_da": 100}, "successo_critico_fino_a": 1,
          "esempi": [{"marcatore": "x | percentuale | valore 60", "dadi": [25], "atteso": {"valore": 25, "esito": "difficile", "riuscito": True}}]},
+        {"nome": "azione", "uso": "il dado piu' alto decide", "tipo": "somma", "dado": 6, "dadi_fissi": None, "successo_da": None,
+         "vantaggio": False, "nome_zero_successi": "", "coppie": {"faccia": 6, "successi_extra": 0, "nome": "critico"}, "speciali": None, "eventi": [],
+         "tieni": {"quanti": 1, "quale": "alto"}, "esiti_su": "dado",
+         "esiti": [{"nome": "fallito", "da_margine": None, "a_margine": 3, "riuscito": False, "guida": "va male"},
+                   {"nome": "con conseguenze", "da_margine": 4, "a_margine": 5, "riuscito": True, "guida": "riesce a un prezzo"},
+                   {"nome": "pieno", "da_margine": 6, "a_margine": None, "riuscito": True, "guida": "riesce"}],
+         "esempi": [{"marcatore": "x | azione | dadi 2", "dadi": [3, 5], "atteso": {"valore": 5, "esito": "con conseguenze", "riuscito": True}}]},
     ],
     "fonte": "test",
 }
@@ -151,9 +159,12 @@ def codice_dadi(camp: Campaign) -> bool:
     with patch("master.dice._die", side_effect=itertools.cycle(FACCE)):
         for kind in profile["tiri"]:
             spec = f"azione | {kind['nome']}" + (" | dadi 3" if kind.get("dadi_fissi") is None else "")
-            if kind.get("tipo") == "somma":
+            if kind.get("tipo") == "somma" and kind.get("esiti_su") != "dado":
                 spec += " | bonus +1"
-            spec += " | valore 60" if kind.get("tipo") == "sotto" else " | difficolta 2"
+            if kind.get("tipo") == "sotto":
+                spec += " | valore 60"
+            elif kind.get("esiti_su") != "dado":
+                spec += " | difficolta 2"
             dice.roll(spec, profile, sheet)
             if kind.get("vantaggio"):
                 dice.roll(spec + " | vantaggio", profile, sheet)
@@ -329,6 +340,17 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (DADI, "tiri.2.fallimento_critico.altrimenti_da", DELETE, None, "accetta", "idem"),
     (DADI, "tiri.2.successo_critico_fino_a", "x", "errore", "rifiuta", "int() fallisce"),
     (DADI, "tiri.2.successo_critico_fino_a", DELETE, None, "accetta", "nessun successo critico"),
+    (DADI, "tiri.3.tieni", "x", "errore", "rifiuta", "non e' {quanti, quale}"),
+    (DADI, "tiri.3.tieni", DELETE, "errore", "accetta", "oltre: si sommano tutti e il campione sul dado tenuto non torna"),
+    (DADI, "tiri.3.tieni.quanti", 0, "errore", "rifiuta", "tenere zero dadi"),
+    (DADI, "tiri.3.tieni.quanti", 5, "errore", "accetta", "oltre: piu' dadi di quelli tirati, si sommano tutti e il campione non torna"),
+    (DADI, "tiri.3.tieni.quale", "medio", "errore", "rifiuta", "quale fuori vocabolario"),
+    (DADI, "tiri.3.esiti_su", "x", "errore", "accetta", "oltre: il codice legge il margine, il campione non torna"),
+    (DADI, "tiri.3.esiti_su", DELETE, "errore", "accetta", "oltre: idem"),
+    (DADI, "tiri.3.esiti", [], "errore", "accetta", "oltre: con esiti sul dado senza fasce non c'e' verdetto"),
+    (DADI, "tiri.1.esplode_su", "x", "errore", "rifiuta", "int() fallisce"),
+    (DADI, "tiri.1.esplode_su", 1, "errore", "accetta", "oltre: esploderebbe sempre, il tetto lo ferma, il campione non torna"),
+    (DADI, "tiri.1.esplode_su", DELETE, "errore", "accetta", "oltre: senza esplosione il campione non torna"),
     (DADI, "tiri.0.esempi", "x", "errore", "accetta", "oltre: i campioni servono alla verifica, il gioco non li legge"),
     (DADI, "tiri.1.esempi", DELETE, None, "accetta", "nessun campione"),
     (DADI, "tiri.0.esempi.0.marcatore", "x | banana", "errore", "accetta", "oltre: il campione non si esegue"),

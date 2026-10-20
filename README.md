@@ -273,6 +273,11 @@ i dadi riusciti) e `sotto` (si riesce con un totale fino al valore della scheda,
 di Call of Cthulhu, BRP, Delta Green, WFRP: `[[tiro: Ascoltare | percentuale | valore 65]]`,
 con i gradi a frazioni del valore, il fallimento critico e il successo critico del manuale).
 
+**Tieni ed esplosioni.** `tieni` tira N dadi e ne tiene i piu' alti o i piu' bassi; con gli esiti
+letti sul dado tenuto non serve una difficolta' (Forged in the Dark: `[[tiro: Scavalcare | azione |
+dadi 2]]` -> "CON CONSEGUENZE"); `esplode_su` ritira e somma una faccia alta (Savage Worlds, L5R)
+o aggiunge un dado alla riserva (il "10 again").
+
 **Il profilo si valida eseguendo campioni.** Insieme al profilo il modello da' per ogni tipo
 di tiro da 2 a 4 casi con le facce uscite e l'esito che le regole prevedono; il programma li
 esegue a dadi fissi prima di salvare, rifa' la chiamata una volta se non tornano, e la verifica

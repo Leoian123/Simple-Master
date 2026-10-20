@@ -35,6 +35,7 @@ PROFILE_NAME = "dadi.json"
 MARK_RE = re.compile(r"\[\[\s*tiro\s*:(.*?)\]\]", re.S | re.I)
 _NOTATION_RE = re.compile(r"^\s*(\d{0,3})\s*d\s*(\d{1,4})\s*([+-]\s*\d+)?\s*$", re.I)
 MAX_DICE = 100
+MAX_EXPLOSIONS = 10  # per dado: un dado che esplode all'infinito e' un errore del profilo, non un tiro
 WHEN = ("sempre", "riuscito", "fallito", "critico")  # quando una faccia fa scattare un evento
 
 # Le fasce dell'esito: il margine (successi o totale oltre la difficolta', negativo se sotto) cade in
@@ -263,7 +264,12 @@ def _roll_successes(p: dict[str, Any], kind: dict[str, Any], special_from_sheet:
     normal_n = count - special_n if special_rule.get("sostituiscono", True) else count
     normal = [_die(sides) for _ in range(normal_n)]
     special = [_die(sides) for _ in range(special_n)]
-    rolls = normal + special
+    explode_at = kind.get("esplode_su")
+    extra: list[int] = []
+    if explode_at is not None:  # ogni faccia da `esplode_su` in su aggiunge un dado alla riserva (il "10 again")
+        for face in normal + special:
+            extra += _explode(sides, face, int(explode_at))[1:]
+    rolls = normal + special + extra
     successes = sum(1 for r in rolls if r >= threshold)
     pair = kind.get("coppie") or {}
     pairs = rolls.count(pair["faccia"]) // 2 if pair.get("faccia") else 0
@@ -279,7 +285,8 @@ def _roll_successes(p: dict[str, Any], kind: dict[str, Any], special_from_sheet:
     if successes == 0 and kind.get("nome_zero_successi"):
         notes.append(str(kind["nome_zero_successi"]).upper())
     label = str(special_rule.get("nome") or "speciali")
-    detail = f"{count}d{sides}: {', '.join(map(str, normal)) or '-'}" + (f" | {label}: {', '.join(map(str, special))}" if special else "")
+    detail = (f"{count}d{sides}: {', '.join(map(str, normal)) or '-'}" + (f" | {label}: {', '.join(map(str, special))}" if special else "")
+              + (f" | esplosi: {', '.join(map(str, extra))}" if extra else ""))
     return {"rolls": rolls, "special_rolls": special, "value": successes, "unit": "successi", "detail": detail, "notes": notes,
             "won": won, "fascia": fascia}
 
@@ -292,20 +299,78 @@ def _roll_sum(p: dict[str, Any], kind: dict[str, Any] | None) -> dict[str, Any]:
         count, sides = int(found.group(1) or 1), int(found.group(2))
         bonus = int((found.group(3) or "0").replace(" ", "")) + int(p["bonus"])
     _check(count, sides)
-    rolls = [_die(sides) for _ in range(count)]
-    shown = ", ".join(map(str, rolls))
-    if p["advantage"] and count == 1:  # si tira due volte e si tiene il migliore (o il peggiore)
+    keep = _keep(kind)
+    explode_at = (kind or {}).get("esplode_su")
+    faces = [_die(sides) for _ in range(count)]
+    if explode_at is not None:  # ogni dado porta con se' le sue esplosioni: il suo valore e' la somma della catena
+        chains = [_explode(sides, f, int(explode_at)) for f in faces]
+        rolls = [sum(c) for c in chains]
+        shown = ", ".join("+".join(map(str, c)) + (f"={sum(c)}" if len(c) > 1 else "") for c in chains)
+    else:
+        rolls = list(faces)
+        shown = ", ".join(map(str, rolls))
+    notes_faces = list(rolls)
+    if p["advantage"] and count == 1 and not keep:  # si tira due volte e si tiene il migliore (o il peggiore)
         other = _die(sides)
         kept = max(rolls[0], other) if p["advantage"] > 0 else min(rolls[0], other)
         shown = f"{rolls[0]} e {other}, tengo {kept} ({'vantaggio' if p['advantage'] > 0 else 'svantaggio'})"
-        rolls = [kept]
+        rolls = notes_faces = [kept]
+    elif keep:
+        n, which = keep
+        ordered = sorted(rolls, reverse=(which == "alto"))
+        kept_dice = ordered[:n]
+        if len(rolls) > n:
+            label = "i piu' alti" if which == "alto" else "i piu' bassi"
+            shown = f"{shown} -> tengo {', '.join(map(str, kept_dice))} ({label})"
+        rolls = notes_faces = kept_dice
     total = sum(rolls) + bonus
     target = p["target"]
-    won, fascia = _verdetto(kind, "somma", total, target)
-    notes = _events((kind or {}).get("eventi"), rolls, won, False, only_special=False) if count == 1 or p["advantage"] else []
+    notes: list[str] = []
+    pair = (kind or {}).get("coppie") or {}
+    if pair.get("faccia") is not None and faces.count(int(pair["faccia"])) >= 2 and pair.get("nome"):
+        notes.append(str(pair["nome"]).upper())  # due dadi uguali sulla faccia detta: il critico di chi tiene il piu' alto
+    if (kind or {}).get("esiti_su") == "dado":
+        decisive = max(rolls) if (keep or (None, "alto"))[1] == "alto" else min(rolls)
+        fascia = _fascia_per_valore(kind, decisive)
+        won = bool(fascia.get("riuscito")) if fascia else None
+    else:
+        won, fascia = _verdetto(kind, "somma", total, target)
+    notes += _events((kind or {}).get("eventi"), notes_faces, won, False, only_special=False) if count == 1 or p["advantage"] or keep else []
     detail = f"{count}d{sides}: {shown}" + (f" {bonus:+d}" if bonus else "") + (f" = {total}" if bonus or len(rolls) > 1 else "")
     return {"rolls": rolls, "special_rolls": [], "value": total, "unit": "totale", "detail": detail, "notes": notes,
             "won": won, "fascia": fascia}
+
+
+def _explode(sides: int, first: int, explode_at: int) -> list[int]:
+    """Il dado e le sue esplosioni, in ordine di uscita: ogni faccia da `explode_at` in su ne tira un'altra."""
+    chain = [first]
+    while chain[-1] >= explode_at and len(chain) <= MAX_EXPLOSIONS:
+        chain.append(_die(sides))
+    return chain
+
+
+def _keep(kind: dict[str, Any] | None) -> tuple[int, str] | None:
+    """(quanti, 'alto'|'basso') se il tipo tiene una parte dei dadi; valida qui, non nel modello."""
+    rule = (kind or {}).get("tieni")
+    if not rule:
+        return None
+    if not isinstance(rule, dict):
+        raise ValueError("`tieni` dev'essere {quanti, quale}")
+    n, which = rule.get("quanti"), str(rule.get("quale") or "").strip().lower()
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        raise ValueError("`tieni.quanti` dev'essere un intero da 1 in su")
+    if which not in ("alto", "basso"):
+        raise ValueError("`tieni.quale` dev'essere `alto` o `basso`")
+    return n, which
+
+
+def _fascia_per_valore(kind: dict[str, Any] | None, value: int) -> dict[str, Any] | None:
+    """La fascia in cui cade un valore (non un margine): per gli esiti letti sul dado tenuto."""
+    for f in (kind or {}).get("esiti") or []:
+        lo, hi = f.get("da_margine"), f.get("a_margine")
+        if (lo is None or value >= lo) and (hi is None or value <= hi):
+            return f
+    return None
 
 
 def _fumble_from(kind: dict[str, Any], value: int) -> int | None:
@@ -381,6 +446,10 @@ def roll(spec: str, profile: dict[str, Any] | None = None, sheet: Any = None) ->
         guida = str(fascia.get("guida") or "")
         measure = f"margine {margin}" if out["won"] or margin >= 0 else f"mancano {-margin}"
         verdict = f" contro {'valore' if under else 'difficolta' + chr(39)} {target}: {esito.upper()} ({measure})"
+    elif out.get("fascia"):  # esiti letti sul dado tenuto: il verdetto non ha bisogno di una difficolta'
+        fascia = out["fascia"]
+        esito, guida = str(fascia.get("nome") or ""), str(fascia.get("guida") or "")
+        verdict = f": {esito.upper()}"
     head = f"{out['value']} successi" if out["unit"] == "successi" else f"totale {out['value']}"
     text = (f"[Tiro] {p['name']} — {out['detail']} -> {head}{verdict}" + "".join(f". {n}" for n in out["notes"]) + "."
             + (f" Guida: {guida}" if guida else ""))
@@ -412,8 +481,15 @@ def prompt_section(profile: dict[str, Any] | None) -> str:
             shape = f"[[tiro: <nome> | {name} | valore <V>]]"
             how = f"{k.get('dadi_fissi') or 1}d{k.get('dado')} sotto il valore della scheda; `| bonus <+K>` modifica il valore"
         else:
-            shape = f"[[tiro: <nome> | {name} | bonus <+K> | difficolta <D>]]"
-            how = f"{k.get('dadi_fissi') or 1}d{k.get('dado')} + bonus" + ("; aggiungi `| vantaggio` o `| svantaggio` quando le regole lo danno" if k.get("vantaggio") else "")
+            on_die = k.get("esiti_su") == "dado"
+            shape = (f"[[tiro: <nome> | {name}" + ("" if k.get("dadi_fissi") else " | dadi <N>")
+                     + ("" if on_die else " | bonus <+K> | difficolta <D>") + "]]")
+            how = f"{k.get('dadi_fissi') or '<N>'}d{k.get('dado')}" + ("" if on_die else " + bonus") + ("; aggiungi `| vantaggio` o `| svantaggio` quando le regole lo danno" if k.get("vantaggio") else "")
+            keep = k.get("tieni") or {}
+            if keep:
+                how += f"; si tengono i {keep.get('quanti')} piu' {'alti' if keep.get('quale') == 'alto' else 'bassi'}" + (" e decide il dado tenuto, senza difficolta'" if on_die else "")
+        if k.get("esplode_su") is not None:
+            how += f"; una faccia da {k['esplode_su']} in su si ritira e si somma"
         special = k.get("speciali") or {}
         if special:
             how += (f"; i dadi {special.get('nome')} li mette il programma leggendo `{special.get('quanti_da')}` dalla scheda"
@@ -421,6 +497,8 @@ def prompt_section(profile: dict[str, Any] | None) -> str:
         lines.append(f"- `{name}` ({how}): {shape}" + (f" — {k['uso']}" if k.get("uso") else ""))
         if k.get("tipo") == "sotto":
             lines.append(f"  esiti sul totale: {scala_sotto(k)}")
+        elif k.get("esiti_su") == "dado":
+            lines.append(f"  esiti sul dado tenuto: {scala_esiti(k)}")
         else:
             lines.append(f"  esiti per margine: {scala_esiti(k)}")
     if profile.get("note"):
@@ -563,6 +641,15 @@ PROFILE_SCHEMA: dict[str, Any] = {
                         "additionalProperties": False,
                     },
                     "successo_critico_fino_a": {**_NULLABLE_INT, "description": "Solo per `sotto`: un totale fino a questo e' un successo critico (es. 1); null altrimenti"},
+                    "tieni": {
+                        "type": ["object", "null"],
+                        "description": "Per `somma`: si tirano N dadi e se ne tengono `quanti`, i piu' alti o i piu' bassi (es. Forged in the Dark: dadi <N>, tieni 1 alto; due dadi a venti facce, tieni 1). null se si sommano tutti",
+                        "properties": {"quanti": {"type": "integer"}, "quale": {"type": "string", "enum": ["alto", "basso"]}},
+                        "required": ["quanti", "quale"],
+                        "additionalProperties": False,
+                    },
+                    "esiti_su": {"type": "string", "enum": ["margine", "dado"], "description": "Per `somma`: `margine` = le fasce di `esiti` si leggono sul margine contro la difficolta'; `dado` = si leggono sul dado tenuto, senza difficolta' (es. 6 pieno, 4-5 con conseguenze, 1-3 fallito)"},
+                    "esplode_su": {**_NULLABLE_INT, "description": "Una faccia da questo valore in su si ritira e si somma (somma) o aggiunge un dado (successi); null se i dadi non esplodono"},
                     "esempi": {"type": "array", "items": _ESEMPIO, "description": "Da 2 a 4 casi con dadi fissi ed esito atteso SECONDO LE REGOLE: il programma li esegue e rifiuta un profilo che non li rispetta"},
                     "esiti": {
                         "type": "array",
@@ -571,7 +658,7 @@ PROFILE_SCHEMA: dict[str, Any] = {
                     },
                 },
                 "required": ["nome", "uso", "tipo", "dado", "dadi_fissi", "successo_da", "vantaggio", "nome_zero_successi", "coppie", "speciali", "eventi", "esiti",
-                             "soglie", "fallimento_critico", "successo_critico_fino_a", "esempi"],
+                             "soglie", "fallimento_critico", "successo_critico_fino_a", "tieni", "esiti_su", "esplode_su", "esempi"],
                 "additionalProperties": False,
             },
         },
@@ -590,6 +677,10 @@ ampio, vittoria costosa): una fascia per grado, con il nome del manuale e una fr
 coprono tutti i margini senza buchi, la piu' bassa aperta in basso e la piu' alta in alto. Altrimenti [].
 `tipo` sotto: per i sistemi in cui si riesce tirando FINO AL valore della scheda (d100 roll-under): i gradi in
 `soglie` come frazioni del valore, il fallimento critico e il successo critico come totali.
+`tieni` + `esiti_su: dado`: per i sistemi in cui decide il dado migliore (o peggiore) e non la somma (Forged
+in the Dark, due dadi a venti facce): le fasce di `esiti` sono allora valori del dado tenuto, non margini. `esplode_su`: la
+faccia che si ritira e si somma (o aggiunge un dado alla riserva), se il manuale lo prevede. Nei campioni le
+facce vanno date nell'ordine in cui il programma le consuma: ogni dado seguito dalle sue esplosioni.
 `esempi`: per ogni tipo di tiro da 2 a 4 casi con le facce uscite e l'esito che le regole prevedono (valore,
 nome dell'esito, riuscito). Il programma li esegue: un profilo i cui esempi non tornano viene rifatto."""
 

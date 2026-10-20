@@ -191,6 +191,57 @@ class TestSotto(unittest.TestCase):
         self.assertIn("esiti sul totale: successo critico (fino a 1) · estremo (fino a 0.2 del valore) · difficile (fino a 0.5 del valore) · riuscito (fino al valore) · fallito (oltre) · fallimento critico (da 96 con valore sotto 50, altrimenti da 100)", text)
 
 
+FITD = {"tiri": [{"nome": "azione", "tipo": "somma", "dado": 6, "dadi_fissi": None, "tieni": {"quanti": 1, "quale": "alto"}, "esiti_su": "dado",
+                  "coppie": {"faccia": 6, "successi_extra": 0, "nome": "critico"},
+                  "esiti": [{"nome": "fallito", "da_margine": None, "a_margine": 3, "riuscito": False, "guida": "va male"},
+                            {"nome": "con conseguenze", "da_margine": 4, "a_margine": 5, "riuscito": True, "guida": "riesce a un prezzo"},
+                            {"nome": "pieno", "da_margine": 6, "a_margine": None, "riuscito": True, "guida": "riesce"}]},
+                 {"nome": "disperato", "tipo": "somma", "dado": 6, "dadi_fissi": 2, "tieni": {"quanti": 1, "quale": "basso"}, "esiti_su": "dado",
+                  "esiti": [{"nome": "fallito", "da_margine": None, "a_margine": 3, "riuscito": False, "guida": ""},
+                            {"nome": "riuscito", "da_margine": 4, "a_margine": None, "riuscito": True, "guida": ""}]},
+                 {"nome": "esplosivo", "tipo": "somma", "dado": 6, "dadi_fissi": 1, "esplode_su": 6}]}
+
+
+class TestTieniEsplode(unittest.TestCase):
+    def test_highest_die_decides_without_a_difficulty(self) -> None:
+        with fixed(3, 5):
+            r = dice.roll("Scavalcare | azione | dadi 2", FITD)
+        self.assertEqual((r["value"], r["esito"], r["success"], r["guida"]), (5, "con conseguenze", True, "riesce a un prezzo"))
+        self.assertEqual(r["text"], "[Tiro] Scavalcare — 2d6: 3, 5 -> tengo 5 (i piu' alti) -> totale 5: CON CONSEGUENZE. Guida: riesce a un prezzo")
+        with fixed(6, 6, 1):
+            r = dice.roll("x | azione | dadi 3", FITD)
+        self.assertEqual((r["esito"], r["notes"]), ("pieno", ["CRITICO"]))
+        with fixed(2, 1):
+            self.assertEqual(dice.roll("x | azione | dadi 2", FITD)["esito"], "fallito")
+        with fixed(5, 2):  # il piu' basso decide
+            self.assertEqual(dice.roll("x | disperato", FITD)["esito"], "fallito")
+        with fixed(4):  # un dado solo: si tiene quello
+            self.assertEqual(dice.roll("x | azione | dadi 1", FITD)["esito"], "con conseguenze")
+        text = dice.prompt_section(FITD)
+        self.assertIn("[[tiro: <nome> | azione | dadi <N>]]", text)
+        self.assertIn("si tengono i 1 piu' alti e decide il dado tenuto, senza difficolta'", text)
+        self.assertIn("esiti sul dado tenuto: fallito (fino a 3) · con conseguenze (4..5) · pieno (da 6)", text)
+
+    def test_exploding_dice_in_sums_and_pools(self) -> None:
+        with fixed(6, 6, 2):
+            r = dice.roll("x | esplosivo | difficolta 10", FITD)
+        self.assertEqual((r["value"], r["success"]), (14, True))
+        self.assertIn("1d6: 6+6+2=14", r["text"])
+        self.assertIn("una faccia da 6 in su si ritira e si somma", dice.prompt_section(FITD))
+        pool = {"tiri": [{**POOL["tiri"][0], "speciali": None, "esplode_su": 10}]}
+        with fixed(10, 3, 7, 4):  # il 10 aggiunge un dado (4): tre dadi tirati, quattro contati
+            r = dice.roll("x | riserva | dadi 3 | difficolta 2", pool)
+        self.assertEqual((r["value"], r["rolls"]), (2, [10, 3, 7, 4]))  # riescono il 10 e il 7; il 4 esploso no
+        self.assertIn("| esplosi: 4", r["text"])
+        with fixed(*([6] * 12), 3):  # il tetto: al massimo 10 esplosioni per dado
+            self.assertEqual(dice.roll("x | esplosivo", FITD)["value"], 6 * 11)
+
+    def test_keep_rules_are_validated_in_code(self) -> None:
+        for bad in ({"quanti": 0, "quale": "alto"}, {"quanti": 1, "quale": "medio"}, "x"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError), fixed(3, 4):
+                dice.roll("x | azione | dadi 2", {"tiri": [{**FITD["tiri"][0], "tieni": bad}]})
+
+
 class TestCampioni(unittest.TestCase):
     """I campioni del profilo si eseguono a dadi fissi: zero chiamate, e il profilo o torna o si dice."""
 

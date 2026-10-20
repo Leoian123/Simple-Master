@@ -280,11 +280,12 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > (roll-under con soglie derivate, tieni il piu' alto/basso, piu' assi per tiro) e ha un metodo
 > da prendere: il profilo si valida eseguendo campioni. Da qui la Fase 1b.
 
-## Fase 1b — Profilo dei dadi v2 (dallo studio 7) — IN CORSO
-> FATTO (2026-10-20): **campioni** (`esempi` nello schema, `verifica_esempi`, un retry in
-> `extract_profile`, `campioni_falliti`, errore nella verifica) e **`tipo: "sotto"`** (`soglie`,
-> `fallimento_critico`, `successo_critico_fino_a`, `valore` nel marcatore, `scala_sotto` nel
-> prompt), 24 righe di mutazione, sezione `dadi` rigenerata. Restano `tieni` ed `esplode_su`.
+## Fase 1b — Profilo dei dadi v2 (dallo studio 7) — FATTO (2026-10-20)
+> **Campioni** (`esempi` nello schema, `verifica_esempi`, un retry in `extract_profile`,
+> `campioni_falliti`, errore nella verifica); **`tipo: "sotto"`** (`soglie`, `fallimento_critico`,
+> `successo_critico_fino_a`, `valore` nel marcatore); **`tieni`** + **`esiti_su: dado`** (Forged in
+> the Dark, 2d20) ed **`esplode_su`** (somma e riserve). 35 righe di mutazione, sezione `dadi`
+> rigenerata. Il banco di prova su un manuale a d100 e uno a dado piu' alto resta da giocare.
 - **Campioni**: `esempi` nel profilo, eseguiti con dadi fissi da `extract_profile` prima di
   salvare (un retry con l'errore) e rieseguiti dalla verifica a zero chiamate.
 - **`tipo: "sotto"`**: roll-under con `soglie` a frazioni del valore e fallimento critico (CoC,

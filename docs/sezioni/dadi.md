@@ -35,6 +35,9 @@ che superano un valore (`successi`). Tutto il resto e' nel profilo.
 | `soglie` | elenco di object | si | Solo per `sotto`: i gradi di successo come frazioni del valore (es. difficile 0.5, estremo 0.2); [] altrimenti Ogni elemento: `nome` (Il nome del grado nel manuale (es. 'successo estremo')), `frazione` (Il grado vale se il totale e' fino a questa frazione del valore (es. 0.5 = meta', 0.2 = un quinto)), `guida` (Come narrare questo grado, in una frase; stringa vuota se il manuale non lo dice). |
 | `fallimento_critico` | object o null | si | Solo per `sotto`: da quale totale il tiro e' un fallimento critico; `sotto_valore`/`altrimenti_da` se la soglia dipende dal valore (es. 96 sotto 50, altrimenti 100) |
 | `successo_critico_fino_a` | integer o null | si | Solo per `sotto`: un totale fino a questo e' un successo critico (es. 1); null altrimenti |
+| `tieni` | object o null | si | Per `somma`: si tirano N dadi e se ne tengono `quanti`, i piu' alti o i piu' bassi (es. Forged in the Dark: dadi <N>, tieni 1 alto; due dadi a venti facce, tieni 1). null se si sommano tutti |
+| `esiti_su` | string (`margine`, `dado`) | si | Per `somma`: `margine` = le fasce di `esiti` si leggono sul margine contro la difficolta'; `dado` = si leggono sul dado tenuto, senza difficolta' (es. 6 pieno, 4-5 con conseguenze, 1-3 fallito) |
+| `esplode_su` | integer o null | si | Una faccia da questo valore in su si ritira e si somma (somma) o aggiunge un dado (successi); null se i dadi non esplodono |
 | `esempi` | elenco di object | si | Da 2 a 4 casi con dadi fissi ed esito atteso SECONDO LE REGOLE: il programma li esegue e rifiuta un profilo che non li rispetta Ogni elemento: `marcatore` (Un marcatore completo, come lo scriverebbe il narratore: `<nome> | <tipo> | dadi N | difficolta D` (per i dadi speciali forzali: `| <nome dei dadi speciali> 2`)), `dadi` (Le facce uscite, in ordine, tante quante il tiro ne usa), `atteso`. |
 | `esiti` | elenco di object | si | Le fasce che il manuale da' all'esito in base al MARGINE (successi o totale oltre la difficolta', negativo se sotto): devono coprire tutti i margini senza buchi, la piu' bassa aperta in basso (da_margine null) e la piu' alta in alto (a_margine null). [] se il manuale non gradua l'esito: valgono fasce predefinite Ogni elemento: `nome` (Il nome che il manuale da' a questo esito (es. 'vittoria costosa')), `da_margine` (Margine minimo compreso; null = aperta in basso), `a_margine` (Margine massimo compreso; null = aperta in alto), `riuscito` (true se in questa fascia l'azione riesce), `guida` (Come narrare questo esito secondo il manuale, in una frase). |
 
@@ -69,6 +72,16 @@ fallito / fallimento critico, con la guida del grado se il manuale la da'. `esit
 | `nome` | string | si | Il nome del grado nel manuale (es. 'successo estremo') |
 | `frazione` | number | si | Il grado vale se il totale e' fino a questa frazione del valore (es. 0.5 = meta', 0.2 = un quinto) |
 | `guida` | string | si | Come narrare questo grado, in una frase; stringa vuota se il manuale non lo dice |
+
+## Tieni ed esplosioni
+
+`tieni: {quanti, quale}` (per `somma`): si tirano N dadi e se ne tengono i `quanti` piu' alti o piu' bassi;
+con `esiti_su: "dado"` le fasce di `esiti` sono valori del dado tenuto e il marcatore non porta una
+difficolta' (Forged in the Dark: `dadi <N>`, tieni 1 alto, 6 pieno / 4-5 con conseguenze / 1-3 fallito;
+`coppie` sulla faccia 6 da' la nota CRITICO quando due dadi la mostrano). `esplode_su`: una faccia da quel
+valore in su si ritira e si somma (`somma`: 6+6+2=14) o aggiunge un dado alla riserva (`successi`, il
+"10 again"); al massimo 10 esplosioni per dado. Nei campioni le facce vanno nell'ordine in cui il
+programma le consuma: ogni dado seguito dalle sue esplosioni.
 
 ## I campioni (`tiri[i].esempi[j]`)
 
@@ -110,6 +123,7 @@ Uno per messaggio, su una riga sua, in coda alla narrazione. La pagina lo mostra
 [[tiro: <nome> | <tipo> | dadi N | <nome dei dadi speciali> N]]      per forzare i dadi speciali
 [[tiro: <nome> | <tipo> | bonus +K | difficolta D | vantaggio]]      o svantaggio, se il tipo lo ammette
 [[tiro: <nome> | <tipo sotto> | valore <V>]]                       roll-under: riesce fino al valore
+[[tiro: <nome> | <tipo con tieni e esiti sul dado> | dadi N]]        decide il dado tenuto, nessuna difficolta'
 [[tiro: <nome> | 2d6+1 | difficolta 8]]                             senza profilo: dadi per esteso
 [[tiro: <nome> | 6d10 | successi 6+ | difficolta 3]]                senza profilo: riserva a successi
 ```
