@@ -616,6 +616,12 @@ def _check_play(campaign: Campaign, report: ValidationReport) -> None:
         report.add("recommendation", f"{ADVENTURE} § {title}", "fili stantii",
                    f"{len(stale)} fil{'o fermo' if len(stale) == 1 else 'i fermi'} da almeno due sessioni: {'; '.join(stale)[:200]}",
                    "il narratore li riceve alla prossima apertura e il consolidamento fra i documenti: chiudili o rilanciali")
+    from .fatti import FILE as FACTS_FILE, MAX_LINES as FACTS_MAX, leggi as facts_of
+
+    if len(facts_of(campaign)) > FACTS_MAX:
+        report.add("recommendation", FACTS_FILE, "fatti da non perdere troppi",
+                   f"{len(facts_of(campaign))} righe: e' un promemoria di cio' che non si puo' perdere, non un diario",
+                   f"sfoltisci a meno di {FACTS_MAX} righe: il resto sta nella cronaca")
     pending = played - campaign.consolidated(slug)
     if pending >= MIN_TURNS_TO_CONSOLIDATE:
         report.add("recommendation", f"{STATE_FILE}:memoria[{slug}]", "memoria da consolidare",

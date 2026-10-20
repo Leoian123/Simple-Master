@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from . import relazioni
+from . import fatti, relazioni
 from .campaign import MECHANICS_DIR, SETTING_DIR, Campaign
 from .glossary import GlossaryEntry
 from .memory import ADVENTURE, NPC_MEMORY, SCENE
@@ -40,6 +40,7 @@ class TurnContext:
     entities: list[str] = field(default_factory=list)
     rules: list[str] = field(default_factory=list)
     exchanges: int = 0
+    facts: list[str] = field(default_factory=list)
 
     def stats(self) -> str:
         return (f"{len(self.text)} car | entita': {', '.join(self.entities) or '-'} | regole: {', '.join(self.rules) or '-'} "
@@ -127,6 +128,12 @@ def compose(campaign: Campaign, player_text: str, save_name: str, router=None) -
 
     turns = campaign.read_turns(save_name, LAST_EXCHANGES) if save_name else []
     last_narration = turns[-1]["master"] if turns else ""
+
+    # i fatti da non perdere che questo turno tocca: stabiliti, non si rinegoziano
+    pinned = fatti.pertinenti(fatti.leggi(campaign), [player_text, scene_text, last_narration])
+    if pinned:
+        parts.append("## Da non perdere (fatti stabiliti, non si contraddicono)\n" + "\n".join(f"- {x}" for x in pinned))
+        ctx.facts = list(pinned)
 
     # chi e cosa e' nominato: prima nelle parole del giocatore, poi nella scena, poi nell'ultima narrazione
     sources = [player_text.lower(), scene_text.lower(), last_narration.lower()]

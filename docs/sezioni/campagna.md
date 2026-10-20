@@ -21,6 +21,7 @@ campaigns/<nome>/
     diario.md             cronologia: cronaca `- [t12] ...` dal consolidamento, `## Appunti` provvisori dello scriba
     scena.md              dove si e' rimasti (riscritta dallo scriba a ogni turno)
     png-memoria.md        per ogni PNG: cosa sa, cosa crede, cosa vuole (dal consolidamento)
+    da-non-perdere.md     poche righe, una per fatto, che la memoria non deve perdere (a mano; il consolidamento ne aggiunge al massimo due per corsa)
   schede/               una scheda per personaggio giocante: <slug>.json i dati, <slug>.md la vista generata (sezione `scheda`)
   sessioni/             il giocato: <slug>.jsonl una riga per turno, archivio/, spese.jsonl, _scheda.jsonl (non indicizzato)
   preparazione/         cache della preparazione da manuale: paternita.json, fonti/<manuale>/ (non indicizzato)
@@ -38,6 +39,16 @@ campaigns/<nome>/
 - `sessioni/` e `preparazione/` non entrano nell'indice dei file ne' nel glossario.
 - `Campaign.files()` elenca i file testuali in ordine di percorso; `Campaign.index()` da' per ogni
   file le prime 12 sezioni (e' cio' che il costruttore e il riordino vedono).
+
+## I fatti da non perdere
+
+`ambientazione/da-non-perdere.md` (`master/fatti.py`) e' un elenco corto: promesse, debiti,
+ferite che restano, gradi, segreti svelati. Il consolidamento lo riceve per intero e lo tratta
+come stabilito (cronaca, fili e memoria dei PNG non lo contraddicono) e puo' proporre fino a due
+righe nuove per corsa, che il codice accoda senza doppioni; togliere e' solo a mano. Il contesto
+del turno porta solo le righe che il turno tocca (un nome proprio in comune, o due parole piene),
+al massimo 5; l'apertura di una sessione le porta tutte. Oltre 30 righe la verifica consiglia di
+sfoltire.
 
 ## Cosa indicizza il glossario
 

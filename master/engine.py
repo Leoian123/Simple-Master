@@ -22,6 +22,7 @@ from typing import Any
 from . import dice
 from .campaign import DIARY, MECHANICS_DIR, SETTING_DIR, SHEETS_DIR, Campaign
 from .conversation import CACHE, DEFAULT_MODEL, ConversationEngine, TurnResult
+from . import fatti
 from .fili import STALE_AFTER
 from .logbook import describe_error, short
 from .models import cost_usd
@@ -372,10 +373,18 @@ class MasterEngine(ConversationEngine):
         number = self.campaign.session_number
         if number > 1:
             # dalla seconda sessione non si rinasce dal background: si riparte da scena, diario e fili aperti
-            brief = OPENING_BRIEF.format(number=number, name=sheet["name"], notes=hint) + self._stale_threads_note(sheet["name"]) + self._diary_tail()
+            brief = (OPENING_BRIEF.format(number=number, name=sheet["name"], notes=hint) + self._facts_note()
+                     + self._stale_threads_note(sheet["name"]) + self._diary_tail())
             return self.play(brief, saved_as=OPENING_MARK + (f" {notes}" if notes else ""))
         brief = PRELUDE_BRIEF.format(name=sheet["name"], notes=hint)
         return self.play(brief, saved_as=PRELUDE_MARK + (f" {notes}" if notes else ""))
+
+    def _facts_note(self) -> str:
+        """All'apertura di una sessione i fatti da non perdere arrivano tutti: la scena nuova non li contraddice."""
+        facts = fatti.leggi(self.campaign)
+        if not facts:
+            return ""
+        return f"{NL_}[DA NON PERDERE, fatti stabiliti: " + " | ".join(facts) + f"]{NL_}"
 
     def _stale_threads_note(self, name: str) -> str:
         """I fili fermi da due sessioni, una volta, all'apertura: il narratore li chiude o li rilancia."""

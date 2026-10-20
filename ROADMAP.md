@@ -221,7 +221,11 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 
 ---
 
-## Fase 5 — Memoria: «cosa non perdere» e cronaca più fedele
+## Fase 5 — Memoria: «cosa non perdere» e cronaca più fedele — FATTO (2026-10-20)
+> `master/fatti.py` + `ambientazione/da-non-perdere.md`: nel consolidamento (documenti, prompt,
+> schema `da_non_perdere` con tetto di 2 per corsa), nel contesto del turno (righe pertinenti,
+> max 5), all'apertura di sessione (tutte); consiglio della verifica oltre 30 righe;
+> `tests/test_fatti.py`.
 
 - **Lezione.** `summarization.custom` di Voyage è una lista di fatti che la condensa
   non deve perdere (promesse, gradi, ferite, evoluzioni), scelti pensando a «cosa sarebbe

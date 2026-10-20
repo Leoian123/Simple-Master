@@ -19,7 +19,7 @@ nella sezione, non esiste**: non inventare chiavi, percorsi o strumenti.
 | le relazioni dei PNG, `relazioni.py`, `shift_relationship`, `meccanica/relazioni.json` | `--doc relazioni` |
 | i modi di gioco, `modi.py`, il selettore 'Modo', `meccanica/modi.json` | `--doc modi` |
 | `glossario.md`, `glossary.py`, `context.py`, `tidy.py` | `--doc glossario` |
-| le cartelle e i file di una campagna, `files.py` | `--doc campagna` |
+| le cartelle e i file di una campagna, `files.py`, i fatti da non perdere (`fatti.py`) | `--doc campagna` |
 | `validate.py`, i livelli della verifica | `--doc verifica` |
 
 Le sezioni `scheda`, `appunti`, `strumenti-scriba`, `dadi`, `relazioni` e `modi` sono generate dal codice

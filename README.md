@@ -226,6 +226,16 @@ compute, Generative Agents) e il risultato di un benchmark su narratori LLM: i
 conflitti di fatti sono l'errore piu' comune, e la memoria compressa peggiora
 proprio la fedelta' a cio' che ha fatto il giocatore.
 
+### Da non perdere: cosa la memoria non puo' lasciar cadere
+
+`ambientazione/da-non-perdere.md` e' un elenco corto, una riga per fatto: una promessa, un
+debito, una ferita che resta, un grado, un segreto svelato. Cio' che sarebbe stonato se un
+PNG lo dimenticasse. Lo si scrive a mano; il consolidamento lo riceve per intero, lo tratta
+come stabilito e puo' aggiungere al massimo due righe per corsa (si toglie solo a mano). Il
+contesto del turno porta le righe che il turno tocca, l'apertura di una sessione tutte: una
+promessa fatta nella sessione 1 e' davanti al narratore nella sessione 4 anche se il
+glossario non la indicizza.
+
 ## Dadi: li tira il programma, con le regole del manuale
 
 Il master non genera numeri casuali credibili e non deve decidere lui se un'azione
@@ -758,6 +768,7 @@ master/
   relazioni.py    le relazioni dei PNG: scala degli stadi (default o dal manuale), passo per enum, etichetta per il narratore
   fili.py         l'eta' dei fili aperti: etichette [sN] messe dal codice, fili stantii da chiudere o rilanciare
   modi.py         i modi di gioco: la lente sul narratore (tre predefiniti o meccanica/modi.json), nel prompt in cache
+  fatti.py        i fatti da non perdere: lettura, aggiunta con tetto e senza doppioni, pertinenza al turno
   docs.py         la documentazione a sezioni (--doc): quattro generate da schemi e prompt, quattro scritte in docs/sezioni/
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina

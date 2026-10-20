@@ -23,7 +23,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import fili
+from . import fatti, fili
 from .campaign import DIARY, SETTING_DIR, STATE_FILE, Campaign
 from .logbook import describe_error, usage_line
 from .models import cost_usd
@@ -79,6 +79,11 @@ MEMORY_SCHEMA: dict[str, Any] = {
             "required": ["luogo", "quando", "presenti", "appena_successo", "domanda_aperta", "da_richiamare"],
             "additionalProperties": False,
         },
+        "da_non_perdere": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Al massimo due fatti NUOVI di questi turni che la memoria non deve perdere (una promessa, un debito, una ferita che resta, un grado, un segreto svelato), una frase ciascuno con i nomi per esteso. Vuoto se nulla di nuovo merita di restare",
+        },
         "incoerenze": {
             "type": "array",
             "description": "Contraddizioni tra il giocato e i documenti forniti. Vuoto se non ce ne sono.",
@@ -90,7 +95,7 @@ MEMORY_SCHEMA: dict[str, Any] = {
             },
         },
     },
-    "required": ["eventi", "fili_aperti", "png", "scena", "incoerenze"],
+    "required": ["eventi", "fili_aperti", "png", "scena", "da_non_perdere", "incoerenze"],
     "additionalProperties": False,
 }
 
@@ -110,6 +115,8 @@ scritti, numerati) e i documenti attuali della campagna. Converti il giocato in 
 - PNG: separa cio' che sanno da cio' che credono. Una bugia creduta resta creduta finche' qualcosa la smentisce.
 - Relazione: `sale` o `scende` solo se in questi turni il personaggio ha aiutato, danneggiato, tradito o
   mantenuto una promessa verso quel PNG, di persona; complimenti e gesti vuoti non contano: `invariata`.
+- Da non perdere: i fatti gia' nell'elenco DA NON PERDERE valgono come stabiliti: la cronaca, i fili e la memoria dei
+  PNG non li contraddicono. Proponi al massimo due fatti nuovi che meritano lo stesso trattamento; nel dubbio nessuno.
 - Incoerenze: segnala solo contraddizioni vere tra il giocato e i documenti (o dentro il giocato), con la
   lettura da tenere d'ora in poi. Il giocato fa fede sui documenti.
 Italiano asciutto, frasi brevi."""
@@ -168,6 +175,9 @@ class Consolidator:
         adventure = camp.file(ADVENTURE)
         threads = adventure.get_section(f"Fili aperti di {name}") if adventure.exists() else None
         parts.append("FILI APERTI ATTUALI:\n" + (threads.strip() if threads else "(nessuno)"))
+        pinned = fatti.leggi(camp)
+        if pinned:
+            parts.append("DA NON PERDERE (fatti stabiliti):\n" + "\n".join(f"- {x}" for x in pinned))
         stale = camp.stale_threads(name)
         if stale:
             parts.append(f"FILI STANTII (fermi da almeno {fili.STALE_AFTER} sessioni: chiudili o rilanciali, non ricopiarli):\n"
@@ -287,6 +297,9 @@ class Consolidator:
 
         write_scene(camp, data["scena"], f"aggiornato al turno t{done + count}")
         touched.append(SCENE)
+
+        if fatti.aggiungi(camp, data.get("da_non_perdere")):
+            touched.append(fatti.FILE)
 
         fixes = [i for i in data.get("incoerenze") or [] if str(i.get("descrizione", "")).strip()]
         if fixes:

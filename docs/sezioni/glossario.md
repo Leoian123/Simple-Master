@@ -27,6 +27,7 @@ turno: entrano solo le sezioni delle entita' nominate.
   4 caratteri, non di tipo `pg`) prima nelle parole del giocatore, poi nella scena, poi nell'ultima
   narrazione, e porta nel contesto al massimo 8 entita' (700 caratteri l'una) e 3 regole (2.500).
   Per i PNG, se `png-memoria.md` ha una sezione con quel nome, entra quella invece del file.
+  Con lo stesso criterio entrano le righe di `da-non-perdere.md` che il turno tocca (sezione `campagna`).
 - **Nel costruttore di schede** entra intero sotto gli 8.000 caratteri; sopra, solo un indice
   compatto (termini per tipo e file, senza descrizioni) e le descrizioni si chiedono con
   `lookup_glossary`, i dettagli con `read_file(file, sezione)`.
