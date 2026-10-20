@@ -108,7 +108,11 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 
 ---
 
-## Fase 1 — Esiti graduati: dal RIUSCITO/FALLITO alla scala con guida narrativa
+## Fase 1 — Esiti graduati: dal RIUSCITO/FALLITO alla scala con guida narrativa — FATTO (2026-10-20)
+> `tiri[i].esiti` nel profilo (schema, prompt di estrazione), `DEFAULT_ESITI` per riserve e
+> somme, `esiti_problems` condivisa fra dadi e verifica, il `[Tiro]` chiude con il nome della
+> fascia e la guida, il prompt elenca le fasce per tipo. Scelta: le fasce sono per tipo di
+> tiro, non globali, perche' un margine di 3 successi non vale un margine di 3 su un d20.
 
 - **Lezione.** Voyage mappa il punteggio su 7 tier (`critical failure … critical
   success`), ciascuno con un `prompt` che arriva al narratore (con `{{characterName}}`), e

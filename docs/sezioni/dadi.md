@@ -32,6 +32,7 @@ che superano un valore (`successi`). Tutto il resto e' nel profilo.
 | `coppie` | object o null | si | Se le coppie di una faccia valgono successi in piu' |
 | `speciali` | object o null | si | Dadi di tipo diverso dentro il tiro, il cui numero viene da un valore della scheda |
 | `eventi` | elenco di object | si | Ogni elemento: `nome` (Il nome che il manuale da' all'evento), `faccia` (La faccia del dado che lo fa scattare), `quando` (sempre; solo se il tiro e' riuscito; solo se e' fallito; solo se c'e' un critico (coppie)), `solo_speciali` (true se conta solo quando la faccia esce su un dado speciale), `effetto` (Promemoria breve dell'effetto, o stringa vuota). |
+| `esiti` | elenco di object | si | Le fasce che il manuale da' all'esito in base al MARGINE (successi o totale oltre la difficolta', negativo se sotto): devono coprire tutti i margini senza buchi, la piu' bassa aperta in basso (da_margine null) e la piu' alta in alto (a_margine null). [] se il manuale non gradua l'esito: valgono fasce predefinite Ogni elemento: `nome` (Il nome che il manuale da' a questo esito (es. 'vittoria costosa')), `da_margine` (Margine minimo compreso; null = aperta in basso), `a_margine` (Margine massimo compreso; null = aperta in alto), `riuscito` (true se in questa fascia l'azione riesce), `guida` (Come narrare questo esito secondo il manuale, in una frase). |
 
 `coppie`: `faccia`; `successi_extra` Successi IN PIU' per ogni coppia, oltre a quelli dei due dadi; `nome`.
 `speciali`: `nome` Una parola minuscola; `quanti_da` Percorso nella scheda JSON del valore che dice quanti sono; `sostituiscono` true se prendono il posto di dadi normali, false se si aggiungono.
@@ -49,6 +50,24 @@ Una faccia che, quando esce, fa scattare qualcosa con un nome (critico caotico, 
 | `effetto` | string | si | Promemoria breve dell'effetto, o stringa vuota |
 
 `quando` vale uno tra: `sempre`, `riuscito`, `fallito`, `critico`.
+
+## Le fasce dell'esito (`tiri[i].esiti[j]`)
+
+Con una difficolta', il margine (successi o totale oltre la difficolta', negativo se sotto) cade in una
+fascia con un nome e una guida per il narratore. Le fasce devono coprire tutti i margini senza buchi,
+la piu' bassa aperta in basso e la piu' alta in alto (`dice.esiti_problems` e' la regola, usata anche
+dalla verifica). Se il manuale non gradua l'esito (`esiti: []` o assente) valgono le fasce predefinite:
+
+- `successi`: fallito (fino a -1) · riuscito di misura (0) · riuscito (1..2) · riuscito bene (da 3)
+- `somma`: fallito malamente (fino a -10) · fallito (-9..-1) · riuscito di misura (0..4) · riuscito (5..9) · riuscito bene (da 10)
+
+| parametro | tipo | obbligatorio | significato |
+|---|---|---|---|
+| `nome` | string | si | Il nome che il manuale da' a questo esito (es. 'vittoria costosa') |
+| `da_margine` | integer o null | si | Margine minimo compreso; null = aperta in basso |
+| `a_margine` | integer o null | si | Margine massimo compreso; null = aperta in alto |
+| `riuscito` | boolean | si | true se in questa fascia l'azione riesce |
+| `guida` | string | si | Come narrare questo esito secondo il manuale, in una frase |
 
 ## Il marcatore che il narratore scrive
 
@@ -71,10 +90,11 @@ I dadi speciali li conta il programma leggendo `quanti_da` dalla scheda del pers
 Tirare non costa chiamate. L'esito e' il messaggio del giocatore del turno dopo:
 
 ```
-[Tiro] <nome> — 5d10: 7, 6, 4 | fame: 2, 9 -> 3 successi contro difficolta' 2: RIUSCITO (margine 1). CRITICO. FALLIMENTO BESTIALE (effetto).
-[Tiro] <nome> — 1d20: 14 +3 = 17 contro difficolta' 15: RIUSCITO (margine 2).
+[Tiro] <nome> — 5d10: 7, 6, 4 | fame: 2, 9 -> 3 successi contro difficolta' 2: RIUSCITO (margine 1). CRITICO. FALLIMENTO BESTIALE (effetto). Guida: ...
+[Tiro] <nome> — 1d20: 14 +3 = 17 contro difficolta' 15: RIUSCITO DI MISURA (margine 2). Guida: ...
 ```
 
 Gli eventi compaiono in MAIUSCOLO con l'effetto tra parentesi; `nome_zero_successi` compare quando
-nessun dado riesce; con `difficolta` il verdetto e' RIUSCITO (margine) o FALLITO (mancano).
-Nel codice: `dice.roll(spec, profile, sheet) -> {name, target, success, value, rolls, special_rolls, notes, text}`.
+nessun dado riesce; con `difficolta` il verdetto e' il NOME DELLA FASCIA in maiuscolo con il margine
+(o quanto manca), e in coda la guida della fascia.
+Nel codice: `dice.roll(spec, profile, sheet) -> {name, target, success, value, rolls, special_rolls, notes, esito, guida, text}`.

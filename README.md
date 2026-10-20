@@ -244,9 +244,19 @@ profilo. Per una campagna preparata prima di questa funzione, in pagina compare
 
 Il master chiude la narrazione con `[[tiro: Intelligenza + Investigare | riserva |
 dadi 5 | difficolta 3]]`; la pagina lo mostra come pulsante; il programma tira e
-l'esito (`[Tiro] ... 5d10: 7, 6, 4 | fame: 2, 9 -> 3 successi ... RIUSCITO`)
-diventa il messaggio del giocatore. Tirare non costa chiamate. `/tira 2d6+1` nel
-campo di testo fa un tiro libero.
+l'esito (`[Tiro] ... 5d10: 7, 6, 4 | fame: 2, 9 -> 3 successi ... RIUSCITO DI MISURA
+(margine 0). Guida: ...`) diventa il messaggio del giocatore. Tirare non costa
+chiamate. `/tira 2d6+1` nel campo di testo fa un tiro libero.
+
+**L'esito ha un nome e una guida.** Con una difficolta', il margine cade in una fascia:
+il manuale puo' darle (`esiti` nel profilo: "fallito", "vittoria costosa", "riuscito"...,
+con una frase su come si narra ciascuna, ricavate insieme al profilo), altrimenti valgono
+fasce predefinite (per le riserve: fallito / riuscito di misura / riuscito / riuscito bene;
+per le somme una scala piu' larga). Il narratore riceve il nome della fascia e la sua
+guida e narra quella, invece di reinterpretare un numero; e' la fascia a dire se l'azione
+e' riuscita. Le fasce devono coprire tutti i margini senza buchi: la verifica lo controlla.
+Un profilo ricavato prima di questa funzione non ha `esiti` e usa le predefinite;
+"Ricava i dadi dalle regole" lo rifa' con quelle del manuale.
 
 ## Orologi: i fili che avanzano li conta il programma
 

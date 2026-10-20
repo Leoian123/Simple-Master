@@ -117,6 +117,14 @@ class TestDice(Base):
         self.assertIn("meccanica/dadi.json:tiri[1].tipo", paths)
         self.assertIn("meccanica/dadi.json:tiri[1].dado", paths)
 
+    def test_bands_that_do_not_tile_are_an_error_with_the_path(self) -> None:
+        self.write_json("meccanica/dadi.json", {"sistema": "x", "note": "", "tiri": [
+            {"nome": "d20", "tipo": "somma", "dado": 20, "dadi_fissi": 1, "esiti": [
+                {"nome": "fallito", "da_margine": None, "a_margine": -1, "riuscito": False, "guida": ""},
+                {"nome": "riuscito", "da_margine": 1, "a_margine": None, "riuscito": True, "guida": ""}]}]})
+        report = validate(self.camp)
+        self.assertEqual([f.path for f in report.errors], ["meccanica/dadi.json:tiri[0].esiti[1].da_margine"])
+
     def test_special_dice_path_missing_from_sheet_is_an_error(self) -> None:
         self.write_json("meccanica/dadi.json", {"sistema": "x", "note": "", "tiri": [
             {"nome": "riserva", "tipo": "successi", "dado": 10, "dadi_fissi": None, "successo_da": 6,

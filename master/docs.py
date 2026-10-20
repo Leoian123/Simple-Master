@@ -171,7 +171,7 @@ def _gen_tools() -> str:
 
 
 def _gen_dice() -> str:
-    from .dice import PROFILE_SCHEMA, WHEN
+    from .dice import DEFAULT_ESITI, PROFILE_SCHEMA, WHEN, scala_esiti
 
     kind = PROFILE_SCHEMA["properties"]["tiri"]["items"]
     event = kind["properties"]["eventi"]["items"]
@@ -206,6 +206,17 @@ def _gen_dice() -> str:
         "",
         f"`quando` vale uno tra: {', '.join(f'`{w}`' for w in WHEN)}.",
         "",
+        "## Le fasce dell'esito (`tiri[i].esiti[j]`)",
+        "",
+        "Con una difficolta', il margine (successi o totale oltre la difficolta', negativo se sotto) cade in una",
+        "fascia con un nome e una guida per il narratore. Le fasce devono coprire tutti i margini senza buchi,",
+        "la piu' bassa aperta in basso e la piu' alta in alto (`dice.esiti_problems` e' la regola, usata anche",
+        "dalla verifica). Se il manuale non gradua l'esito (`esiti: []` o assente) valgono le fasce predefinite:",
+        "",
+        *[f"- `{tipo}`: {scala_esiti(None, tipo)}" for tipo in DEFAULT_ESITI],
+        "",
+        _params_table(kind["properties"]["esiti"]["items"]),
+        "",
         "## Il marcatore che il narratore scrive",
         "",
         "Uno per messaggio, su una riga sua, in coda alla narrazione. La pagina lo mostra come pulsante.",
@@ -227,13 +238,14 @@ def _gen_dice() -> str:
         "Tirare non costa chiamate. L'esito e' il messaggio del giocatore del turno dopo:",
         "",
         "```",
-        "[Tiro] <nome> — 5d10: 7, 6, 4 | fame: 2, 9 -> 3 successi contro difficolta' 2: RIUSCITO (margine 1). CRITICO. FALLIMENTO BESTIALE (effetto).",
-        "[Tiro] <nome> — 1d20: 14 +3 = 17 contro difficolta' 15: RIUSCITO (margine 2).",
+        "[Tiro] <nome> — 5d10: 7, 6, 4 | fame: 2, 9 -> 3 successi contro difficolta' 2: RIUSCITO (margine 1). CRITICO. FALLIMENTO BESTIALE (effetto). Guida: ...",
+        "[Tiro] <nome> — 1d20: 14 +3 = 17 contro difficolta' 15: RIUSCITO DI MISURA (margine 2). Guida: ...",
         "```",
         "",
         "Gli eventi compaiono in MAIUSCOLO con l'effetto tra parentesi; `nome_zero_successi` compare quando",
-        "nessun dado riesce; con `difficolta` il verdetto e' RIUSCITO (margine) o FALLITO (mancano).",
-        "Nel codice: `dice.roll(spec, profile, sheet) -> {name, target, success, value, rolls, special_rolls, notes, text}`.",
+        "nessun dado riesce; con `difficolta` il verdetto e' il NOME DELLA FASCIA in maiuscolo con il margine",
+        "(o quanto manca), e in coda la guida della fascia.",
+        "Nel codice: `dice.roll(spec, profile, sheet) -> {name, target, success, value, rolls, special_rolls, notes, esito, guida, text}`.",
     ]
     return "\n".join(out)
 

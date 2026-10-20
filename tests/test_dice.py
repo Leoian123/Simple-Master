@@ -88,6 +88,71 @@ class TestDiceEngine(unittest.TestCase):
         self.assertIn("non ha ancora un profilo", dice.prompt_section(None))
 
 
+LADDER = [{"nome": "fallito", "da_margine": None, "a_margine": -1, "riuscito": False, "guida": "non riesce"},
+          {"nome": "vittoria costosa", "da_margine": 0, "a_margine": 0, "riuscito": True, "guida": "riesce, ma a un prezzo"},
+          {"nome": "riuscito", "da_margine": 1, "a_margine": None, "riuscito": True, "guida": "riesce"}]
+
+
+class TestEsiti(unittest.TestCase):
+    """Con una difficolta', l'esito ha il nome della fascia e una guida: dal manuale, o predefinite."""
+
+    def test_default_bands_for_pools_and_sums(self) -> None:
+        with fixed(6, 6, 2):
+            r = dice.roll("x | 3d10 | successi 6+ | difficolta 2")
+        self.assertEqual((r["esito"], r["success"]), ("riuscito di misura", True))
+        self.assertIn("RIUSCITO DI MISURA (margine 0). Guida: Riesce appena", r["text"])
+        with fixed(6, 6, 6, 6, 6):
+            self.assertEqual(dice.roll("x | 5d10 | successi 6+ | difficolta 2")["esito"], "riuscito bene")
+        with fixed(2, 2, 2):
+            r = dice.roll("x | 3d10 | successi 6+ | difficolta 2")
+        self.assertEqual((r["esito"], r["success"]), ("fallito", False))
+        self.assertIn("FALLITO (mancano 2)", r["text"])
+        with fixed(2):
+            self.assertEqual(dice.roll("x | 1d20 | difficolta 15")["esito"], "fallito malamente")
+        with fixed(20):
+            self.assertEqual(dice.roll("x | 1d20+5 | difficolta 15")["esito"], "riuscito bene")
+        self.assertEqual(dice.roll("x | 2d6")["esito"], "")  # senza difficolta' niente fascia
+
+    def test_manual_bands_override_the_defaults_and_decide_success(self) -> None:
+        pool = {"tiri": [{**POOL["tiri"][0], "esiti": LADDER}]}
+        sheet = SimpleNamespace(get=lambda path: 0)
+        with fixed(6, 6, 2):
+            r = dice.roll("x | riserva | dadi 3 | difficolta 2 | fame 0", pool, sheet)
+        self.assertEqual((r["esito"], r["guida"], r["success"]), ("vittoria costosa", "riesce, ma a un prezzo", True))
+        self.assertIn("VITTORIA COSTOSA (margine 0). Guida: riesce, ma a un prezzo", r["text"])
+        strict = {"tiri": [{**POOL["tiri"][0], "esiti": [{**LADDER[0], "a_margine": 0}, {**LADDER[2], "da_margine": 1}]}]}
+        with fixed(6, 6, 2):  # qui il margine 0 e' un fallimento: lo decide la fascia, non la soglia
+            r = dice.roll("x | riserva | dadi 3 | difficolta 2 | fame 0", strict, sheet)
+        self.assertEqual((r["esito"], r["success"]), ("fallito", False))
+        self.assertIn("FALLITO (margine 0)", r["text"])
+        with fixed(2, 2, 2):  # zero successi: il nome del manuale resta in coda
+            r = dice.roll("x | riserva | dadi 3 | difficolta 1 | fame 0", pool, sheet)
+        self.assertEqual(r["notes"], ["FALLIMENTO TOTALE"])
+
+    def test_bands_must_tile_the_margins(self) -> None:
+        self.assertEqual(dice.esiti_problems([]), [])
+        self.assertEqual(dice.esiti_problems(LADDER), [])
+        for broken, where in (
+            ([{**LADDER[0]}, {**LADDER[1], "da_margine": 1}, LADDER[2]], "[1].da_margine"),          # buco
+            ([LADDER[0], {**LADDER[1], "a_margine": 2}, LADDER[2]], "[2].da_margine"),               # sovrapposizione
+            ([{**LADDER[0], "da_margine": -5}, LADDER[1], LADDER[2]], "[0].da_margine"),            # non aperta in basso
+            ([LADDER[0], LADDER[1], {**LADDER[2], "a_margine": 9}], "[2].a_margine"),               # non aperta in alto
+            ([LADDER[0], {**LADDER[1], "nome": "fallito"}, LADDER[2]], ""),                          # nome doppio
+            ([LADDER[0], {**LADDER[1], "riuscito": "si"}, LADDER[2]], "[1].riuscito"),              # non booleano
+            ([LADDER[0], {**LADDER[1], "riuscito": True}, {**LADDER[2], "riuscito": False}], "[2].riuscito"),  # fallita sopra una riuscita
+            ("x", ""),
+        ):
+            with self.subTest(where=where):
+                self.assertIn(where, [p for p, _ in dice.esiti_problems(broken)])
+
+    def test_prompt_lists_the_bands_of_each_kind(self) -> None:
+        text = dice.prompt_section({"tiri": [{**POOL["tiri"][0], "esiti": LADDER}, {"nome": "d20", "tipo": "somma", "dado": 20, "dadi_fissi": 1}]})
+        self.assertIn("esiti per margine: fallito (fino a -1) · vittoria costosa (0) · riuscito (da 1)", text)
+        self.assertIn("esiti per margine: fallito malamente (fino a -10) · fallito (-9..-1) · riuscito di misura (0..4)", text)
+        self.assertIn("narra quella, non reinterpretare il margine", text)
+        self.assertIn("esiti", json.dumps(dice.PROFILE_SCHEMA))  # il manuale le puo' dare
+
+
 class TestProfile(Base):
     def test_example_campaign_rolls_by_its_own_rules(self) -> None:
         profile = dice.load_profile(self.camp)
@@ -124,7 +189,8 @@ class TestProfile(Base):
         self.assertEqual(app.state()["dice"], ["d20"])
         with fixed(12):
             out = app.roll("Scassinare | d20 | bonus +3 | difficolta 15")
-        self.assertEqual(out["roll_text"], "[Tiro] Scassinare — 1d20: 12 +3 = 15 -> totale 15 contro difficolta' 15: RIUSCITO (margine 0).")
+        self.assertTrue(out["roll_text"].startswith(
+            "[Tiro] Scassinare — 1d20: 12 +3 = 15 -> totale 15 contro difficolta' 15: RIUSCITO DI MISURA (margine 0). Guida: Riesce appena"))
         self.assertTrue(out["roll_success"])
         self.assertTrue(client.calls[0]["messages"][-1]["content"].rstrip().endswith(out["roll_text"]))  # l'esito, in coda al contesto
         self.assertEqual(app.engine.history(1)[0]["player"], out["roll_text"])

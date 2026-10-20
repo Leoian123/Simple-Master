@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from .campaign import DIARY, MECHANICS_DIR, PREP_DIR, SETTING_DIR, SHEETS_DIR, STATE_FILE, Campaign
-from .dice import PROFILE_NAME, WHEN, profile_path, rules_about_dice
+from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_dice
 from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
 from .sheet import XP_KEY, XP_ROUTES
 
@@ -262,6 +262,8 @@ def _profile_problems(data: Any) -> list[tuple[str, str]]:
         special = kind.get("speciali")
         if special is not None and (not isinstance(special, dict) or not str(special.get("quanti_da") or "").strip()):
             out.append((f"{at}.speciali", "null, oppure {nome, quanti_da, sostituiscono} con il percorso nella scheda"))
+        if kind.get("esiti") is not None:
+            out += [(f"{at}.esiti{where}", problem) for where, problem in esiti_problems(kind["esiti"])]
         events = kind.get("eventi")
         if events is None:
             continue
