@@ -102,6 +102,8 @@ TRIGGER_BASE: dict[str, Any] = {"trigger": [
     {"nome": "una tantum", "quando": [{"orologio": "Guardia", "op": ">=", "valore": 2}],
      "effetti": [{"orologio": "La Bestia", "avanza": 1, "segmenti": 6, "conseguenza": "x"},
                  {"relazione": "Mira Sol", "verso": "scende", "forza": "lieve"}]},
+    {"nome": "il gorgo", "ricorrente": True, "quando": [{"tabella": "incontri", "op": "contiene", "valore": "orso"}],
+     "effetti": [{"avviso": "un orso: le regole sugli animali"}]},
 ]}
 MODI_BASE: dict[str, Any] = {"modi": [{"nome": "cupo", "descrizione": "x", "istruzioni": "tono cupo", "png": "diffidenti"},
                                       {"nome": "lieve", "descrizione": "y", "istruzioni": "tono lieve"}]}
@@ -260,6 +262,7 @@ def codice_trigger(camp: Campaign) -> bool:
     if trigger.problems(data):
         return False
     trigger.valuta(camp, "")
+    trigger.valuta(camp, "[Tabella] incontri — 1d6: 6 -> 6: Un orso")
     return True
 
 
@@ -479,6 +482,13 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (TRIG, "trigger.1.effetti.1.relazione", 5, "errore", "rifiuta", "nome non testo"),
     (TRIG, "trigger.1.effetti.1.verso", "su", "errore", "rifiuta", "verso fuori vocabolario"),
     (TRIG, "trigger.1.effetti.1.forza", "enorme", "errore", "rifiuta", "forza fuori vocabolario"),
+    (TRIG, "trigger.2.nome", "fame alta", "errore", "rifiuta", "nome gia' usato"),
+    (TRIG, "trigger.2.ricorrente", "si", "errore", "rifiuta", "ricorrente non booleano"),
+    (TRIG, "trigger.2.quando.0.tabella", DELETE, "errore", "rifiuta", "condizione senza la sua chiave"),
+    (TRIG, "trigger.2.quando.0.tabella", "", "errore", "rifiuta", "nome di tabella vuoto"),
+    (TRIG, "trigger.2.quando.0.op", ">", "errore", "rifiuta", "per tabella solo ==, != o contiene"),
+    (TRIG, "trigger.2.quando.0.valore", 3, "errore", "rifiuta", "la riga e' un testo"),
+    (TRIG, "trigger.2.effetti.0.avviso", "", "errore", "rifiuta", "avviso vuoto"),
     (TRIG, "extra", 1, None, "accetta", "chiave in piu' ignorata"),
     # --- meccanica/tabelle.json (le righe coprono tutto il dado, o il file si ignora) ---
     (TAB, "", "{", "errore", "rifiuta", "illeggibile: nessuna tabella"),

@@ -143,21 +143,49 @@ def trova(tables: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
 
 # --- il tiro --------------------------------------------------------------------------------------
 
+_MODIFIER = re.compile(r"^[+-]\s*\d+$")
+OUTCOME_RE = re.compile(r"^\[Tabella\] (?P<name>.+?) — .+? -> (?P<value>\d+): (?P<result>.*)$", re.S)
+
+
+def parse(spec: str) -> tuple[str, int]:
+    """`<nome> | +2` -> (nome, modificatore): il manuale dice "tira 1d100 +10 di notte", il narratore lo scrive nel marcatore."""
+    text = str(spec).strip().strip("[]")
+    if text.lower().startswith("tabella:"):
+        text = text[8:]
+    parts = [p.strip() for p in text.split("|")]
+    name, modifier = parts[0], 0
+    for part in parts[1:]:
+        if _MODIFIER.match(part):
+            modifier += int(part.replace(" ", ""))
+        elif part:
+            raise ValueError(f"'{part}' non e' un modificatore (+N o -N): il marcatore e' [[tabella: <nome> | +N]]")
+    return name, modifier
+
+
 def tira(spec: str, tables: list[dict[str, Any]]) -> dict[str, Any]:
-    """`<nome tabella>`: tira il dado della tabella, trova la riga. Tirare non costa chiamate."""
-    name = str(spec).strip().strip("[]")
-    if name.lower().startswith("tabella:"):
-        name = name[8:].strip()
+    """`<nome tabella> | +N`: tira il dado della tabella, somma il modificatore, trova la riga. Tirare non costa chiamate."""
+    name, modifier = parse(spec)
     table = trova(tables, name)
     if table is None:
         known = [t.get("nome") for t in tables]
         raise ValueError(f"'{name}' non e' una tabella di questa campagna ({known or 'nessuna tabella'})")
     rolled = dice.roll(f"{table['nome']} | {table['dado']}")
-    value = rolled["value"]
+    lo, hi = dice_range(str(table["dado"])) or (rolled["value"], rolled["value"])
+    value = max(lo, min(hi, rolled["value"] + modifier))  # fuori scala si ferma al capo: la tabella non ha righe oltre
     row = next((r for r in table["righe"] if int(r["da"]) <= value <= int(r["a"])), None)
     result = str(row["risultato"]).strip() if row else "(nessuna riga per questo valore: la tabella ha un buco)"
-    text = f"[Tabella] {table['nome']} — {table['dado']}: {rolled['rolls'] if len(rolled['rolls']) > 1 else rolled['rolls'][0]} -> {value}: {result}"
-    return {"name": table["nome"], "value": value, "rolls": rolled["rolls"], "result": result, "text": text}
+    faces = rolled["rolls"] if len(rolled["rolls"]) > 1 else rolled["rolls"][0]
+    shown = f"{faces} {modifier:+d}" if modifier else f"{faces}"
+    if modifier and value != rolled["value"] + modifier:
+        shown += f" (fermato a {value})"
+    text = f"[Tabella] {table['nome']} — {table['dado']}: {shown} -> {value}: {result}"
+    return {"name": table["nome"], "value": value, "rolls": rolled["rolls"], "modifier": modifier, "result": result, "text": text}
+
+
+def outcome(spoken: str) -> tuple[str, str] | None:
+    """(nome tabella, riga uscita) da un messaggio `[Tabella] ...`, o None: il fatto che i trigger leggono."""
+    found = OUTCOME_RE.match(str(spoken).strip())
+    return (found.group("name").strip(), found.group("result").strip()) if found else None
 
 
 # --- cio' che il narratore deve sapere ---------------------------------------------------------------
@@ -168,7 +196,8 @@ def prompt_section(tables: list[dict[str, Any]]) -> str:
     lines = ["\n## Tabelle: le tira il programma",
              "Quando le regole mandano a una tabella casuale non scegliere tu la riga: chiudi la narrazione con un marcatore "
              "su una riga sua (uno per messaggio, in alternativa al tiro), il giocatore preme il pulsante, il programma tira e "
-             "ti arriva `[Tabella] ...` con il dado e la riga uscita: narra quella."]
+             "ti arriva `[Tabella] ...` con il dado e la riga uscita: narra quella. Se le regole danno un modificatore al tiro "
+             "(\"+10 di notte\") scrivilo nel marcatore: `[[tabella: <nome> | +10]]`."]
     for t in tables:
         lines.append(f"- `[[tabella: {t['nome']}]]` ({t.get('dado')})" + (f" — {t['uso']}" if t.get("uso") else ""))
     return "\n".join(lines) + "\n"

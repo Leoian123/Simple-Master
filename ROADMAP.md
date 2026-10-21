@@ -306,6 +306,14 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 11 — Tabelle e trigger si compongono — FATTO (2026-10-21)
+> Modificatore nel marcatore (`[[tabella: <nome> | +10]]`, `tabelle.parse`, totale fermato ai
+> capi del dado, mostrato nel `[Tabella]`); la riga uscita come fatto (`tabelle.outcome`,
+> condizione `tabella` con `==`/`!=`/`contiene`, valida solo nel turno in cui arriva, per quella
+> tabella). Una riga di tabella puo' cosi' far avanzare un orologio o avvisare il narratore: dati
+> che chiamano dati, zero chiamate. Terzo trigger nella base di mutazione (7 righe), l'estrazione
+> dei trigger riceve l'elenco delle tabelle, sezioni `tabelle` e `trigger` rigenerate.
+
 ## Fase 10 — Collaudo a secco della v2 — FATTO (2026-10-21)
 > `tests/test_collaudo.py`: un manuale inventato ("Cronache della Marea", testo) entra nella
 > preparazione con un copione al posto del modello; escono regole in sezioni, glossario, dadi,

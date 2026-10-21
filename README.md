@@ -294,6 +294,10 @@ e la riga uscita torna al narratore come messaggio del giocatore (`[Tabella] ...
 sbagliato si ignora intero. Il pulsante "Ricava le tabelle" le trascrive con una chiamata
 dalle sezioni che hanno la forma di una tabella; il codice scarta quelle che non quadrano.
 I tipi di tiro del profilo possono avere `alias`: il nome che il manuale usa in quel passo.
+Un modificatore al tiro ("+10 di notte") sta nel marcatore: `[[tabella: incontri | +10]]`, e il
+totale si ferma ai capi del dado. La riga uscita e' un fatto per i trigger: `{"tabella":
+"incontri", "op": "contiene", "valore": "gorgo"}` scatta solo nel turno in cui arriva, cosi' una
+riga di tabella puo' far avanzare un orologio o avvisare il narratore senza che nessuno ricordi.
 
 ## La prefazione delle regole e i trigger dal manuale
 

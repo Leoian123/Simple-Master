@@ -65,11 +65,38 @@ class TestTiro(unittest.TestCase):
         self.assertEqual(tabelle.find_marker("Buio.\n[[tabella: incontri nella palude]]"), "incontri nella palude")
         self.assertIsNone(tabelle.find_marker("Nessuna tabella."))
 
+    def test_modifier_in_the_marker_shifts_the_roll_and_stops_at_the_ends(self) -> None:
+        self.assertEqual(tabelle.parse("incontri | +2"), ("incontri", 2))
+        self.assertEqual(tabelle.parse("[[tabella: incontri | - 3 | +1]]"), ("incontri", -2))
+        self.assertEqual(tabelle.parse("incontri"), ("incontri", 0))
+        with self.assertRaises(ValueError):
+            tabelle.parse("incontri | di notte")
+        with fixed(4):
+            r = tabelle.tira("incontri nella palude | +2", [INCONTRI])
+        self.assertEqual((r["value"], r["modifier"], r["result"]), (6, 2, "Un orso"))
+        self.assertEqual(r["text"], "[Tabella] incontri nella palude — 1d6: 4 +2 -> 6: Un orso")
+        with fixed(5):
+            r = tabelle.tira("incontri nella palude | +4", [INCONTRI])
+        self.assertEqual(r["value"], 6)
+        self.assertIn("5 +4 (fermato a 6) -> 6: Un orso", r["text"])
+        with fixed(2):
+            self.assertEqual(tabelle.tira("incontri nella palude | -5", [INCONTRI])["value"], 1)
+
+    def test_outcome_reads_the_row_back_from_the_message(self) -> None:
+        self.assertEqual(tabelle.outcome("[Tabella] incontri nella palude — 1d6: 4 +2 -> 6: Un orso"), ("incontri nella palude", "Un orso"))
+        self.assertEqual(tabelle.outcome("[Tabella] tesori — 2d6+1: [4, 6] -> 11: Una gemma"), ("tesori", "Una gemma"))
+        self.assertIsNone(tabelle.outcome("[Tiro] x — 1d6: 4 -> totale 4."))
+        self.assertIsNone(tabelle.outcome("Apro la porta."))
+        with fixed(3, 6):
+            text = tabelle.tira("tesori", [TESORI])["text"]
+        self.assertEqual(tabelle.outcome(text), ("tesori", "Una gemma"))
+
     def test_prompt_lists_the_tables(self) -> None:
         text = tabelle.prompt_section([INCONTRI, TESORI])
         self.assertIn("## Tabelle: le tira il programma", text)
         self.assertIn("- `[[tabella: incontri nella palude]]` (1d6) — ogni ora di marcia", text)
         self.assertIn("- `[[tabella: tesori]]` (2d6+1)", text)
+        self.assertIn("`[[tabella: <nome> | +10]]`", text)
         self.assertEqual(tabelle.prompt_section([]), "")
 
 

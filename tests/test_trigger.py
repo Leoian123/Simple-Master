@@ -137,6 +137,43 @@ class TestInGioco(Base):
         self.assertEqual(validate(self.camp).errors, [])
 
 
+class TestTabella(Base):
+    """La riga uscita da una tabella e' un fatto: vale nel turno in cui arriva, per quella tabella, e poi sparisce."""
+
+    RULE = {"trigger": [
+        {"nome": "il gorgo", "ricorrente": True,
+         "quando": [{"tabella": "incontri in mare", "op": "contiene", "valore": "gorgo"}],
+         "effetti": [{"avviso": "Il Gorgo: le regole sulle correnti"}, {"orologio": "La tempesta", "avanza": 1, "segmenti": 4, "conseguenza": "la nave affonda"}]},
+        {"nome": "calma", "ricorrente": True,
+         "quando": [{"tabella": "incontri in mare", "op": "==", "valore": "Mare calmo"}],
+         "effetti": [{"avviso": "Mare calmo: una giornata senza prove"}]},
+    ]}
+
+    def test_shape(self) -> None:
+        self.assertEqual(trigger.problems(self.RULE), [])
+        bad = json.loads(json.dumps(self.RULE))
+        bad["trigger"][0]["quando"][0]["op"] = ">="
+        bad["trigger"][1]["quando"][0]["valore"] = 3
+        self.assertEqual([p for p, _ in trigger.problems(bad)],
+                         ["trigger[0].quando[0].op", "trigger[0].quando[0].valore", "trigger[1].quando[0].valore"])  # >= vuole anche un numero
+
+    def test_fires_only_in_the_turn_the_row_arrives_and_only_for_its_table(self) -> None:
+        (self.camp.root / "meccanica" / "trigger.json").write_text(json.dumps(self.RULE), encoding="utf-8")
+        self.assertEqual(validate(self.camp).errors, [])
+        self.assertEqual(trigger.valuta(self.camp, "Salpo."), [])
+        self.assertEqual(trigger.valuta(self.camp, "[Tabella] tesori — 1d6: 6 -> 6: Il Gorgo"), [])  # altra tabella
+        self.assertEqual(trigger.valuta(self.camp, "[Tabella] incontri in mare — 1d6: 6 -> 6: Il Gorgo"),
+                         ["[TRIGGER il gorgo: Il Gorgo: le regole sulle correnti]"])
+        self.assertEqual(self.camp.clocks()["La tempesta"]["pieni"], 1)
+        self.assertEqual(trigger.valuta(self.camp, "[Tabella] Incontri in mare — 1d6: 2 -> 2: Mare calmo"), ["[TRIGGER calma: Mare calmo: una giornata senza prove]"])
+        self.assertEqual(trigger.valuta(self.camp, "Guardo l'orizzonte."), [])
+        # dal tavolo: il messaggio della tabella e' il turno, e la testa del messaggio porta il trigger al narratore
+        client = ScriptedClient([QUIET, DONE])
+        MasterEngine(self.camp, client=client).play("[Tabella] incontri in mare — 1d6: 4 +2 -> 6: Il Gorgo")
+        self.assertIn("[TRIGGER il gorgo:", narrator_calls(client)[-1]["messages"][-1]["content"])
+        self.assertEqual(self.camp.clocks()["La tempesta"]["pieni"], 2)
+
+
 class TestEstrazione(Base):
     """Dal manuale ai trigger: il modello propone in forma piatta, il codice ritraduce e setaccia."""
 

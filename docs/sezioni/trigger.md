@@ -39,10 +39,12 @@ Al massimo 100 regole per campagna.
 | `relazione` | il numero della relazione di un PNG (-100..100); se non e' mai stata contata, falsa |
 | `stadio` | lo stadio della relazione di un PNG, per nome (es. `Ostile`), confronto solo con `==` / `!=` |
 | `esito` | il nome della fascia dell'ultimo tiro, solo nel turno in cui l'esito arriva (es. `fallito`), `==` / `!=` |
+| `tabella` | la riga uscita da una tabella, per nome della tabella, solo nel turno in cui l'esito arriva: `==` / `!=` / `contiene` con un testo |
 | `contatore` | `turni` (giocati dal personaggio) o `sessione` (in corso) |
 
 `op`: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contiene`. Con `<`, `<=`, `>`, `>=` il valore e' un numero; `contiene` cerca un
-elemento in un elenco (o un pezzo in un testo); `stadio` ed `esito` ammettono solo `==` / `!=` con un nome.
+elemento in un elenco (o un pezzo in un testo); `stadio` ed `esito` ammettono solo `==` / `!=` con un nome; `tabella`
+anche `contiene`, sul testo della riga uscita (`[Tabella] <nome> — ... -> N: <riga>`), solo in quel turno.
 Un confronto fra tipi diversi e' falso, mai un errore: una regola scritta male non scatta.
 
 ## Gli effetti (`effetti[j]`: una sola chiave fra queste)

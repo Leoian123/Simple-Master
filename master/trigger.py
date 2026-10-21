@@ -48,6 +48,7 @@ CONDIZIONI: dict[str, str] = {
     "relazione": "il numero della relazione di un PNG (-100..100); se non e' mai stata contata, falsa",
     "stadio": "lo stadio della relazione di un PNG, per nome (es. `Ostile`), confronto solo con `==` / `!=`",
     "esito": "il nome della fascia dell'ultimo tiro, solo nel turno in cui l'esito arriva (es. `fallito`), `==` / `!=`",
+    "tabella": "la riga uscita da una tabella, per nome della tabella, solo nel turno in cui l'esito arriva: `==` / `!=` / `contiene` con un testo",
     "contatore": "`turni` (giocati dal personaggio) o `sessione` (in corso)",
 }
 EFFETTI: dict[str, str] = {
@@ -129,11 +130,13 @@ def _condition_problems(c: Any) -> list[tuple[str, str]]:
         out.append((".op", f"uno fra {', '.join(OPS)}"))
     elif kind in ("stadio", "esito") and op not in ("==", "!="):
         out.append((".op", f"per `{kind}` solo == o !="))
+    elif kind == "tabella" and op not in ("==", "!=", "contiene"):
+        out.append((".op", "per `tabella` solo ==, != o contiene"))
     if "valore" not in c:
         out.append((".valore", "manca il valore con cui confrontare"))
     elif op in NUMERIC_OPS and not _is_number(c["valore"]):
         out.append((".valore", f"con `{op}` serve un numero"))
-    elif kind in ("stadio", "esito") and not isinstance(c["valore"], str):
+    elif kind in ("stadio", "esito", "tabella") and not isinstance(c["valore"], str):
         out.append((".valore", "un nome, come testo"))
     extra = sorted(k for k in c if k not in (kind, "op", "valore"))
     if extra:
@@ -261,6 +264,11 @@ class _Fatti:
         if "esito" in c:
             outcome = roll_outcome(self.spoken)
             return outcome is not None and _compare(outcome, op, wanted)
+        if "tabella" in c:
+            from . import tabelle
+
+            found = tabelle.outcome(self.spoken)
+            return found is not None and found[0].lower() == str(c["tabella"]).strip().lower() and _compare(found[1], op, wanted)
         if "contatore" in c:
             which = str(c["contatore"]).strip().lower()
             value = self.campaign.played_turns() if which == "turni" else self.campaign.session_number
@@ -421,7 +429,7 @@ TRIGGERS_SCHEMA: dict[str, Any] = {
 TRIGGERS_PROMPT = """\
 Trascrivi come TRIGGER le regole di un gioco di ruolo che il programma puo' contare da solo: una SOGLIA su un valore
 che il programma possiede (un numero della scheda, fra i percorsi dati; un orologio; la relazione o lo stadio di un PNG;
-la fascia dell'ultimo tiro; i turni giocati) e una CONSEGUENZA chiusa (un avviso al master con la regola da applicare,
+la fascia dell'ultimo tiro; la riga uscita da una tabella che il programma tira; i turni giocati) e una CONSEGUENZA chiusa (un avviso al master con la regola da applicare,
 un orologio che avanza, una relazione che si muove). Esempi: "con lo stress a 4 o piu' ogni tentazione richiede una
 prova" -> scheda stato.stress >= 4, avviso ricorrente; "a 0 punti ferita il personaggio cade" -> avviso.
 Solo cio' che le sezioni dicono, con i numeri del manuale. Usa SOLO percorsi della scheda fra quelli elencati: se la
@@ -480,9 +488,12 @@ def extract_triggers(campaign: Campaign, client: Any, model: str, sheet: Any = N
     paths = sheet_paths(dict(getattr(sheet, "data", {}) or {})) if sheet is not None else []
     head = ("PERCORSI DELLA SCHEDA (gli unici che una condizione `scheda` puo' leggere): " + ", ".join(paths)
             if paths else "La campagna non ha ancora una scheda: non usare condizioni `scheda`.")
+    from . import tabelle
+
     clocks = ", ".join(campaign.clocks()) or "nessuno"
+    tables = ", ".join(str(t.get("nome")) for t in tabelle.carica(campaign)) or "nessuna"
     response = create_message(client, max_seconds=300, model=model, max_tokens=8000, system=TRIGGERS_PROMPT,
-                              messages=[{"role": "user", "content": f"{head}\nOROLOGI ATTIVI: {clocks}\n\nREGOLE:\n\n{rules}"}],
+                              messages=[{"role": "user", "content": f"{head}\nOROLOGI ATTIVI: {clocks}\nTABELLE CHE IL PROGRAMMA TIRA: {tables}\n\nREGOLE:\n\n{rules}"}],
                               output_config={"format": {"type": "json_schema", "schema": TRIGGERS_SCHEMA}})
     usage = getattr(response, "usage", None)
     campaign.record_spend("trigger", model, cost_usd(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0))

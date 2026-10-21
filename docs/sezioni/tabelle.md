@@ -43,6 +43,11 @@ narratore come messaggio del giocatore:
 
 Tirare non costa chiamate. Il prompt di sistema elenca le tabelle con il loro uso (blocco in cache).
 
+Un modificatore al tiro ("+10 di notte") sta nel marcatore: `[[tabella: <nome> | +10]]`; il totale si ferma ai capi
+del dado (`1d100: 95 +10 (fermato a 100) -> 100: ...`). La riga uscita e' un fatto per i trigger: la condizione
+`{"tabella": "<nome>", "op": "contiene", "valore": "..."}` vale solo nel turno in cui arriva (`--doc trigger`).
+Nel codice: `tabelle.parse(spec) -> (nome, modificatore)`, `tabelle.tira(spec, tabelle)`, `tabelle.outcome(messaggio)`.
+
 ## Da dove vengono
 
 `extract_tables` (pulsante 'Ricava le tabelle' nel tavolo, `POST /api/tables/extract`; alla fine della preparazione
