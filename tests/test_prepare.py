@@ -58,6 +58,10 @@ class FakePrepClient:
         self.meta_calls: list[dict] = []  # la domanda sui dati della pubblicazione: a parte, non e' un'estrazione
         self.meta: dict = {"titolo": "Manuale di prova", "gioco": "Gioco di prova", "edizione": None, "anno": None}
         self.resolve_calls: list[dict] = []  # i confronti tra testi di manuali diversi: a parte anche questi
+        self.preface_calls: list[dict] = []  # la prefazione d'uso delle regole e i trigger: una chiamata ciascuno, a parte
+        self.trigger_calls: list[dict] = []
+        self.preface: dict = {"precedenza": ["La scheda sulle regole generali"], "cercare": [], "riserva": ["Un tiro di d20 contro 15"]}
+        self.triggers: dict = {"trigger": []}
         self.plan: dict = {"rapporto": "estende", "dichiarato": False, "motivo": "finto", "tutto": False, "modifiche": [], "aggiunte": []}
         self.messages = SimpleNamespace(create=self._create)
 
@@ -66,6 +70,12 @@ class FakePrepClient:
         if "DATI DELLA PUBBLICAZIONE" in str(kwargs.get("system")):
             self.meta_calls.append(kwargs)
             return SimpleNamespace(stop_reason="end_turn", usage=usage, content=[_block(type="text", text=json.dumps(self.meta))])
+        if "PREFAZIONE D'USO" in str(kwargs.get("system")):
+            self.preface_calls.append(kwargs)
+            return SimpleNamespace(stop_reason="end_turn", usage=usage, content=[_block(type="text", text=json.dumps(self.preface))])
+        if "Trascrivi come TRIGGER" in str(kwargs.get("system")):
+            self.trigger_calls.append(kwargs)
+            return SimpleNamespace(stop_reason="end_turn", usage=usage, content=[_block(type="text", text=json.dumps(self.triggers))])
         if "RAPPORTO TRA DUE TESTI" in str(kwargs.get("system")):
             self.resolve_calls.append(kwargs)
             return SimpleNamespace(stop_reason="end_turn", usage=usage, content=[_block(type="text", text=json.dumps(self.plan))])
@@ -216,6 +226,7 @@ class TestPreparer(unittest.TestCase):
             mod.load_chunks = orig
         self.assertEqual(report2.chunks_from_cache, report2.chunks)
         self.assertEqual(len(client.calls), calls_before)
+        self.assertEqual((len(client.preface_calls), len(client.trigger_calls)), (1, 1))  # stesse regole: prefazione e trigger restano
         # con una suddivisione diversa (pagine diverse) la cache non viene riusata
         report3 = self.prep(client).run(str(self.pdf), consolidate=False, tidy=False, progress=lambda s: None)
         self.assertEqual(report3.chunks_from_cache, 0)
@@ -240,6 +251,13 @@ class TestPreparer(unittest.TestCase):
         self.assertEqual(self.camp.glossary.get("manuale").kind, "fonte")
         self.assertIn("Pagine 1-", self.camp.file("fonte-manuale.md").read())
         self.assertIn("Riordino glossario", report.summary())
+        # la prefazione d'uso e i trigger (c'e' una scheda attiva): una chiamata ciascuno; senza regole valide nessun file
+        self.assertEqual(len(client.preface_calls), 1)
+        self.assertEqual(self.camp.file("meccanica/regole.md").outline()[0], "Come usare queste regole")
+        self.assertIn("1. La scheda sulle regole generali", regole)
+        self.assertEqual(len(client.trigger_calls), 1)
+        self.assertIn("stato.", client.trigger_calls[0]["messages"][0]["content"])
+        self.assertFalse((self.root / "meccanica" / "trigger.json").exists())
         self.assertEqual(self.camp.glossary.entries()[0].kind, "regola")
         # cache condivisa fuori dalla campagna, per manuale e non per campagna
         self.assertEqual(len(self.cached_blocks()), 2)

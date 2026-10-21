@@ -36,6 +36,7 @@ INDEX: dict[str, tuple[str, str, str]] = {
     "modi": ("I modi di gioco", "la lente sul narratore: i tre modi predefiniti, il blocco nel prompt, meccanica/modi.json", "modi.py"),
     "trigger": ("I trigger", "meccanica/trigger.json: condizioni sui fatti del programma, effetti tipizzati, valutati a ogni turno", "trigger.py"),
     "tabelle": ("Le tabelle casuali", "meccanica/tabelle.json: le tabelle del manuale come dati, il marcatore [[tabella: ...]], l'estrazione", "tabelle.py"),
+    "prefazione": ("La prefazione delle regole", "la sezione 'Come usare queste regole' in testa a meccanica/regole.md: precedenza, rimandi, riserva; generata", "prefazione.py"),
     "glossario": ("Il glossario", "la tabella, i tipi, come entra nel contesto del turno", "docs/sezioni/glossario.md"),
     "verifica": ("La verifica della campagna", "i tre livelli, il JSON, l'hook", "docs/sezioni/verifica.md"),
 }
@@ -536,6 +537,16 @@ def _gen_triggers() -> str:
         "La verifica segnala come errore un file illeggibile o malformato (con il percorso della regola) e un percorso",
         "`scheda` che nella scheda attiva non esiste (la regola non scatterebbe mai). Nel codice: `trigger.problems(data)`,",
         "`trigger.carica(campaign)`, `trigger.valuta(campaign, messaggio_del_turno)`.",
+        "",
+        "## Da dove vengono",
+        "",
+        "Si scrivono a mano, oppure `trigger.extract_triggers(campaign, client, model, sheet)` (pulsante 'Ricava i trigger' nel",
+        "tavolo, `POST /api/triggers/extract`; alla fine della preparazione se c'e' una scheda attiva, in cache per contenuto):",
+        "una chiamata sulle sezioni di `meccanica/` che legano un numero a una conseguenza, con i percorsi della scheda attiva",
+        "come unici percorsi ammessi (`trigger.sheet_paths`), schema forzato in forma piatta (`tipo`, `soggetto`, `op`, `valore`",
+        "per le condizioni; `tipo`, `testo` e i campi dell'effetto). Il codice ritraduce nella forma del file, passa ogni regola",
+        "per `problems` e `sheet_path_problems`, scarta cio' che non quadra (registrato nel log) e aggiunge le regole nuove a",
+        "quelle gia' scritte, senza toccarle (vince il nome gia' in uso).",
     ]
     return "\n".join(out)
 
@@ -586,12 +597,49 @@ def _gen_tables() -> str:
     return "\n".join(out)
 
 
+def _gen_preface() -> str:
+    from .prefazione import HEADS, MAX_ITEMS, MIN_SECTIONS, PREFACE_SCHEMA, RULES_FILE, SECTION_TITLE
+
+    out = [
+        f"Un manuale smontato in sezioni dice le regole, non come orientarsi fra loro. La sezione `## {SECTION_TITLE}`",
+        f"in testa a `{RULES_FILE}` lo dice, in tre liste con titoli fissi; il prompt di sistema la copia (blocco in cache),",
+        "quindi il narratore la legge a ogni turno senza che costi. L'instradatore delle regole non la propone (e' gia' li').",
+        "",
+        "## Le tre liste",
+        "",
+        f"- `### {HEADS[0]}`: elenco numerato, da chi vince a chi cede, quando due fonti dicono cose diverse.",
+        f"- `### {HEADS[1]}`: una riga per rimando, nella forma esatta `- <argomento>: `<file>` § <sezione>`: cio' che va riletto",
+        "  nei file e non ricordato (numeri, costi, tabelle). La verifica rilegge queste righe e segnala come avviso un",
+        "  rimando a un file o a una sezione che non esiste.",
+        f"- `### {HEADS[2]}`: cosa fare in gioco quando una regola non si trova (quale tiro generico, quando decidere senza tiro).",
+        "",
+        f"Al massimo {MAX_ITEMS} voci per lista. Si puo' scrivere a mano, rispettando i tre titoli e la forma dei rimandi.",
+        f"La verifica consiglia di scriverla quando le regole hanno almeno {MIN_SECTIONS} sezioni: sotto, si leggono intere.",
+        "",
+        "## Da dove viene",
+        "",
+        "`extract_preface` (pulsante 'Scrivi la prefazione' nel tavolo, `POST /api/preface/extract`; alla fine della",
+        "preparazione di un manuale, in cache per contenuto dell'indice): una chiamata con l'indice dei file di regole, i tipi",
+        "di tiro e le tabelle che il programma gestisce, schema forzato:",
+        "",
+        _params_table(PREFACE_SCHEMA),
+        "",
+        "Il codice tiene nei rimandi solo file e sezioni che esistono davvero (titolo ricopiato esatto), scarta il resto",
+        "(registrato nel log) e scrive la sezione in testa alle regole, sostituendo quella precedente.",
+        "",
+        "Nel codice: `prefazione.leggi(campaign)`, `prefazione.prompt_section(campaign)`, `prefazione.broken_lookups(campaign)`,",
+        "`prefazione.scrivi(campaign, corpo)`.",
+    ]
+    return "\n".join(out)
+
+
 GENERATED: dict[str, Callable[[], str]] = {
     "scheda": _gen_sheet,
     "relazioni": _gen_relations,
     "modi": _gen_modes,
     "trigger": _gen_triggers,
     "tabelle": _gen_tables,
+    "prefazione": _gen_preface,
     "appunti": _gen_notes,
     "strumenti-scriba": _gen_tools,
     "dadi": _gen_dice,

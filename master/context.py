@@ -97,7 +97,10 @@ def _rule_blocks(campaign: Campaign, player_text: str, skip: set[str]) -> list[t
 
 def rule_titles(campaign: Campaign) -> list[tuple[str, str]]:
     """(file, titolo) di ogni sezione di regole: l'elenco tra cui l'instradatore sceglie."""
-    return [(f.name, t) for f in campaign.files() if f.name.startswith(MECHANICS_DIR + "/") for t in f.outline()]
+    from .prefazione import SECTION_TITLE
+
+    return [(f.name, t) for f in campaign.files() if f.name.startswith(MECHANICS_DIR + "/")
+            for t in f.outline() if t.strip().lower() != SECTION_TITLE.lower()]
 
 
 def compose(campaign: Campaign, player_text: str, save_name: str, router=None) -> TurnContext:

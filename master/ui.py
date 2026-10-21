@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import dice, explorer, modi, tabelle
+from . import dice, explorer, modi, prefazione, tabelle, trigger
 from .campaign import DIARY, MECHANICS_DIR, SHEETS_DIR, Campaign
 from .character import CharacterBuilder
 from .engine import MasterEngine
@@ -265,6 +265,11 @@ class App:
             "dice": [k.get("nome") for k in (dice.load_profile(self.campaign) or {}).get("tiri", [])],
             "tables": [t.get("nome") for t in tabelle.carica(self.campaign)],
             "has_table_sections": bool(tabelle.sections_with_tables(self.campaign)),
+            "has_preface": bool(prefazione.leggi(self.campaign)),
+            "min_rules_sections": prefazione.MIN_SECTIONS,
+            "rules_sections": len(self.campaign.file(prefazione.RULES_FILE).outline()) if self.campaign.file(prefazione.RULES_FILE).exists() else 0,
+            "triggers": [t.get("nome") for t in trigger.carica(self.campaign)],
+            "has_threshold_rules": bool(trigger.rules_with_thresholds(self.campaign)),
             "mode": modi.attivo(self.campaign)["nome"],
             "modes": [{"name": m["nome"], "description": m.get("descrizione", "")} for m in modi.carica(self.campaign)],
             "has_creation_rules": self.campaign.file(f"{MECHANICS_DIR}/creazione-pg.md").exists()
@@ -338,6 +343,25 @@ class App:
         with self.lock:
             found = tabelle.extract_tables(camp, self.client or self.engine.client, self.settings.model_for("prepare"))
         return {"tables": [t["nome"] for t in found]}
+
+    def make_preface(self) -> dict[str, Any]:
+        """Scrive la prefazione d'uso in testa a `meccanica/regole.md`: una chiamata."""
+        camp = self._open_campaign()
+        with self.lock:
+            data = prefazione.extract_preface(camp, self.client or self.engine.client, self.settings.model_for("prepare"))
+            self.engine.reload()
+        return {"preface": data or {}}
+
+    def make_triggers(self) -> dict[str, Any]:
+        """Ricava `meccanica/trigger.json` dalle regole con soglie, con i percorsi della scheda attiva: una chiamata."""
+        camp = self._open_campaign()
+        info = camp.active_sheet()
+        sheet = Sheet(camp, info["slug"]) if info else None
+        if sheet is None or not sheet.exists:
+            raise ValueError("Serve un personaggio con la scheda: i trigger leggono i suoi percorsi")
+        with self.lock:
+            found = trigger.extract_triggers(camp, self.client or self.engine.client, self.settings.model_for("prepare"), sheet)
+        return {"triggers": [t["nome"] for t in found]}
 
     def consolidate(self) -> dict[str, Any]:
         """Il livello lento, a comando: il giocato non ancora consolidato diventa memoria."""
@@ -853,6 +877,13 @@ function labelSession(){renderSpend();const m=$('#memory');if(m){const n=state&&
   b.textContent=close?'Chiudi sessione':'Nuova sessione';
   b.title=close?'Il master riepiloga, aggiorna i fili aperti e assegna i punti esperienza; poi la conversazione viene archiviata.':'Archivia la conversazione corrente e ne apre una nuova. La storia nei file della campagna resta.'}
 /* senza profilo dei dadi il master scrive i tiri per esteso: qui lo si ricava dalle regole estratte, una volta */
+function extractHint(cls,show,text,label,url,done){const had=logs.play.querySelector('.'+cls);if(!show){if(had)had.remove();return}
+  if(had)return;const d=document.createElement('div');d.className='meta '+cls;const t=document.createElement('span');t.textContent=text+' ';d.appendChild(t);
+  const b=document.createElement('button');b.type='button';b.className='btn small';b.textContent=label;
+  b.onclick=async()=>{b.disabled=true;b.textContent='Leggo le regole…';try{const r=await api(url,{});d.textContent=done(r);d.classList.remove(cls);await load()}catch(e){b.disabled=false;b.textContent=label;t.textContent='Errore: '+e.message+' '}};
+  d.appendChild(b);logs.play.appendChild(d)}
+function prefaceHint(){extractHint('prefacehint',state.pg&&!state.has_preface&&state.rules_sections>=state.min_rules_sections,'Le regole non hanno una prefazione d\u2019uso (precedenza, cosa rileggere, cosa fare se una regola manca).','Scrivi la prefazione','/api/preface/extract',r=>'Prefazione scritta in testa a meccanica/regole.md ('+((r.preface&&r.preface.cercare)||[]).length+' rimandi).')}
+function triggersHint(){extractHint('triggershint',state.pg&&state.has_threshold_rules&&!(state.triggers&&state.triggers.length),'Le regole hanno soglie che il programma puo\u2019 contare (fame, ferite, orologi): ricavale come trigger.','Ricava i trigger','/api/triggers/extract',r=>'Trigger ricavati: '+(r.triggers.join(', ')||'nessuno valido'))}
 function tablesHint(){const had=logs.play.querySelector('.tableshint');if(!state.pg||!state.has_table_sections||(state.tables&&state.tables.length)){if(had)had.remove();return}
   if(had)return;const d=document.createElement('div');d.className='meta tableshint';const t=document.createElement('span');t.textContent='Le regole hanno tabelle casuali: ricavale come dati e le tira il programma. ';d.appendChild(t);
   const b=document.createElement('button');b.type='button';b.className='btn small';b.textContent='Ricava le tabelle';
@@ -875,7 +906,7 @@ function renderPlay(){
   if(fresh){shownCampaign=state.campaign;viewing=null;for(const k in logs)logs[k].innerHTML='';
     add('gm hint',!state.has_creation_rules?'Questa campagna non ha ancora regole di creazione in meccanica/creazione-pg.md: preparala da un manuale dal menu principale, oppure descrivimi il personaggio e lo imposto in forma libera.'
       :(state.sheets.length?'Qui crei un nuovo personaggio o modifichi una scheda, seguendo le regole della campagna.':'Creiamo il tuo personaggio seguendo le regole della campagna. Scegli un avvio qui sotto o descrivimi chi vuoi interpretare.'),'sheet')}
-  renderPgList();renderChips();diceHint();tablesHint();
+  renderPgList();renderChips();diceHint();tablesHint();prefaceHint();triggersHint();
   if(fresh)restore();
   if(fresh){setMode(state.pg?'play':'sheet');if(state.pg)showSheet(state.pg.slug)}
   else if(mode==='play'&&!state.pg)setMode('sheet');
@@ -1004,6 +1035,10 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     self._json(HTTPStatus.OK, out)
                 elif path == "/api/tables/extract":
                     self._json(HTTPStatus.OK, app.make_tables())
+                elif path == "/api/preface/extract":
+                    self._json(HTTPStatus.OK, app.make_preface())
+                elif path == "/api/triggers/extract":
+                    self._json(HTTPStatus.OK, app.make_triggers())
                 elif path == "/api/roll":
                     out = app.roll(str(body.get("spec", "")))
                     log.info("%s ok in %.1fs", path, time.monotonic() - started)

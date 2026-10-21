@@ -280,13 +280,20 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > (roll-under con soglie derivate, tieni il piu' alto/basso, piu' assi per tiro) e ha un metodo
 > da prendere: il profilo si valida eseguendo campioni. Da qui la Fase 1b.
 
-## Fase 8 — Preparazione v2 (dallo studio 7) — IN CORSO
-> FATTO (2026-10-21): **alias** dei tipi di tiro (`alias` nel profilo, `_kind` li risolve, la
-> verifica li vuole unici) e **tabelle casuali come dati** (`master/tabelle.py`,
-> `meccanica/tabelle.json`, marcatore `[[tabella: ...]]` -> pulsante -> `POST /api/table`,
-> estrazione `extract_tables` con scarto di cio' che non quadra, pulsante 'Ricava le tabelle',
-> settimo file del test di mutazione, sezione generata `--doc tabelle`). Restano la prefazione
-> generata delle regole e i trigger ricavati dal manuale.
+## Fase 8 — Preparazione v2 (dallo studio 7) — FATTO (2026-10-21)
+> (a) **alias** dei tipi di tiro (`alias` nel profilo, `_kind` li risolve, la verifica li vuole
+> unici) e **tabelle casuali come dati** (`master/tabelle.py`, `meccanica/tabelle.json`,
+> marcatore `[[tabella: ...]]` -> pulsante -> `POST /api/table`, estrazione `extract_tables` con
+> scarto di cio' che non quadra, pulsante 'Ricava le tabelle', settimo file del test di
+> mutazione, sezione generata `--doc tabelle`).
+> (b) **prefazione generata** (`master/prefazione.py`: sezione 'Come usare queste regole' in
+> testa a `regole.md`, tre liste a titoli fissi, rimandi tenuti solo se esistono e riletti dalla
+> verifica, copiata nel prompt in cache, esclusa dall'instradatore; pulsante 'Scrivi la
+> prefazione', passo di preparazione in cache per contenuto) e **trigger dal manuale**
+> (`trigger.extract_triggers`: sezioni con soglie + percorsi della scheda attiva, schema piatto
+> ritradotto nella forma del file, `problems` e `sheet_path_problems` come setaccio, le regole a
+> mano restano; pulsante 'Ricava i trigger', passo di preparazione solo con una scheda attiva).
+> Da giocare: un manuale a d100 e uno a dado piu' alto, con prefazione e trigger ricavati.
 
 ## Fase 1b — Profilo dei dadi v2 (dallo studio 7) — FATTO (2026-10-20)
 > **Campioni** (`esempi` nello schema, `verifica_esempi`, un retry in `extract_profile`,

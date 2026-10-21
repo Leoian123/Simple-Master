@@ -715,10 +715,71 @@ class Preparer:
             log.warning("profilo dadi non ricavato: %s", describe_error(exc))
             report.warnings.append(f"profilo dei dadi non ricavato: {exc}")
 
+        # come usare le regole, e le regole che il programma puo' contare: una chiamata ciascuna, in cache per contenuto
+        self._preface_and_triggers(report, progress)
+
         log.info("preparazione FINITA | blocchi=%d (cache %d, batch %d) chiamate=%d token in/out=%d/%d | file=%s | avvisi=%d",
                  report.chunks, report.chunks_from_cache, report.chunks_batched, report.calls, report.input_tokens,
                  report.output_tokens, ", ".join(report.files_touched) or "-", len(report.warnings))
         return report
+
+    def _active_sheet(self) -> Any:
+        info = self.campaign.active_sheet()
+        if not info:
+            return None
+        from .sheet import Sheet
+
+        try:
+            sheet = Sheet(self.campaign, info["slug"])
+        except ValueError:
+            return None
+        return sheet if sheet.exists else None
+
+    def _preface_and_triggers(self, report: PrepReport, progress: Callable[[str], None]) -> None:
+        """La prefazione d'uso in testa alle regole e i trigger dalle soglie: si rifanno solo se cambia cio' che leggono."""
+        from . import prefazione, trigger
+
+        try:
+            rules_file = self.campaign.file(prefazione.RULES_FILE)
+            if rules_file.exists() and rules_file.outline():
+                digest = fingerprint(prefazione.materials(self.campaign))
+                cached = self.cache_root / "prefazione" / f"{CACHE_VERSION}-{digest}.json"
+                data = self._load_json(cached)
+                if data is not None and prefazione.leggi(self.campaign):
+                    pass  # scritta da queste stesse regole
+                elif data is not None:
+                    prefazione.scrivi(self.campaign, prefazione.render(prefazione.clean(self.campaign, data)))
+                    progress("  prefazione: ripresa dalla cache")
+                else:
+                    progress("  prefazione: scrivo come usare le regole (precedenza, rimandi, riserva)")
+                    data = prefazione.extract_preface(self.campaign, self.client, self.model)
+                    report.calls += 1
+                    cached.parent.mkdir(parents=True, exist_ok=True)
+                    cached.write_text(json.dumps(data or {}, ensure_ascii=False, indent=1), encoding="utf-8")
+                    progress(f"  prefazione: {len((data or {}).get('cercare') or [])} rimandi alle sezioni")
+        except Exception as exc:
+            log.warning("prefazione non scritta: %s", describe_error(exc))
+            report.warnings.append(f"prefazione delle regole non scritta: {exc}")
+        try:
+            rules = trigger.rules_with_thresholds(self.campaign)
+            sheet = self._active_sheet()
+            if rules and sheet is None:
+                progress("  trigger: senza una scheda attiva i percorsi non si verificano: ricavali dal tavolo ('Ricava i trigger')")
+            elif rules:
+                digest = fingerprint(rules + "\n" + ",".join(trigger.sheet_paths(dict(sheet.data))))
+                cached = self.cache_root / "trigger" / f"{CACHE_VERSION}-{digest}.json"
+                if self._load_json(cached) is not None:
+                    progress("  trigger: gia' ricavati da queste regole")
+                else:
+                    progress("  trigger: ricavo le soglie che il programma puo' contare")
+                    found = trigger.extract_triggers(self.campaign, self.client, self.model, sheet)
+                    report.calls += 1
+                    cached.parent.mkdir(parents=True, exist_ok=True)
+                    cached.write_text(json.dumps({"trigger": found}, ensure_ascii=False, indent=1), encoding="utf-8")
+                    progress("  trigger: " + (", ".join(t["nome"] for t in found) or "nessuno valido"))
+        except Exception as exc:
+            log.warning("trigger non ricavati: %s", describe_error(exc))
+            report.warnings.append(f"trigger non ricavati: {exc}")
 
     # --- invio di piu' richieste indipendenti ------------------------------------------
 

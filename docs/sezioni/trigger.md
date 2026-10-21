@@ -62,3 +62,13 @@ i numeri del personaggio li muove solo lo scriba, su indicazione del narratore.
 La verifica segnala come errore un file illeggibile o malformato (con il percorso della regola) e un percorso
 `scheda` che nella scheda attiva non esiste (la regola non scatterebbe mai). Nel codice: `trigger.problems(data)`,
 `trigger.carica(campaign)`, `trigger.valuta(campaign, messaggio_del_turno)`.
+
+## Da dove vengono
+
+Si scrivono a mano, oppure `trigger.extract_triggers(campaign, client, model, sheet)` (pulsante 'Ricava i trigger' nel
+tavolo, `POST /api/triggers/extract`; alla fine della preparazione se c'e' una scheda attiva, in cache per contenuto):
+una chiamata sulle sezioni di `meccanica/` che legano un numero a una conseguenza, con i percorsi della scheda attiva
+come unici percorsi ammessi (`trigger.sheet_paths`), schema forzato in forma piatta (`tipo`, `soggetto`, `op`, `valore`
+per le condizioni; `tipo`, `testo` e i campi dell'effetto). Il codice ritraduce nella forma del file, passa ogni regola
+per `problems` e `sheet_path_problems`, scarta cio' che non quadra (registrato nel log) e aggiunge le regole nuove a
+quelle gia' scritte, senza toccarle (vince il nome gia' in uso).

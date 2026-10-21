@@ -310,3 +310,183 @@ def _apply(campaign: Campaign, name: str, effect: dict[str, Any]) -> list[str]:
         campaign.shift_relation(str(effect["relazione"]), str(effect["verso"]), str(effect["forza"]), f"trigger: {name}")
         return []
     return []
+
+
+# --- dal manuale ai trigger: una chiamata, poi il codice controlla ---------------------------------
+
+_THRESHOLD = re.compile(r"\b(soglia|raggiung|scend|sal[ei]\b|super[ai]|almeno|oltre|sotto|a zero|a 0\b|ogni volta|quando|se\b)", re.I)
+MAX_PATHS = 80
+SOURCE_LIMIT = 24_000
+
+
+def sheet_paths(data: Any, prefix: str = "") -> list[str]:
+    """I percorsi della scheda che una condizione puo' leggere: solo le foglie numeriche o testuali."""
+    out: list[str] = []
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if k == "esperienza":
+                continue
+            out += sheet_paths(v, f"{prefix}.{k}" if prefix else str(k))
+    elif isinstance(data, (int, float, str)) and not isinstance(data, bool) and prefix:
+        out.append(prefix)
+    return out[:MAX_PATHS]
+
+
+def rules_with_thresholds(campaign: Campaign) -> str:
+    """Le sezioni di `meccanica/` che legano un numero a una conseguenza, fino a un tetto di caratteri."""
+    parts, size = [], 0
+    for f in campaign.files():
+        if not f.name.startswith(MECHANICS_DIR + "/"):
+            continue
+        for title, body in f.sections().items():
+            if title and _THRESHOLD.search(body) and re.search(r"\d", body) and size + len(body) <= SOURCE_LIMIT:
+                parts.append(f"## {title} ({f.name})\n{body.strip()}")
+                size += len(body)
+    return "\n\n".join(parts)
+
+
+_CONDITION = {
+    "type": "object",
+    "properties": {
+        "tipo": {"type": "string", "enum": list(CONDIZIONI), "description": "; ".join(f"{k}: {v}" for k, v in CONDIZIONI.items())},
+        "soggetto": {"type": "string", "description": "Il percorso della scheda (fra quelli dati, esatto), il nome dell'orologio o del PNG, la fascia dell'esito, `turni` o `sessione`"},
+        "op": {"type": "string", "enum": list(OPS)},
+        "valore": {"type": "string", "description": "Il valore con cui confrontare: un numero scritto in cifre, o un nome"},
+    },
+    "required": ["tipo", "soggetto", "op", "valore"],
+    "additionalProperties": False,
+}
+_EFFECT = {
+    "type": "object",
+    "properties": {
+        "tipo": {"type": "string", "enum": list(EFFETTI), "description": "; ".join(f"{k}: {v}" for k, v in EFFETTI.items())},
+        "testo": {"type": "string", "description": "L'avviso al narratore (per `avviso`), il nome dell'orologio o del PNG"},
+        "avanza": {"type": ["integer", "null"], "description": "Solo per `orologio`: i segmenti che avanza"},
+        "segmenti": {"type": ["integer", "null"], "description": "Solo per `orologio` da creare: 2..12"},
+        "conseguenza": {"type": ["string", "null"], "description": "Solo per `orologio` da creare: cosa succede quando si riempie"},
+        "verso": {"type": ["string", "null"], "enum": ["sale", "scende", None], "description": "Solo per `relazione`"},
+        "forza": {"type": ["string", "null"], "enum": ["lieve", "media", "forte", None], "description": "Solo per `relazione`"},
+    },
+    "required": ["tipo", "testo", "avanza", "segmenti", "conseguenza", "verso", "forza"],
+    "additionalProperties": False,
+}
+TRIGGERS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "trigger": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "nome": {"type": "string", "description": "Breve, minuscolo, unico"},
+                    "ricorrente": {"type": "boolean", "description": "true se vale ogni turno in cui la condizione regge; false se scatta una volta sola"},
+                    "quando": {"type": "array", "items": _CONDITION, "description": f"Da 1 a {MAX_CONDITIONS} condizioni, tutte vere insieme"},
+                    "effetti": {"type": "array", "items": _EFFECT, "description": f"Da 1 a {MAX_EFFECTS} effetti"},
+                    "fonte": {"type": "string", "description": "La sezione da cui viene"},
+                },
+                "required": ["nome", "ricorrente", "quando", "effetti", "fonte"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["trigger"],
+    "additionalProperties": False,
+}
+TRIGGERS_PROMPT = """\
+Trascrivi come TRIGGER le regole di un gioco di ruolo che il programma puo' contare da solo: una SOGLIA su un valore
+che il programma possiede (un numero della scheda, fra i percorsi dati; un orologio; la relazione o lo stadio di un PNG;
+la fascia dell'ultimo tiro; i turni giocati) e una CONSEGUENZA chiusa (un avviso al master con la regola da applicare,
+un orologio che avanza, una relazione che si muove). Esempi: "con la fame a 4 o piu' ogni tentazione richiede una
+prova" -> scheda stato.fame >= 4, avviso ricorrente; "a 0 punti ferita il personaggio cade" -> avviso.
+Solo cio' che le sezioni dicono, con i numeri del manuale. Usa SOLO percorsi della scheda fra quelli elencati: se la
+regola parla di un valore che la scheda non ha, lasciala fuori. L'avviso cita la regola in una frase, non la narra.
+Lascia fuori cio' che richiede un giudizio ("se il personaggio e' in pericolo") o un tiro: quello lo fa il master."""
+
+
+def _number_or_text(value: Any) -> Any:
+    text = str(value).strip()
+    try:
+        return int(text)
+    except ValueError:
+        try:
+            return float(text)
+        except ValueError:
+            return text
+
+
+def _to_rule(t: dict[str, Any]) -> dict[str, Any]:
+    """Dalla forma piatta dello schema alla forma del file (una chiave per condizione ed effetto)."""
+    conds = []
+    for c in t.get("quando") or []:
+        if isinstance(c, dict):
+            conds.append({str(c.get("tipo")): str(c.get("soggetto", "")).strip(), "op": c.get("op"), "valore": _number_or_text(c.get("valore"))})
+    effects = []
+    for e in t.get("effetti") or []:
+        if not isinstance(e, dict):
+            continue
+        kind = str(e.get("tipo"))
+        out: dict[str, Any] = {kind: str(e.get("testo", "")).strip()}
+        if kind == "orologio":
+            out["avanza"] = e.get("avanza") if e.get("avanza") is not None else 1
+            if e.get("segmenti") is not None:
+                out["segmenti"] = e["segmenti"]
+                out["conseguenza"] = str(e.get("conseguenza") or "").strip()
+        if kind == "relazione":
+            out["verso"], out["forza"] = e.get("verso"), e.get("forza")
+        effects.append(out)
+    rule = {"nome": str(t.get("nome", "")).strip().lower(), "ricorrente": bool(t.get("ricorrente")), "quando": conds, "effetti": effects}
+    if t.get("fonte"):
+        rule["fonte"] = str(t["fonte"]).strip()
+    return rule
+
+
+def extract_triggers(campaign: Campaign, client: Any, model: str, sheet: Any = None) -> list[dict[str, Any]]:
+    """Una chiamata sulle sezioni con soglie; tiene solo le regole che passano `problems` e i percorsi della scheda.
+
+    Le regole scritte a mano in `trigger.json` restano: le nuove si aggiungono se il nome e' libero."""
+    rules = rules_with_thresholds(campaign)
+    if not rules:
+        log.info("trigger: nessuna sezione con soglie nelle regole")
+        return []
+    from .models import cost_usd
+    from .prepare import create_message, parse_json_object
+
+    paths = sheet_paths(dict(getattr(sheet, "data", {}) or {})) if sheet is not None else []
+    head = ("PERCORSI DELLA SCHEDA (gli unici che una condizione `scheda` puo' leggere): " + ", ".join(paths)
+            if paths else "La campagna non ha ancora una scheda: non usare condizioni `scheda`.")
+    clocks = ", ".join(campaign.clocks()) or "nessuno"
+    response = create_message(client, max_seconds=300, model=model, max_tokens=8000, system=TRIGGERS_PROMPT,
+                              messages=[{"role": "user", "content": f"{head}\nOROLOGI ATTIVI: {clocks}\n\nREGOLE:\n\n{rules}"}],
+                              output_config={"format": {"type": "json_schema", "schema": TRIGGERS_SCHEMA}})
+    usage = getattr(response, "usage", None)
+    campaign.record_spend("trigger", model, cost_usd(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0))
+    data = parse_json_object("\n".join(b.text for b in response.content if b.type == "text"))
+    found = data.get("trigger") if isinstance(data, dict) else None
+    existing = carica(campaign)
+    kept = list(existing)
+    names = {str(r.get("nome", "")).lower() for r in existing}
+    for raw in found if isinstance(found, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        rule = _to_rule(raw)
+        if rule["nome"] in names:
+            continue
+        probe = {"trigger": [rule]}
+        bad = problems(probe)
+        if sheet is not None:
+            bad += sheet_path_problems(probe, sheet)
+        elif any("scheda" in c for c in rule["quando"]):
+            bad.append(("quando", "senza scheda attiva una condizione `scheda` non si verifica"))
+        if bad or len(kept) >= MAX_TRIGGERS:
+            log.warning("trigger scartato '%s': %s", rule["nome"], "; ".join(f"{p}: {m}" for p, m in bad[:3]) or "troppe regole")
+            continue
+        kept.append(rule)
+        names.add(rule["nome"])
+    if not kept and not existing:
+        log.info("trigger: nessuna regola valida nelle soglie trovate")
+        return []
+    path = campaign.root / MECHANICS_DIR / FILE_NAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"trigger": kept}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    log.info("trigger salvati: %s", ", ".join(r["nome"] for r in kept) or "nessuno")
+    return kept[len(existing):]

@@ -295,6 +295,17 @@ sbagliato si ignora intero. Il pulsante "Ricava le tabelle" le trascrive con una
 dalle sezioni che hanno la forma di una tabella; il codice scarta quelle che non quadrano.
 I tipi di tiro del profilo possono avere `alias`: il nome che il manuale usa in quel passo.
 
+## La prefazione delle regole e i trigger dal manuale
+
+Alla fine della preparazione (o dal tavolo, con un pulsante) il programma scrive in testa a
+`meccanica/regole.md` la sezione "Come usare queste regole": la precedenza fra le fonti, cosa
+va riletto nei file e non ricordato (rimandi `file § sezione`, tenuti solo se esistono), cosa
+fare quando una regola non si trova. Sta nel prompt di sistema in cache: il narratore la legge
+a ogni turno gratis. Con la stessa logica "Ricava i trigger" trascrive in `meccanica/trigger.json`
+le soglie che il programma puo' contare (fame a 4, ferite a 0, un orologio pieno), usando come
+unici percorsi quelli della scheda attiva: il codice scarta cio' che non quadra e non tocca le
+regole gia' scritte a mano.
+
 ## Orologi: i fili che avanzano li conta il programma
 
 Una minaccia o un progetto che matura nel tempo e' un orologio a segmenti in
@@ -812,6 +823,7 @@ master/
   fatti.py        i fatti da non perdere: lettura, aggiunta con tetto e senza doppioni, pertinenza al turno
   trigger.py      i trigger: regole condizioni->effetti su scheda, orologi, relazioni, esiti; valutate dal codice a ogni turno
   tabelle.py      le tabelle casuali come dati: forma, tiro dal marcatore [[tabella: ...]], estrazione dalle sezioni
+  prefazione.py   la prefazione d'uso in testa alle regole: precedenza, rimandi verificati, riserva; generata, in cache
   docs.py         la documentazione a sezioni (--doc): quattro generate da schemi e prompt, quattro scritte in docs/sezioni/
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina

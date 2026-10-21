@@ -27,6 +27,7 @@ from .campaign import DIARY, MECHANICS_DIR, PREP_DIR, SETTING_DIR, SHEETS_DIR, S
 from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_dice, verifica_esempi
 from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
 from .modi import FILE_NAME as MODES_NAME, modi_problems
+from .prefazione import MIN_SECTIONS, RULES_FILE, SECTION_TITLE as PREFACE_TITLE, broken_lookups, leggi as read_preface
 from .tabelle import FILE_NAME as TABLES_NAME, problems as table_problems
 from .trigger import FILE_NAME as TRIGGER_NAME, problems as trigger_problems, sheet_path_problems
 from .relazioni import FILE_NAME as RELATIONS_NAME, MAX as REL_MAX, MIN as REL_MIN, stadi_problems
@@ -135,6 +136,7 @@ def validate(campaign: Campaign) -> ValidationReport:
     _check_modes(campaign, report)
     _check_triggers(campaign, report)
     _check_tables(campaign, report)
+    _check_preface(campaign, report)
     _check_lineage(campaign, report)
     _check_play(campaign, report)
     return report
@@ -666,6 +668,23 @@ def _check_tables(campaign: Campaign, report: ValidationReport) -> None:
     for where, problem in table_problems(data):
         report.add("error", f"{name}:{where}" if where else name, "tabelle malformate", problem + ": il file viene ignorato intero",
                    "correggi la tabella indicata (python main.py --doc tabelle)")
+
+
+def _check_preface(campaign: Campaign, report: ValidationReport) -> None:
+    rules = campaign.file(RULES_FILE)
+    if not rules.exists():
+        return
+    titles = [t for t in rules.outline() if t.lower() != PREFACE_TITLE.lower()]
+    if not read_preface(campaign):
+        if len(titles) >= MIN_SECTIONS:
+            report.add("recommendation", RULES_FILE, "regole senza prefazione d'uso",
+                       f"manca la sezione '{PREFACE_TITLE}': precedenza fra le fonti, cosa rileggere nei file, cosa fare se una regola non si trova",
+                       "pulsante 'Scrivi la prefazione' nel tavolo (una chiamata), o la preparazione di un manuale")
+        return
+    for topic, file, section in broken_lookups(campaign):
+        report.add("warning", f"{RULES_FILE} § {PREFACE_TITLE}", "rimando a una sezione che non esiste",
+                   f"'{topic}' manda a `{file}` § {section}, che non c'e': il narratore cercherebbe a vuoto",
+                   "correggi il rimando nella prefazione, o riscrivila (python main.py --doc prefazione)")
 
 
 def _check_lineage(campaign: Campaign, report: ValidationReport) -> None:

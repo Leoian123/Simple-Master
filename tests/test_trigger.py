@@ -137,5 +137,80 @@ class TestInGioco(Base):
         self.assertEqual(validate(self.camp).errors, [])
 
 
+class TestEstrazione(Base):
+    """Dal manuale ai trigger: il modello propone in forma piatta, il codice ritraduce e setaccia."""
+
+    def sheet(self):
+        from master.sheet import Sheet
+
+        info = self.camp.active_sheet()
+        return Sheet(self.camp, info["slug"])
+
+    def test_sheet_paths_are_the_leaves_without_the_ledger(self) -> None:
+        paths = trigger.sheet_paths({"nome": "Kael", "stato": {"monete": 3, "punti_ferita": {"attuale": 8, "massimo": 10}},
+                                     "esperienza": [{"punti": 1}], "tratti": ["x"], "ok": True})
+        self.assertEqual(paths, ["nome", "stato.monete", "stato.punti_ferita.attuale", "stato.punti_ferita.massimo"])
+
+    def test_rules_with_thresholds_pick_sections_that_bind_a_number_to_a_consequence(self) -> None:
+        self.camp.file("meccanica/regole.md").set_section("Ferite", "Quando i punti ferita scendono a 0 il personaggio cade a terra.")
+        self.camp.file("meccanica/regole.md").set_section("Tono", "Scene brevi e cupe.")
+        text = trigger.rules_with_thresholds(self.camp)
+        self.assertIn("## Ferite (meccanica/regole.md)", text)
+        self.assertNotIn("## Tono", text)
+
+    def test_flat_answer_becomes_the_file_shape(self) -> None:
+        rule = trigger._to_rule({"nome": "Ferito", "ricorrente": True, "fonte": "Ferite",
+                                 "quando": [{"tipo": "scheda", "soggetto": "stato.punti_ferita.attuale", "op": "<=", "valore": "4"}],
+                                 "effetti": [{"tipo": "avviso", "testo": "Malus", "avanza": None, "segmenti": None, "conseguenza": None, "verso": None, "forza": None},
+                                             {"tipo": "orologio", "testo": "La Gilda", "avanza": None, "segmenti": 4, "conseguenza": "arrivano", "verso": None, "forza": None},
+                                             {"tipo": "relazione", "testo": "Mira Sol", "avanza": None, "segmenti": None, "conseguenza": None, "verso": "scende", "forza": "lieve"}]})
+        self.assertEqual(rule["nome"], "ferito")
+        self.assertEqual(rule["quando"], [{"scheda": "stato.punti_ferita.attuale", "op": "<=", "valore": 4}])
+        self.assertEqual(rule["effetti"], [{"avviso": "Malus"}, {"orologio": "La Gilda", "avanza": 1, "segmenti": 4, "conseguenza": "arrivano"},
+                                           {"relazione": "Mira Sol", "verso": "scende", "forza": "lieve"}])
+        self.assertEqual(trigger.problems({"trigger": [rule]}), [])
+
+    def test_extraction_keeps_what_passes_and_leaves_hand_written_rules_alone(self) -> None:
+        self.camp.file("meccanica/regole.md").set_section("Ferite", "Quando i punti ferita scendono sotto 5 ogni prova ha un malus.")
+        (self.camp.root / "meccanica" / "trigger.json").write_text(json.dumps({"trigger": [RULES["trigger"][0]]}), encoding="utf-8")
+        sheet = self.sheet()
+        answer = {"trigger": [
+            {"nome": "ferito", "ricorrente": True, "fonte": "Ferite",  # nome gia' usato a mano: resta quella a mano
+             "quando": [{"tipo": "scheda", "soggetto": "stato.punti_ferita.attuale", "op": "<", "valore": "5"}],
+             "effetti": [{"tipo": "avviso", "testo": "doppione", "avanza": None, "segmenti": None, "conseguenza": None, "verso": None, "forza": None}]},
+            {"nome": "senza un soldo", "ricorrente": True, "fonte": "Ferite",
+             "quando": [{"tipo": "scheda", "soggetto": "stato.monete", "op": "<=", "valore": "0"}],
+             "effetti": [{"tipo": "avviso", "testo": "Senza monete non paga il pedaggio", "avanza": None, "segmenti": None, "conseguenza": None, "verso": None, "forza": None}]},
+            {"nome": "inventato", "ricorrente": True, "fonte": "Ferite",  # percorso che la scheda non ha
+             "quando": [{"tipo": "scheda", "soggetto": "stato.sanita", "op": "<", "valore": "3"}],
+             "effetti": [{"tipo": "avviso", "testo": "x", "avanza": None, "segmenti": None, "conseguenza": None, "verso": None, "forza": None}]},
+            {"nome": "storto", "ricorrente": False, "fonte": "Ferite",  # stadio con un operatore numerico
+             "quando": [{"tipo": "stadio", "soggetto": "Mira Sol", "op": ">", "valore": "Ostile"}],
+             "effetti": [{"tipo": "avviso", "testo": "x", "avanza": None, "segmenti": None, "conseguenza": None, "verso": None, "forza": None}]},
+        ]}
+        client = ScriptedClient([[_b(type="text", text=json.dumps(answer))]])
+        new = trigger.extract_triggers(self.camp, client, "claude-sonnet-5", sheet)
+        self.assertEqual([t["nome"] for t in new], ["senza un soldo"])
+        saved = json.loads((self.camp.root / "meccanica" / "trigger.json").read_text(encoding="utf-8"))
+        self.assertEqual([t["nome"] for t in saved["trigger"]], ["ferito", "senza un soldo"])
+        self.assertEqual(saved["trigger"][0], RULES["trigger"][0])  # quella a mano intatta
+        self.assertEqual(saved["trigger"][1]["quando"], [{"scheda": "stato.monete", "op": "<=", "valore": 0}])
+        self.assertEqual(validate(self.camp).errors, [])
+        call = client.calls[0]
+        self.assertEqual(call["output_config"]["format"]["schema"], trigger.TRIGGERS_SCHEMA)
+        self.assertIn("stato.monete", call["messages"][0]["content"])
+        self.assertIn("## Ferite", call["messages"][0]["content"])
+        # senza scheda: le condizioni `scheda` si scartano, non si verificano a vuoto
+        (self.camp.root / "meccanica" / "trigger.json").unlink()
+        client = ScriptedClient([[_b(type="text", text=json.dumps(answer))]])
+        self.assertEqual([t["nome"] for t in trigger.extract_triggers(self.camp, client, "m", None)], [])
+        self.assertIn("non usare condizioni `scheda`", client.calls[0]["messages"][0]["content"])
+        # senza sezioni con soglie: nessuna chiamata
+        self.camp.file("meccanica/regole.md").write("# Regole\n\n## Tono\n\nCupo.\n")
+        client = ScriptedClient([])
+        self.assertEqual(trigger.extract_triggers(self.camp, client, "m", sheet), [])
+        self.assertEqual(client.calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()
