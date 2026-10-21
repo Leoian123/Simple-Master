@@ -109,7 +109,7 @@ TOOLS: list[dict[str, Any]] = [
         ),
         "input_schema": {
             "type": "object",
-            "properties": {"query": {"type": "string", "description": "Termine o parole chiave, es. 'Frenesia' o 'clan Ventrue'"}},
+            "properties": {"query": {"type": "string", "description": "Termine o parole chiave, es. 'Fatica' o 'gilda dei mercanti'"}},
             "required": ["query"],
         },
     },
@@ -126,7 +126,7 @@ _CHANGES = {
     "items": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Percorso con i punti, es. 'stato.fame', 'stato.salute.attuale', 'tratti.abilita.rissa', 'equipaggiamento.+' per aggiungere a un elenco"},
+            "path": {"type": "string", "description": "Percorso con i punti, es. 'stato.stress', 'stato.salute.attuale', 'tratti.abilita.rissa', 'equipaggiamento.+' per aggiungere a un elenco"},
             "value": {"description": "Nuovo valore JSON (numero, testo, elenco, oggetto). null cancella la voce"},
         },
         "required": ["path", "value"],
@@ -316,7 +316,7 @@ class ToolExecutor:
             if body is None:
                 close = [t for t in f.outline() if section.lower() in t.lower() or t.lower() in section.lower()]
                 if close:
-                    # un titolo quasi giusto ("Fame" per "La Fame") non vale un giro di API in piu':
+                    # un titolo quasi giusto ("Fatica" per "La Fatica") non vale un giro di API in piu':
                     # si restituiscono le sezioni piu' vicine, le piu' brevi di nome per prime
                     parts, size = [], 0
                     for t in sorted(close, key=len)[:3]:
@@ -345,7 +345,7 @@ class ToolExecutor:
         clean = name.strip().replace(chr(92), "/")
         if clean.startswith(SHEETS_DIR + "/") and clean.endswith(".md") and Sheet(self.campaign, clean[len(SHEETS_DIR) + 1:-3]).exists:
             raise ValueError(f"{clean} e' la vista generata dalla scheda: i dati si cambiano con update_sheet "
-                             "(percorsi come 'stato.fame'), l'esperienza con award_xp / spend_xp")
+                             "(percorsi come 'stato.stress'), l'esperienza con award_xp / spend_xp")
 
     def _sheet(self, pg: str | None = None) -> Sheet:
         slug = slugify(pg) if pg else self.campaign.active_pg

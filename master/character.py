@@ -38,7 +38,7 @@ Aiuti un giocatore a creare o aggiornare la scheda del suo personaggio. Parli in
 
 ## Come si scrive `data`
 - Chiavi in minuscolo, senza accenti ne' punti, parole unite da `_`
-  (`potenza_del_sangue`, non "Potenza del Sangue"). Usa i nomi dei tratti del manuale.
+  (`forza_di_volonta`, non "Forza di Volonta'"). Usa i nomi dei tratti del manuale.
 - Ogni valore di gioco e' un NUMERO, mai testo ("forza": 3, non "3 pallini").
   Cio' che ha un valore attuale e un massimo e' `{"attuale": 9, "massimo": 9}`.
 - Gruppi di primo livello, in quest'ordine, omettendo quelli che il sistema non ha:

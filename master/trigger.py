@@ -7,8 +7,8 @@ tipizzati: un avviso al narratore (`[TRIGGER <nome>: ...]` in testa al messaggio
 un orologio che avanza (o nasce), una relazione che si muove di un passo. Niente testo libero
 da giudicare, niente script, niente AI: a ogni turno, prima della chiamata del narratore, il
 codice valuta tutte le regole (AND fra le condizioni), applica gli effetti e segna quelle non
-ricorrenti come scattate (`stato.json` -> `trigger_scattati`). Cosi' "fame a 4 o piu': rischio
-di frenesia" arriva al narratore dal contatore della scheda, non dalla sua memoria.
+ricorrenti come scattate (`stato.json` -> `trigger_scattati`). Cosi' "stress a 4 o piu': rischio
+di crollo" arriva al narratore dal contatore della scheda, non dalla sua memoria.
 
 E' il linguaggio del World Engine di Voyage ridotto alla parte deterministica: condizioni
 strutturali ed effetti chiusi, tetti bassi (cinque condizioni, tre effetti, cento regole),
@@ -17,12 +17,12 @@ un file che o e' valido tutto o si ignora, e la verifica che lo dice.
 Esempio:
 
     {"trigger": [
-      {"nome": "rischio di frenesia", "ricorrente": true,
-       "quando": [{"scheda": "stato.fame", "op": ">=", "valore": 4}],
-       "effetti": [{"avviso": "Fame a 4 o piu': a ogni tentazione serve una prova, secondo le regole"}]},
-      {"nome": "la Bestia si avvicina",
-       "quando": [{"scheda": "stato.umanita", "op": "<", "valore": 5}],
-       "effetti": [{"orologio": "La Bestia", "avanza": 1, "segmenti": 6, "conseguenza": "Jonathan perde una notte"}]}
+      {"nome": "rischio di crollo", "ricorrente": true,
+       "quando": [{"scheda": "stato.stress", "op": ">=", "valore": 4}],
+       "effetti": [{"avviso": "Stress a 4 o piu': a ogni tentazione serve una prova, secondo le regole"}]},
+      {"nome": "la ferita si infetta",
+       "quando": [{"scheda": "stato.punti_ferita.attuale", "op": "<", "valore": 5}],
+       "effetti": [{"orologio": "L'infezione", "avanza": 1, "segmenti": 6, "conseguenza": "Kael perde una notte di riposo"}]}
     ]}
 """
 
@@ -43,7 +43,7 @@ MAX_TRIGGERS, MAX_CONDITIONS, MAX_EFFECTS = 100, 5, 3
 OPS = ("==", "!=", "<", "<=", ">", ">=", "contiene")
 NUMERIC_OPS = ("<", "<=", ">", ">=")
 CONDIZIONI: dict[str, str] = {
-    "scheda": "un valore della scheda del personaggio attivo, per percorso (es. `stato.fame`); se il percorso non esiste la condizione e' falsa",
+    "scheda": "un valore della scheda del personaggio attivo, per percorso (es. `stato.stress`); se il percorso non esiste la condizione e' falsa",
     "orologio": "i segmenti pieni di un orologio attivo, per nome; se l'orologio non esiste la condizione e' falsa",
     "relazione": "il numero della relazione di un PNG (-100..100); se non e' mai stata contata, falsa",
     "stadio": "lo stadio della relazione di un PNG, per nome (es. `Ostile`), confronto solo con `==` / `!=`",
@@ -321,7 +321,7 @@ _NUMBER = re.compile(r"\b\d+\b")
 NEAR_CHARS = 60
 MIN_SCORE = 2
 MAX_PATHS = 80
-SOURCE_LIMIT = 36_000  # ~10k token: su Vampiri ci stanno Fame, Umanita', Danni, Volonta' e Frenesia
+SOURCE_LIMIT = 36_000  # ~10k token: su un manuale vero di ~100 sezioni ci stanno le sei a soglia piu' dense
 
 
 def sheet_paths(data: Any, prefix: str = "") -> list[str]:
@@ -345,8 +345,8 @@ def threshold_score(body: str) -> int:
 def threshold_sections(campaign: Campaign) -> list[tuple[int, str, str, str]]:
     """(punteggio, file, titolo, corpo) delle sezioni di `meccanica/` con soglie, dalla piu' densa, entro il tetto.
 
-    Misurato sul manuale di Vampiri (2026-10-21): per ordine dei file il tetto si riempiva di creature e clan e
-    non arrivava mai a Fame e Umanita'; per punteggio le prime sono Potenza del Sangue, Saziare la Fame, Umanita'."""
+    Misurato su un manuale vero di ~100 sezioni (2026-10-21): per ordine dei file il tetto si riempiva di creature e
+    opzioni di creazione senza arrivare alle risorse con soglie; per punteggio le prime sono proprio quelle."""
     scored = []
     for f in campaign.files():
         if not f.name.startswith(MECHANICS_DIR + "/"):
@@ -422,8 +422,8 @@ TRIGGERS_PROMPT = """\
 Trascrivi come TRIGGER le regole di un gioco di ruolo che il programma puo' contare da solo: una SOGLIA su un valore
 che il programma possiede (un numero della scheda, fra i percorsi dati; un orologio; la relazione o lo stadio di un PNG;
 la fascia dell'ultimo tiro; i turni giocati) e una CONSEGUENZA chiusa (un avviso al master con la regola da applicare,
-un orologio che avanza, una relazione che si muove). Esempi: "con la fame a 4 o piu' ogni tentazione richiede una
-prova" -> scheda stato.fame >= 4, avviso ricorrente; "a 0 punti ferita il personaggio cade" -> avviso.
+un orologio che avanza, una relazione che si muove). Esempi: "con lo stress a 4 o piu' ogni tentazione richiede una
+prova" -> scheda stato.stress >= 4, avviso ricorrente; "a 0 punti ferita il personaggio cade" -> avviso.
 Solo cio' che le sezioni dicono, con i numeri del manuale. Usa SOLO percorsi della scheda fra quelli elencati: se la
 regola parla di un valore che la scheda non ha, lasciala fuori. L'avviso cita la regola in una frase, non la narra.
 Lascia fuori cio' che richiede un giudizio ("se il personaggio e' in pericolo") o un tiro: quello lo fa il master."""

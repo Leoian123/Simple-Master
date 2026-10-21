@@ -10,7 +10,7 @@ solo testo (`.md` senza `.json`) funziona ancora e diventa dati la prima volta c
 ## Come e' fatta (dal prompt del costruttore di schede, parola per parola)
 
 - Chiavi in minuscolo, senza accenti ne' punti, parole unite da `_`
-  (`potenza_del_sangue`, non "Potenza del Sangue"). Usa i nomi dei tratti del manuale.
+  (`forza_di_volonta`, non "Forza di Volonta'"). Usa i nomi dei tratti del manuale.
 - Ogni valore di gioco e' un NUMERO, mai testo ("forza": 3, non "3 pallini").
   Cio' che ha un valore attuale e un massimo e' `{"attuale": 9, "massimo": 9}`.
 - Gruppi di primo livello, in quest'ordine, omettendo quelli che il sistema non ha:
@@ -38,7 +38,7 @@ La chiave `nome` sta in cima, messa dal programma al salvataggio (`Sheet.replace
 
 ## I percorsi (`update_sheet`, `Sheet.get` / `Sheet.set`)
 
-- Con i punti: `stato.fame`, `stato.salute.attuale`, `tratti.abilita.rissa`, `equipaggiamento.2`.
+- Con i punti: `stato.stress`, `stato.salute.attuale`, `tratti.abilita.rissa`, `equipaggiamento.2`.
 - In un elenco: un indice (`condizioni.0`), oppure `+` per aggiungere in coda (`stato.condizioni.+`).
 - `value` `null` cancella la voce. I livelli intermedi mancanti vengono creati; un valore non si puo' usare come gruppo.
 - Un percorso che comincia con `esperienza` e' rifiutato: i punti passano solo dal registro.

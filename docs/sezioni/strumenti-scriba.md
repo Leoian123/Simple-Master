@@ -24,7 +24,7 @@ Cerca nel glossario completo e ritorna le voci (termine, tipo, descrizione, file
 
 | parametro | tipo | obbligatorio | significato |
 |---|---|---|---|
-| `query` | string | si | Termine o parole chiave, es. 'Frenesia' o 'clan Ventrue' |
+| `query` | string | si | Termine o parole chiave, es. 'Fatica' o 'gilda dei mercanti' |
 
 ### `list_files`
 
@@ -80,7 +80,7 @@ Cambia i dati della scheda del personaggio (il JSON in PERSONAGGIO ATTIVO) per p
 
 | parametro | tipo | obbligatorio | significato |
 |---|---|---|---|
-| `changes` | elenco di object | si | Modifiche ai dati della scheda, applicate tutte insieme Ogni elemento: `path` (Percorso con i punti, es. 'stato.fame', 'stato.salute.attuale', 'tratti.abilita.rissa', 'equipaggiamento.+' per aggiungere a un elenco), `value` (Nuovo valore JSON (numero, testo, elenco, oggetto). null cancella la voce). |
+| `changes` | elenco di object | si | Modifiche ai dati della scheda, applicate tutte insieme Ogni elemento: `path` (Percorso con i punti, es. 'stato.stress', 'stato.salute.attuale', 'tratti.abilita.rissa', 'equipaggiamento.+' per aggiungere a un elenco), `value` (Nuovo valore JSON (numero, testo, elenco, oggetto). null cancella la voce). |
 | `pg` | string | no | Personaggio, solo se diverso da quello attivo |
 
 ### `award_xp`
@@ -102,7 +102,7 @@ Spende punti esperienza per far crescere un tratto: controlla che bastino, appli
 |---|---|---|---|
 | `amount` | integer, min 1 | si |  |
 | `reason` | string | si | Cosa si compra e il calcolo del costo, es. 'Fermezza 2->3: 5 x 3' |
-| `changes` | elenco di object | si | Modifiche ai dati della scheda, applicate tutte insieme Ogni elemento: `path` (Percorso con i punti, es. 'stato.fame', 'stato.salute.attuale', 'tratti.abilita.rissa', 'equipaggiamento.+' per aggiungere a un elenco), `value` (Nuovo valore JSON (numero, testo, elenco, oggetto). null cancella la voce). |
+| `changes` | elenco di object | si | Modifiche ai dati della scheda, applicate tutte insieme Ogni elemento: `path` (Percorso con i punti, es. 'stato.stress', 'stato.salute.attuale', 'tratti.abilita.rissa', 'equipaggiamento.+' per aggiungere a un elenco), `value` (Nuovo valore JSON (numero, testo, elenco, oggetto). null cancella la voce). |
 | `pg` | string | no | Personaggio, solo se diverso da quello attivo |
 
 ### `set_clock`

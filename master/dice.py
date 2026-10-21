@@ -5,8 +5,8 @@ successi) e applicare cio' che un PROFILO gli dice: che dado si usa, da che valo
 successo, quanto valgono le coppie di una faccia, se esistono dadi speciali presi da un valore
 della scheda e quali facce fanno scattare un evento con un nome. Il profilo sta in
 `meccanica/dadi.json` ed e' ricavato dalle regole che la preparazione ha estratto dal manuale
-(`extract_profile`, una chiamata sola, poi resta su disco): Vampiri diventa riserve di d10 con
-dadi Fame, un gioco a d20 diventa d20 + bonus contro una soglia, senza toccare il codice.
+(`extract_profile`, una chiamata sola, poi resta su disco): un gioco a riserve diventa riserve
+di d10 con dadi speciali, un gioco a d20 diventa d20 + bonus contro una soglia, senza toccare il codice.
 
 Flusso: il narratore chiude la narrazione con un marcatore, la pagina lo mostra come pulsante,
 `roll` tira, e l'esito torna al narratore come messaggio del giocatore. Tirare non costa chiamate.

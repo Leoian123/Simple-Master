@@ -39,6 +39,15 @@ class TestDiceEngine(unittest.TestCase):
         for word in ("fame", "bestiale", "caotico", "d20", "vampir"):
             self.assertFalse(word in source.lower(), word)  # le regole stanno nel profilo, non nel codice
 
+    def test_no_module_that_talks_to_the_model_names_a_real_game(self) -> None:
+        """Gli esempi nei prompt, negli schemi e nelle docstring sono di un gioco inventato: un manuale vero
+        li rileggerebbe come la risposta attesa. Le misure prese su un manuale vero restano, ma senza nominarlo."""
+        words = ("vampir", "fame", "frenesia", "bestia", "sangue", "ventrue", "clan ", "jonathan", "caotico")  # 'umanita'' e' di molti giochi
+        for name in ("dice", "trigger", "tabelle", "prefazione", "engine", "tools", "docs", "character", "sheet"):
+            source = (ROOT / "master" / f"{name}.py").read_text(encoding="utf-8").lower()
+            for word in words:
+                self.assertFalse(word in source, f"{name}.py nomina '{word}'")
+
     def test_pool_with_special_dice_from_the_sheet(self) -> None:
         sheet = SimpleNamespace(get=lambda path: {"stato.fame": 2}[path])
         with fixed(7, 3, 10, 10, 2):  # tre normali, poi due dadi fame

@@ -10,12 +10,12 @@ nessuna chiamata. Un file che non rispetta la forma viene ignorato intero, e la 
 
 ```json
 {"trigger": [
-  {"nome": "rischio di frenesia", "ricorrente": true,
-   "quando": [{"scheda": "stato.fame", "op": ">=", "valore": 4}],
-   "effetti": [{"avviso": "Fame a 4 o piu': a ogni tentazione serve una prova, secondo le regole"}]},
-  {"nome": "la Bestia si avvicina",
-   "quando": [{"scheda": "stato.umanita", "op": "<", "valore": 5}],
-   "effetti": [{"orologio": "La Bestia", "avanza": 1, "segmenti": 6, "conseguenza": "Jonathan perde una notte"}]}
+  {"nome": "rischio di crollo", "ricorrente": true,
+   "quando": [{"scheda": "stato.stress", "op": ">=", "valore": 4}],
+   "effetti": [{"avviso": "Stress a 4 o piu': a ogni tentazione serve una prova, secondo le regole"}]},
+  {"nome": "la ferita si infetta",
+   "quando": [{"scheda": "stato.punti_ferita.attuale", "op": "<", "valore": 5}],
+   "effetti": [{"orologio": "L'infezione", "avanza": 1, "segmenti": 6, "conseguenza": "Kael perde una notte di riposo"}]}
 ]}
 ```
 
@@ -34,7 +34,7 @@ Al massimo 100 regole per campagna.
 
 | chiave | legge |
 |---|---|
-| `scheda` | un valore della scheda del personaggio attivo, per percorso (es. `stato.fame`); se il percorso non esiste la condizione e' falsa |
+| `scheda` | un valore della scheda del personaggio attivo, per percorso (es. `stato.stress`); se il percorso non esiste la condizione e' falsa |
 | `orologio` | i segmenti pieni di un orologio attivo, per nome; se l'orologio non esiste la condizione e' falsa |
 | `relazione` | il numero della relazione di un PNG (-100..100); se non e' mai stata contata, falsa |
 | `stadio` | lo stadio della relazione di un PNG, per nome (es. `Ostile`), confronto solo con `==` / `!=` |

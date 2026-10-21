@@ -1,7 +1,7 @@
 """La scheda del personaggio come dati: `schede/<slug>.json`.
 
 Il JSON e' l'unica fonte dei dati della scheda. Il master legge i valori direttamente
-("stato.fame" e' 2, non una frase da interpretare) e li cambia per percorso, senza dover
+("stato.stress" e' 2, non una frase da interpretare) e li cambia per percorso, senza dover
 ritrovare e riscrivere frasi in un Markdown. `schede/<slug>.md` resta, ma e' solo la vista
 leggibile, rigenerata a ogni salvataggio: non si modifica a mano.
 

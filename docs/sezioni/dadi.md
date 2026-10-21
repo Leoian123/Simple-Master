@@ -47,7 +47,7 @@ che superano un valore (`successi`). Tutto il resto e' nel profilo.
 
 ## Un evento (`tiri[i].eventi[j]`)
 
-Una faccia che, quando esce, fa scattare qualcosa con un nome (critico caotico, fallimento bestiale).
+Una faccia che, quando esce, fa scattare qualcosa con un nome (critico esplosivo, fallimento rovinoso).
 
 | parametro | tipo | obbligatorio | significato |
 |---|---|---|---|
@@ -138,7 +138,7 @@ I dadi speciali li conta il programma leggendo `quanti_da` dalla scheda del pers
 Tirare non costa chiamate. L'esito e' il messaggio del giocatore del turno dopo:
 
 ```
-[Tiro] <nome> — 5d10: 7, 6, 4 | fame: 2, 9 -> 3 successi contro difficolta' 2: RIUSCITO (margine 1). CRITICO. FALLIMENTO BESTIALE (effetto). Guida: ...
+[Tiro] <nome> — 5d10: 7, 6, 4 | <speciali>: 2, 9 -> 3 successi contro difficolta' 2: RIUSCITO (margine 1). CRITICO. FALLIMENTO ROVINOSO (effetto). Guida: ...
 [Tiro] <nome> — 1d20: 14 +3 = 17 contro difficolta' 15: RIUSCITO DI MISURA (margine 2). Guida: ...
 ```
 
