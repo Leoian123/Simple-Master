@@ -306,6 +306,13 @@ le soglie che il programma puo' contare (fame a 4, ferite a 0, un orologio pieno
 unici percorsi quelli della scheda attiva: il codice scarta cio' che non quadra e non tocca le
 regole gia' scritte a mano.
 
+Le quattro estrazioni (dadi, tabelle, prefazione, trigger) si lanciano anche senza pagina:
+`python main.py --campaign campaigns/<nome> --ricava tabelle trigger`. Il tavolo mostra accanto
+a ogni pulsante quanti caratteri di regole leggerebbe e il costo stimato; la verifica consiglia
+le estrazioni che mancano. Le sezioni con soglie si scelgono per densita' (una parola come
+"scende", "raggiunge", "almeno" vicina a un numero), non per ordine dei file: sul manuale di
+Vampiri l'ordine dei file riempiva il tetto di creature e clan e non arrivava mai a Fame e Umanita'.
+
 ## Orologi: i fili che avanzano li conta il programma
 
 Una minaccia o un progetto che matura nel tempo e' un orologio a segmenti in

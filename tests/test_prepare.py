@@ -226,7 +226,7 @@ class TestPreparer(unittest.TestCase):
             mod.load_chunks = orig
         self.assertEqual(report2.chunks_from_cache, report2.chunks)
         self.assertEqual(len(client.calls), calls_before)
-        self.assertEqual((len(client.preface_calls), len(client.trigger_calls)), (1, 1))  # stesse regole: prefazione e trigger restano
+        self.assertEqual(len(client.preface_calls), 1)  # stesse regole: la prefazione resta quella
         # con una suddivisione diversa (pagine diverse) la cache non viene riusata
         report3 = self.prep(client).run(str(self.pdf), consolidate=False, tidy=False, progress=lambda s: None)
         self.assertEqual(report3.chunks_from_cache, 0)
@@ -251,18 +251,32 @@ class TestPreparer(unittest.TestCase):
         self.assertEqual(self.camp.glossary.get("manuale").kind, "fonte")
         self.assertIn("Pagine 1-", self.camp.file("fonte-manuale.md").read())
         self.assertIn("Riordino glossario", report.summary())
-        # la prefazione d'uso e i trigger (c'e' una scheda attiva): una chiamata ciascuno; senza regole valide nessun file
+        # la prefazione d'uso: una chiamata, in testa alle regole; i trigger no: queste regole non hanno soglie
         self.assertEqual(len(client.preface_calls), 1)
         self.assertEqual(self.camp.file("meccanica/regole.md").outline()[0], "Come usare queste regole")
         self.assertIn("1. La scheda sulle regole generali", regole)
-        self.assertEqual(len(client.trigger_calls), 1)
-        self.assertIn("stato.", client.trigger_calls[0]["messages"][0]["content"])
+        self.assertEqual(client.trigger_calls, [])
         self.assertFalse((self.root / "meccanica" / "trigger.json").exists())
         self.assertEqual(self.camp.glossary.entries()[0].kind, "regola")
         # cache condivisa fuori dalla campagna, per manuale e non per campagna
         self.assertEqual(len(self.cached_blocks()), 2)
         self.assertNotIn("preparazione", self.camp.index())
         self.assertFalse((self.root / "preparazione" / "manuale").exists())
+
+    def test_triggers_are_extracted_once_when_the_rules_have_thresholds(self) -> None:
+        self.camp.file("meccanica/regole.md").set_section("Fame", "Quando la Fame raggiunge 4 serve una prova; a 5 scende in frenesia.")
+        client = FakePrepClient()
+        client.triggers = {"trigger": [{"nome": "fame alta", "ricorrente": True, "fonte": "Fame",
+                                        "quando": [{"tipo": "scheda", "soggetto": "stato.monete", "op": ">=", "valore": "4"}],
+                                        "effetti": [{"tipo": "avviso", "testo": "Serve una prova", "avanza": None, "segmenti": None,
+                                                     "conseguenza": None, "verso": None, "forza": None}]}]}
+        self.prep(client).run(str(self.pdf), consolidate=False, tidy=False, progress=lambda s: None)
+        self.assertEqual(len(client.trigger_calls), 1)
+        self.assertIn("stato.monete", client.trigger_calls[0]["messages"][0]["content"])
+        self.assertIn("## Fame", client.trigger_calls[0]["messages"][0]["content"])
+        self.assertIn("fame alta", (self.root / "meccanica" / "trigger.json").read_text(encoding="utf-8"))
+        self.prep(client).run(str(self.pdf), consolidate=False, tidy=False, progress=lambda s: None)
+        self.assertEqual(len(client.trigger_calls), 1)  # stesse soglie, stessa scheda: niente seconda chiamata
 
     def test_same_manual_on_another_campaign_costs_nothing(self) -> None:
         """Il caso che costa euro: stesso manuale, seconda campagna. Deve riusare tutto."""

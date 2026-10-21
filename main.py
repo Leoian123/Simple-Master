@@ -20,6 +20,7 @@ import argparse
 import logging
 import os
 import sys
+from typing import Any
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -56,7 +57,37 @@ def run_cli(engine: MasterEngine) -> None:
         print(f"  [letti: {', '.join(result.files_read) or '-'} | modificati: {', '.join(result.files_changed) or '-'}]\n")
 
 
-def main(argv: list[str] | None = None) -> int:
+def ricava(campaign: Campaign, what: list[str], model: str, client: Any = None) -> list[str]:
+    """Le estrazioni a una chiamata, dalla riga di comando: le stesse dei pulsanti del tavolo."""
+    from master import dice, prefazione, tabelle, trigger
+    from master.sheet import Sheet
+
+    if client is None:
+        import anthropic
+
+        client = anthropic.Anthropic()
+    info = campaign.active_sheet()
+    sheet = Sheet(campaign, info["slug"]) if info else None
+    sheet = sheet if sheet is not None and sheet.exists else None
+    out = []
+    for item in what:
+        if item == "dadi":
+            profile = dice.extract_profile(campaign, client, model, sheet.prompt_json() if sheet else "")
+            out.append("dadi: " + (", ".join(k["nome"] for k in profile["tiri"]) if profile else "nessun tipo di tiro trovato nelle regole"))
+        elif item == "tabelle":
+            out.append("tabelle: " + (", ".join(t["nome"] for t in tabelle.extract_tables(campaign, client, model)) or "nessuna valida"))
+        elif item == "prefazione":
+            data = prefazione.extract_preface(campaign, client, model)
+            out.append("prefazione: " + (f"scritta in testa a {prefazione.RULES_FILE} ({len(data['cercare'])} rimandi)" if data else "nessuna regola da prefare"))
+        elif item == "trigger":
+            if sheet is None:
+                out.append("trigger: serve un personaggio con la scheda (i trigger leggono i suoi percorsi)")
+                continue
+            out.append("trigger: " + (", ".join(t["nome"] for t in trigger.extract_triggers(campaign, client, model, sheet)) or "nessuno valido"))
+    return out
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Simple Master: master di gioco di ruolo con Claude")
     parser.add_argument("--campaign", default=None,
                         help="cartella della campagna (UI: la apre subito saltando il menu; CLI/preparazione: obbligatoria, default esempio)")
@@ -79,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
                       help="non decide quale testo vale dove due manuali si toccano: le versioni restano una dopo l'altra")
     prep.add_argument("--altra-edizione", action="store_true",
                       help="fonde il manuale anche se e' di un'edizione diversa da quella della campagna (di norma viene rifiutato)")
+    prep.add_argument("--ricava", nargs="+", choices=["dadi", "tabelle", "prefazione", "trigger"], metavar="COSA",
+                      help="ricava dalle regole gia' estratte, una chiamata ciascuno: dadi, tabelle, prefazione, trigger")
     prep.add_argument("--tidy-glossary", action="store_true",
                       help="solo riordino del glossario: allinea ai file e pulisce con una chiamata veloce")
     prep.add_argument("--sanitize", action="store_true",
@@ -103,7 +136,11 @@ def main(argv: list[str] | None = None) -> int:
     logs.add_argument("--log-files", nargs="*", default=[], metavar="FILE", help="con dismiss: nomi dei registri da archiviare")
     logs.add_argument("--log-days", type=int, metavar="N", help="con clean/dismiss/purge: soglia in giorni")
     logs.add_argument("--log-all", action="store_true", help="con purge: cancella anche i registri correnti, tranne oggi")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
 
     load_dotenv(ROOT / ".env")
 
@@ -115,8 +152,8 @@ def main(argv: list[str] | None = None) -> int:
         return _doc(args)
 
     process = ("nuova" if args.new else "preparazione" if args.prepare else "riordino" if args.tidy_glossary
-               else "sanifica" if args.sanitize else "gioco")
-    if args.campaign is None and (args.cli or args.prepare or args.tidy_glossary or args.sanitize):
+               else "sanifica" if args.sanitize else "ricava" if args.ricava else "gioco")
+    if args.campaign is None and (args.cli or args.prepare or args.tidy_glossary or args.sanitize or args.ricava):
         args.campaign = str(ROOT / "campaigns" / "esempio")
     campaign_name = Path(args.new or args.campaign).name if (args.new or args.campaign) else "menu"
     log_path = logbook.setup(process, campaign_name)
@@ -269,6 +306,14 @@ def _run(args: argparse.Namespace, log: logging.Logger) -> int:
         s = Settings.load(ROOT / "impostazioni.json")
         report = Sanitizer(Campaign(args.campaign), model=args.model or s.model_for("prepare")).run(deep=True)
         print("\n" + report.summary())
+        return 0
+
+    if args.ricava:
+        from master.models import Settings
+
+        s = Settings.load(ROOT / "impostazioni.json")
+        for line in ricava(Campaign(args.campaign), args.ricava, args.model or s.model_for("prepare")):
+            print(line)
         return 0
 
     if args.tidy_glossary:

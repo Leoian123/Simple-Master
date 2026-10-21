@@ -158,6 +158,19 @@ class TestEstrazione(Base):
         self.assertIn("## Ferite (meccanica/regole.md)", text)
         self.assertNotIn("## Tono", text)
 
+    def test_sections_are_ranked_by_threshold_density_not_by_file_order(self) -> None:
+        self.camp.file("meccanica/creature.md").set_section(
+            "Animali", "Il lupo ha 3 dadi di attacco. Se il branco e' numeroso, quando attacca di notte, il master decide 1 cosa.")
+        self.camp.file("meccanica/regole.md").set_section(
+            "Fame", "Quando la Fame raggiunge 4 ogni tentazione richiede una prova con almeno 3 dadi; a 5 il personaggio scende in frenesia se supera 2 fallimenti.")
+        self.camp.file("meccanica/regole.md").set_section("Volonta'", "La Volonta' scende di 1 ogni volta che si cede; a zero il personaggio crolla.")
+        ranked = trigger.threshold_sections(self.camp)
+        self.assertEqual([(t, s >= trigger.MIN_SCORE) for s, _, t, _ in ranked][:2], [("Fame", True), ("Volonta'", True)])
+        self.assertNotIn("Animali", [t for _, _, t, _ in ranked])  # "se" e "quando" vicino a un numero non bastano
+        self.assertGreater(ranked[0][0], ranked[1][0])
+        self.assertTrue(trigger.rules_with_thresholds(self.camp).startswith("## Fame (meccanica/regole.md)"))
+        self.assertEqual(trigger.threshold_score("Scene brevi e cupe, 3 atti."), 0)
+
     def test_flat_answer_becomes_the_file_shape(self) -> None:
         rule = trigger._to_rule({"nome": "Ferito", "ricorrente": True, "fonte": "Ferite",
                                  "quando": [{"tipo": "scheda", "soggetto": "stato.punti_ferita.attuale", "op": "<=", "valore": "4"}],

@@ -265,6 +265,7 @@ class App:
             "dice": [k.get("nome") for k in (dice.load_profile(self.campaign) or {}).get("tiri", [])],
             "tables": [t.get("nome") for t in tabelle.carica(self.campaign)],
             "has_table_sections": bool(tabelle.sections_with_tables(self.campaign)),
+            "estimates": self._extract_estimates(),
             "has_preface": bool(prefazione.leggi(self.campaign)),
             "min_rules_sections": prefazione.MIN_SECTIONS,
             "rules_sections": len(self.campaign.file(prefazione.RULES_FILE).outline()) if self.campaign.file(prefazione.RULES_FILE).exists() else 0,
@@ -336,6 +337,18 @@ class App:
         log.info("tabella: %s", rolled["text"])
         turn = self.play(rolled["text"])
         return {**turn.__dict__, "roll_text": rolled["text"], "roll_success": None}
+
+    def _extract_estimates(self) -> dict[str, dict[str, Any]]:
+        """Quanto costerebbe, circa, ogni pulsante 'Ricava': i caratteri che leggerebbe e il prezzo del modello."""
+        from .models import estimate_usd
+
+        model = self.settings.model_for("prepare")
+        sizes = {
+            "tables": sum(len(b) for _, _, b in tabelle.sections_with_tables(self.campaign)),
+            "triggers": sum(len(b) for _, _, _, b in trigger.threshold_sections(self.campaign)),
+            "preface": len(prefazione.materials(self.campaign)),
+        }
+        return {k: {"chars": n, "usd": round(estimate_usd(model, n, out_tokens=3000 if k != "preface" else 1500), 2)} for k, n in sizes.items()}
 
     def make_tables(self) -> dict[str, Any]:
         """Ricava `meccanica/tabelle.json` dalle sezioni che hanno la forma di una tabella: una chiamata."""
@@ -882,10 +895,11 @@ function extractHint(cls,show,text,label,url,done){const had=logs.play.querySele
   const b=document.createElement('button');b.type='button';b.className='btn small';b.textContent=label;
   b.onclick=async()=>{b.disabled=true;b.textContent='Leggo le regole…';try{const r=await api(url,{});d.textContent=done(r);d.classList.remove(cls);await load()}catch(e){b.disabled=false;b.textContent=label;t.textContent='Errore: '+e.message+' '}};
   d.appendChild(b);logs.play.appendChild(d)}
-function prefaceHint(){extractHint('prefacehint',state.pg&&!state.has_preface&&state.rules_sections>=state.min_rules_sections,'Le regole non hanno una prefazione d\u2019uso (precedenza, cosa rileggere, cosa fare se una regola manca).','Scrivi la prefazione','/api/preface/extract',r=>'Prefazione scritta in testa a meccanica/regole.md ('+((r.preface&&r.preface.cercare)||[]).length+' rimandi).')}
-function triggersHint(){extractHint('triggershint',state.pg&&state.has_threshold_rules&&!(state.triggers&&state.triggers.length),'Le regole hanno soglie che il programma puo\u2019 contare (fame, ferite, orologi): ricavale come trigger.','Ricava i trigger','/api/triggers/extract',r=>'Trigger ricavati: '+(r.triggers.join(', ')||'nessuno valido'))}
+function est(k){const e=state.estimates&&state.estimates[k];return e?' Legge '+e.chars.toLocaleString('it-IT')+' caratteri di regole: circa $'+e.usd.toFixed(2)+'.':''}
+function prefaceHint(){extractHint('prefacehint',state.pg&&!state.has_preface&&state.rules_sections>=state.min_rules_sections,'Le regole non hanno una prefazione d\u2019uso (precedenza, cosa rileggere, cosa fare se una regola manca).'+est('preface'),'Scrivi la prefazione','/api/preface/extract',r=>'Prefazione scritta in testa a meccanica/regole.md ('+((r.preface&&r.preface.cercare)||[]).length+' rimandi).')}
+function triggersHint(){extractHint('triggershint',state.pg&&state.has_threshold_rules&&!(state.triggers&&state.triggers.length),'Le regole hanno soglie che il programma puo\u2019 contare (fame, ferite, orologi): ricavale come trigger.'+est('triggers'),'Ricava i trigger','/api/triggers/extract',r=>'Trigger ricavati: '+(r.triggers.join(', ')||'nessuno valido'))}
 function tablesHint(){const had=logs.play.querySelector('.tableshint');if(!state.pg||!state.has_table_sections||(state.tables&&state.tables.length)){if(had)had.remove();return}
-  if(had)return;const d=document.createElement('div');d.className='meta tableshint';const t=document.createElement('span');t.textContent='Le regole hanno tabelle casuali: ricavale come dati e le tira il programma. ';d.appendChild(t);
+  if(had)return;const d=document.createElement('div');d.className='meta tableshint';const t=document.createElement('span');t.textContent='Le regole hanno tabelle casuali: ricavale come dati e le tira il programma.'+est('tables')+' ';d.appendChild(t);
   const b=document.createElement('button');b.type='button';b.className='btn small';b.textContent='Ricava le tabelle';
   b.onclick=async()=>{b.disabled=true;b.textContent='Leggo le tabelle…';try{const r=await api('/api/tables/extract',{});d.textContent='Tabelle ricavate: '+(r.tables.join(', ')||'nessuna valida');d.classList.remove('tableshint');await load()}catch(e){b.disabled=false;b.textContent='Ricava le tabelle';t.textContent='Errore: '+e.message+' '}};
   d.appendChild(b);logs.play.appendChild(d)}

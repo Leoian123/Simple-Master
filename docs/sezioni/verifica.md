@@ -11,7 +11,7 @@ dati, le correzioni restano ai loro comandi.
 |---|---|---|
 | `errors` | la campagna non funziona come deve: un JSON che il codice non legge, un profilo dei dadi malformato o con un `quanti_da` assente dalla scheda, totali dell'esperienza scritti a mano, punti di sessione doppi, orologi fuori misura, memoria consolidata oltre il giocato | esce con 2 |
 | `warnings` | funziona ma puo' sbagliare in gioco: voce di glossario verso un file sparito, termine assente dal file, voce doppia, scheda senza nome, sezione in quarantena o registrata ma assente, via dell'esperienza sconosciuta | esce con 0 |
-| `recommendations` | migliorie: campagna da preparare, dadi da ricavare, scheda solo testo, scena o fili aperti assenti, memoria da consolidare, orologio senza conseguenza | esce con 0 |
+| `recommendations` | migliorie: campagna da preparare, dadi/tabelle/trigger da ricavare, prefazione delle regole, scheda solo testo, scena o fili aperti assenti, memoria da consolidare, orologio senza conseguenza | esce con 0 |
 
 Ogni rilievo: `path` (file; dopo `:` la chiave JSON, dopo ` § ` la sezione o la voce), `title`,
 `message`, `fix`. A terminale: `- path | title: message -> fix`.

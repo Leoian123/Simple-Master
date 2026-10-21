@@ -295,6 +295,17 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > mano restano; pulsante 'Ricava i trigger', passo di preparazione solo con una scheda attiva).
 > Da giocare: un manuale a d100 e uno a dado piu' alto, con prefazione e trigger ricavati.
 
+## Fase 9 — Preparazione v2 sul campo — FATTO (2026-10-21)
+> Prova a secco (zero chiamate) dei tre selettori sulla campagna di Vampiri: le tabelle trovano
+> 'Ferite Invalidanti' (giusto: V5 ne ha poche), la prefazione legge 99 titoli in 4k caratteri,
+> ma le soglie per ordine dei file riempivano 24k caratteri di creature e clan senza arrivare a
+> Fame e Umanita'. Ora `trigger.threshold_sections` da' un punto a ogni parola di soglia vicina
+> a un numero, vuole almeno 2 punti ed entra dalla piu' densa (tetto a 36k): su Vampiri le prime sono Potenza
+> del Sangue, Saziare la Fame, Umanita', Danni, Volonta', Frenesia; sull'esempio nessuna.
+> Intorno: `--ricava dadi|tabelle|prefazione|trigger` da riga di comando, stima di costo accanto
+> a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
+> Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
+
 ## Fase 1b — Profilo dei dadi v2 (dallo studio 7) — FATTO (2026-10-20)
 > **Campioni** (`esempi` nello schema, `verifica_esempi`, un retry in `extract_profile`,
 > `campioni_falliti`, errore nella verifica); **`tipo: "sotto"`** (`soglie`, `fallimento_critico`,

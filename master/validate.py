@@ -28,8 +28,8 @@ from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_
 from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
 from .modi import FILE_NAME as MODES_NAME, modi_problems
 from .prefazione import MIN_SECTIONS, RULES_FILE, SECTION_TITLE as PREFACE_TITLE, broken_lookups, leggi as read_preface
-from .tabelle import FILE_NAME as TABLES_NAME, problems as table_problems
-from .trigger import FILE_NAME as TRIGGER_NAME, problems as trigger_problems, sheet_path_problems
+from .tabelle import FILE_NAME as TABLES_NAME, problems as table_problems, sections_with_tables
+from .trigger import FILE_NAME as TRIGGER_NAME, problems as trigger_problems, sheet_path_problems, threshold_sections
 from .relazioni import FILE_NAME as RELATIONS_NAME, MAX as REL_MAX, MIN as REL_MIN, stadi_problems
 from .sheet import XP_KEY, XP_ROUTES
 
@@ -633,6 +633,12 @@ def _check_triggers(campaign: Campaign, report: ValidationReport) -> None:
                    "ripara il JSON, oppure cancella il file")
         return
     if data is None:
+        found = threshold_sections(campaign)
+        if found and campaign.active_sheet() is not None:
+            report.add("recommendation", name, "trigger non ancora ricavati",
+                       f"{len(found)} sezioni legano un numero a una conseguenza ({', '.join(t for _, _, t, _ in found[:3])}"
+                       f"{', ...' if len(found) > 3 else ''}) ma il file non c'e': quelle regole vivono solo nella memoria del narratore",
+                       "pulsante 'Ricava i trigger' nel tavolo, o python main.py --campaign <cartella> --ricava trigger (una chiamata)")
         return
     found = trigger_problems(data)
     for where, problem in found:
@@ -664,6 +670,12 @@ def _check_tables(campaign: Campaign, report: ValidationReport) -> None:
                    "ripara il JSON, oppure cancella il file")
         return
     if data is None:
+        found = sections_with_tables(campaign)
+        if found:
+            report.add("recommendation", name, "tabelle non ancora ricavate",
+                       f"{len(found)} sezioni hanno la forma di una tabella casuale ({', '.join(t for _, t, _ in found[:3])}"
+                       f"{', ...' if len(found) > 3 else ''}) ma il file non c'e': il narratore sceglierebbe lui la riga",
+                       "pulsante 'Ricava le tabelle' nel tavolo, o python main.py --campaign <cartella> --ricava tabelle (una chiamata)")
         return
     for where, problem in table_problems(data):
         report.add("error", f"{name}:{where}" if where else name, "tabelle malformate", problem + ": il file viene ignorato intero",

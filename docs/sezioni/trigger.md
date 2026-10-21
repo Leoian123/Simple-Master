@@ -67,7 +67,9 @@ La verifica segnala come errore un file illeggibile o malformato (con il percors
 
 Si scrivono a mano, oppure `trigger.extract_triggers(campaign, client, model, sheet)` (pulsante 'Ricava i trigger' nel
 tavolo, `POST /api/triggers/extract`; alla fine della preparazione se c'e' una scheda attiva, in cache per contenuto):
-una chiamata sulle sezioni di `meccanica/` che legano un numero a una conseguenza, con i percorsi della scheda attiva
+una chiamata sulle sezioni di `meccanica/` che legano un numero a una conseguenza (`trigger.threshold_sections`: una
+parola di soglia a meno di 60 caratteri da un numero vale un punto, servono almeno 2 punti, le sezioni
+entrano dalla piu' densa fino a 36k caratteri), con i percorsi della scheda attiva
 come unici percorsi ammessi (`trigger.sheet_paths`), schema forzato in forma piatta (`tipo`, `soggetto`, `op`, `valore`
 per le condizioni; `tipo`, `testo` e i campi dell'effetto). Il codice ritraduce nella forma del file, passa ogni regola
 per `problems` e `sheet_path_problems`, scarta cio' che non quadra (registrato nel log) e aggiunge le regole nuove a

@@ -261,6 +261,20 @@ class TestPlay(Base):
         self.assertIn("memoria da consolidare", titles)
         self.assertEqual(validate(self.camp).errors, [])
 
+    def test_recommends_tables_and_triggers_when_the_rules_have_them(self) -> None:
+        self.camp.file("meccanica/creature.md").set_section(
+            "Incontri casuali", "Tira 1d6 ogni ora.\n\n| 1-3 | Nulla |\n| 4-5 | Un lupo |\n| 6 | Un orso |")
+        self.camp.file("meccanica/regole.md").set_section("Fame", "Quando la Fame raggiunge 4 serve una prova; a 5 scende in frenesia.")
+        titles = self.titles("recommendation")
+        self.assertIn("tabelle non ancora ricavate", titles)
+        self.assertIn("trigger non ancora ricavati", titles)
+        self.assertIn("Incontri casuali", next(f.message for f in validate(self.camp).recommendations if f.title == "tabelle non ancora ricavate"))
+        (self.camp.root / "meccanica" / "tabelle.json").write_text('{"tabelle": []}', encoding="utf-8")
+        (self.camp.root / "meccanica" / "trigger.json").write_text('{"trigger": []}', encoding="utf-8")
+        titles = self.titles("recommendation")
+        self.assertNotIn("tabelle non ancora ricavate", titles)
+        self.assertNotIn("trigger non ancora ricavati", titles)
+
     def test_fresh_campaign_gets_no_play_recommendations(self) -> None:
         self.assertEqual(self.titles("recommendation"), [])
 

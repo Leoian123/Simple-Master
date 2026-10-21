@@ -481,6 +481,7 @@ def _gen_modes() -> str:
 
 
 def _gen_triggers() -> str:
+    from .trigger import MIN_SCORE, NEAR_CHARS, SOURCE_LIMIT
     from .trigger import CONDIZIONI, EFFETTI, FILE_NAME, MAX_CONDITIONS, MAX_EFFECTS, MAX_TRIGGERS, OPS, STATE_KEY
 
     out = [
@@ -542,7 +543,9 @@ def _gen_triggers() -> str:
         "",
         "Si scrivono a mano, oppure `trigger.extract_triggers(campaign, client, model, sheet)` (pulsante 'Ricava i trigger' nel",
         "tavolo, `POST /api/triggers/extract`; alla fine della preparazione se c'e' una scheda attiva, in cache per contenuto):",
-        "una chiamata sulle sezioni di `meccanica/` che legano un numero a una conseguenza, con i percorsi della scheda attiva",
+        "una chiamata sulle sezioni di `meccanica/` che legano un numero a una conseguenza (`trigger.threshold_sections`: una",
+        f"parola di soglia a meno di {NEAR_CHARS} caratteri da un numero vale un punto, servono almeno {MIN_SCORE} punti, le sezioni",
+        f"entrano dalla piu' densa fino a {SOURCE_LIMIT // 1000}k caratteri), con i percorsi della scheda attiva",
         "come unici percorsi ammessi (`trigger.sheet_paths`), schema forzato in forma piatta (`tipo`, `soggetto`, `op`, `valore`",
         "per le condizioni; `tipo`, `testo` e i campi dell'effetto). Il codice ritraduce nella forma del file, passa ogni regola",
         "per `problems` e `sheet_path_problems`, scarta cio' che non quadra (registrato nel log) e aggiunge le regole nuove a",
@@ -592,7 +595,9 @@ def _gen_tables() -> str:
         f"`extract_tables` (pulsante 'Ricava le tabelle' nel tavolo, `POST /api/tables/extract`): una chiamata sulle sezioni",
         f"di `meccanica/` e `ambientazione/` che hanno la forma di una tabella (almeno {MIN_RANGE_LINES} righe con un intervallo",
         "come `01-05` e una notazione di dado nel testo), con schema forzato; il codice controlla ogni tabella e scarta",
-        "quelle che non quadrano (registrate nel log). Si possono scrivere anche a mano.",
+        "quelle che non quadrano (registrate nel log). Si possono scrivere anche a mano. La verifica consiglia di ricavarle",
+        "quando ci sono sezioni con quella forma e il file manca; `python main.py --campaign <cartella> --ricava tabelle` lo fa",
+        "dalla riga di comando (anche `dadi`, `prefazione`, `trigger`). Il tavolo mostra la stima di costo accanto al pulsante.",
     ]
     return "\n".join(out)
 

@@ -314,9 +314,14 @@ def _apply(campaign: Campaign, name: str, effect: dict[str, Any]) -> list[str]:
 
 # --- dal manuale ai trigger: una chiamata, poi il codice controlla ---------------------------------
 
-_THRESHOLD = re.compile(r"\b(soglia|raggiung|scend|sal[ei]\b|super[ai]|almeno|oltre|sotto|a zero|a 0\b|ogni volta|quando|se\b)", re.I)
+# una parola di soglia vicina a un numero: "scende sotto 5", "raggiunge 4", "a zero"; "se" e "quando" da soli non bastano
+_STRONG = re.compile(r"\b(soglia|soglie|raggiung\w*|scend\w*|sale|salgono|salire|super\w*|almeno|oltre|sotto|a zero|a 0|pari a|"
+                     r"uguale a|maggiore|minore|inferiore|superiore|ogni volta che|ogni turno|ogni sessione|si riempie|pieno|piena)\b", re.I)
+_NUMBER = re.compile(r"\b\d+\b")
+NEAR_CHARS = 60
+MIN_SCORE = 2
 MAX_PATHS = 80
-SOURCE_LIMIT = 24_000
+SOURCE_LIMIT = 36_000  # ~10k token: su Vampiri ci stanno Fame, Umanita', Danni, Volonta' e Frenesia
 
 
 def sheet_paths(data: Any, prefix: str = "") -> list[str]:
@@ -332,17 +337,38 @@ def sheet_paths(data: Any, prefix: str = "") -> list[str]:
     return out[:MAX_PATHS]
 
 
-def rules_with_thresholds(campaign: Campaign) -> str:
-    """Le sezioni di `meccanica/` che legano un numero a una conseguenza, fino a un tetto di caratteri."""
-    parts, size = [], 0
+def threshold_score(body: str) -> int:
+    """Quante parole di soglia stanno a un passo da un numero: la misura di quanto una sezione 'conta'."""
+    return sum(1 for m in _STRONG.finditer(body) if _NUMBER.search(body[max(0, m.start() - NEAR_CHARS): m.end() + NEAR_CHARS]))
+
+
+def threshold_sections(campaign: Campaign) -> list[tuple[int, str, str, str]]:
+    """(punteggio, file, titolo, corpo) delle sezioni di `meccanica/` con soglie, dalla piu' densa, entro il tetto.
+
+    Misurato sul manuale di Vampiri (2026-10-21): per ordine dei file il tetto si riempiva di creature e clan e
+    non arrivava mai a Fame e Umanita'; per punteggio le prime sono Potenza del Sangue, Saziare la Fame, Umanita'."""
+    scored = []
     for f in campaign.files():
         if not f.name.startswith(MECHANICS_DIR + "/"):
             continue
         for title, body in f.sections().items():
-            if title and _THRESHOLD.search(body) and re.search(r"\d", body) and size + len(body) <= SOURCE_LIMIT:
-                parts.append(f"## {title} ({f.name})\n{body.strip()}")
-                size += len(body)
-    return "\n\n".join(parts)
+            if title:
+                score = threshold_score(body)
+                if score >= MIN_SCORE:
+                    scored.append((score, f.name, title, body.strip()))
+    scored.sort(key=lambda x: (-x[0], x[1], x[2]))
+    out, size = [], 0
+    for row in scored:
+        if size + len(row[3]) > SOURCE_LIMIT:
+            continue
+        out.append(row)
+        size += len(row[3])
+    return out
+
+
+def rules_with_thresholds(campaign: Campaign) -> str:
+    """Il testo che la chiamata legge: le sezioni con soglie, dalla piu' densa."""
+    return "\n\n".join(f"## {title} ({name})\n{body}" for _, name, title, body in threshold_sections(campaign))
 
 
 _CONDITION = {

@@ -49,6 +49,14 @@ def cost_usd(model: str, input_tokens: float, output_tokens: float, batch: bool 
 EFFORT_IDS = {e["id"] for e in EFFORTS} | {"xhigh"}
 
 
+CHARS_PER_TOKEN = 3.6  # italiano, misurato con count_tokens durante la preparazione
+
+
+def estimate_usd(model: str, chars: int, out_tokens: int = 1500, system_tokens: int = 800) -> float:
+    """Il costo massimo probabile di una chiamata su `chars` caratteri di regole: informativo, mai esatto."""
+    return cost_usd(model, chars / CHARS_PER_TOKEN + system_tokens, out_tokens)
+
+
 def supports_effort(model: str) -> bool:
     """Haiku 4.5 rifiuta il parametro effort: per lui si omette sempre."""
     return not model.startswith("claude-haiku")
