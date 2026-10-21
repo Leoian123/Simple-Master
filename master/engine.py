@@ -270,7 +270,7 @@ class MasterEngine(ConversationEngine):
     def system_blocks(self) -> list[dict[str, Any]]:
         """Primo blocco: non cambia mai. Secondo: la parte stabile della scheda, che cambia solo quando
         il personaggio cresce; se cambia si riscrive lei sola, il primo blocco resta in cache."""
-        blocks = [{"type": "text", "text": self.prompt + self.dice_text() + self.mode_text(), "cache_control": CACHE}]
+        blocks = [{"type": "text", "text": self.prompt + self.dice_text() + self.tables_text() + self.mode_text(), "cache_control": CACHE}]
         sheet = self.campaign.active_sheet()
         data = Sheet(self.campaign, sheet["slug"]) if sheet else None
         if data is not None and data.exists:
@@ -285,6 +285,12 @@ class MasterEngine(ConversationEngine):
         from . import modi
 
         return modi.testo(modi.attivo(self.campaign))
+
+    def tables_text(self) -> str:
+        """Le tabelle casuali della campagna, se ci sono: il narratore le chiama, il programma le tira."""
+        from . import tabelle
+
+        return tabelle.prompt_section(tabelle.carica(self.campaign))
 
     def dice_text(self) -> str:
         """Come si chiede un tiro in QUESTA campagna: generato dal profilo ricavato dal manuale."""
@@ -307,7 +313,7 @@ class MasterEngine(ConversationEngine):
         from .context import compose
 
         # le istruzioni del tavolo e gli esiti dei dadi non sono azioni da instradare
-        router = self._route_rules if saved_as is None and not spoken.startswith("[Tiro]") else None
+        router = self._route_rules if saved_as is None and not spoken.startswith(("[Tiro]", "[Tabella]")) else None
         context = compose(self.campaign, spoken if saved_as is None else "", self.save_name or "", router=router)
         self.log.info("turno %d contesto: %s", self.turns, context.stats())
         return context.text + self._table_state(spoken) + ("GIOCATORE: " if saved_as is None else "") + spoken

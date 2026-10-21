@@ -35,6 +35,7 @@ INDEX: dict[str, tuple[str, str, str]] = {
     "relazioni": ("Le relazioni dei PNG", "il numero in stato.json, la scala degli stadi, il passo per enum, il tool, l'override dal manuale", "relazioni.py, tools.RELATION_TOOLS"),
     "modi": ("I modi di gioco", "la lente sul narratore: i tre modi predefiniti, il blocco nel prompt, meccanica/modi.json", "modi.py"),
     "trigger": ("I trigger", "meccanica/trigger.json: condizioni sui fatti del programma, effetti tipizzati, valutati a ogni turno", "trigger.py"),
+    "tabelle": ("Le tabelle casuali", "meccanica/tabelle.json: le tabelle del manuale come dati, il marcatore [[tabella: ...]], l'estrazione", "tabelle.py"),
     "glossario": ("Il glossario", "la tabella, i tipi, come entra nel contesto del turno", "docs/sezioni/glossario.md"),
     "verifica": ("La verifica della campagna", "i tre livelli, il JSON, l'hook", "docs/sezioni/verifica.md"),
 }
@@ -539,11 +540,58 @@ def _gen_triggers() -> str:
     return "\n".join(out)
 
 
+def _gen_tables() -> str:
+    from .tabelle import FILE_NAME, MAX_ROWS, MAX_TABLES, MIN_RANGE_LINES, TABLES_SCHEMA
+
+    item = TABLES_SCHEMA["properties"]["tabelle"]["items"]
+    out = [
+        f"Le tabelle casuali del manuale (incontri, tesori, effetti: \"1d100: 01-05 ...\") stanno in `meccanica/{FILE_NAME}`",
+        "come dati, e le tira il programma. Lasciate in prosa il narratore sceglierebbe lui la riga.",
+        "",
+        "```json",
+        '{"tabelle": [{"nome": "incontri nella palude", "uso": "ogni ora di marcia", "dado": "1d100",',
+        '              "righe": [{"da": 1, "a": 30, "risultato": "Nulla"}, {"da": 31, "a": 100, "risultato": "..."}],',
+        '              "fonte": "meccanica/creature.md: Incontri casuali"}]}',
+        "```",
+        "",
+        "## Una tabella",
+        "",
+        _params_table(item),
+        "",
+        _params_table(item["properties"]["righe"]["items"]),
+        "",
+        f"Regole (`tabelle.problems`, usate anche dalla verifica): nomi unici; `dado` e' una notazione NdS+K; le righe coprono",
+        f"tutto l'intervallo del dado (dal minimo al massimo) senza buchi ne' sovrapposizioni; al massimo {MAX_TABLES} tabelle e",
+        f"{MAX_ROWS} righe per tabella. Un file che non le rispetta si ignora intero e la verifica lo segnala come errore.",
+        "",
+        "## Il marcatore e l'esito",
+        "",
+        "Il narratore chiude la narrazione con `[[tabella: <nome>]]` (uno per messaggio, in alternativa a un tiro); la pagina",
+        "lo mostra come pulsante; `POST /api/table {name}` tira il dado della tabella, trova la riga e manda l'esito al",
+        "narratore come messaggio del giocatore:",
+        "",
+        "```",
+        "[Tabella] incontri nella palude — 1d100: 37 -> 37: Un branco di cani selvatici",
+        "```",
+        "",
+        "Tirare non costa chiamate. Il prompt di sistema elenca le tabelle con il loro uso (blocco in cache).",
+        "",
+        "## Da dove vengono",
+        "",
+        f"`extract_tables` (pulsante 'Ricava le tabelle' nel tavolo, `POST /api/tables/extract`): una chiamata sulle sezioni",
+        f"di `meccanica/` e `ambientazione/` che hanno la forma di una tabella (almeno {MIN_RANGE_LINES} righe con un intervallo",
+        "come `01-05` e una notazione di dado nel testo), con schema forzato; il codice controlla ogni tabella e scarta",
+        "quelle che non quadrano (registrate nel log). Si possono scrivere anche a mano.",
+    ]
+    return "\n".join(out)
+
+
 GENERATED: dict[str, Callable[[], str]] = {
     "scheda": _gen_sheet,
     "relazioni": _gen_relations,
     "modi": _gen_modes,
     "trigger": _gen_triggers,
+    "tabelle": _gen_tables,
     "appunti": _gen_notes,
     "strumenti-scriba": _gen_tools,
     "dadi": _gen_dice,

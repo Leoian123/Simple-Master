@@ -19,11 +19,12 @@ nella sezione, non esiste**: non inventare chiavi, percorsi o strumenti.
 | le relazioni dei PNG, `relazioni.py`, `shift_relationship`, `meccanica/relazioni.json` | `--doc relazioni` |
 | i modi di gioco, `modi.py`, il selettore 'Modo', `meccanica/modi.json` | `--doc modi` |
 | i trigger, `trigger.py`, `meccanica/trigger.json`, la testa del messaggio del turno | `--doc trigger` |
+| le tabelle casuali, `tabelle.py`, `meccanica/tabelle.json`, il marcatore `[[tabella: ...]]` | `--doc tabelle` |
 | `glossario.md`, `glossary.py`, `context.py`, `tidy.py` | `--doc glossario` |
 | le cartelle e i file di una campagna, `files.py`, i fatti da non perdere (`fatti.py`) | `--doc campagna` |
 | `validate.py`, i livelli della verifica | `--doc verifica` |
 
-Le sezioni `scheda`, `appunti`, `strumenti-scriba`, `dadi`, `relazioni`, `modi` e `trigger` sono generate dal codice
+Le sezioni `scheda`, `appunti`, `strumenti-scriba`, `dadi`, `relazioni`, `modi`, `trigger` e `tabelle` sono generate dal codice
 (`master/docs.py`): se cambi uno schema, un tool o un prompt lancia `--doc --rigenera` e
 committa i file in `docs/sezioni/` insieme al codice (`tests/test_docs.py` lo pretende).
 

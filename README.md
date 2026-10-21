@@ -284,6 +284,17 @@ esegue a dadi fissi prima di salvare, rifa' la chiamata una volta se non tornano
 li riesegue a zero chiamate a ogni avvio: un profilo che non rispetta i suoi campioni e' un
 errore, non una speranza.
 
+## Tabelle casuali: le tira il programma
+
+Le tabelle del manuale in cui un dado sceglie una riga (incontri, tesori, effetti) stanno in
+`meccanica/tabelle.json` come dati: nome, dado, righe con gli intervalli. Il narratore chiude
+con `[[tabella: incontri nella palude]]`, la pagina lo mostra come pulsante, il programma tira
+e la riga uscita torna al narratore come messaggio del giocatore (`[Tabella] ... 1d100: 37 ->
+...`). Le righe devono coprire tutto il dado senza buchi: la verifica lo controlla, un file
+sbagliato si ignora intero. Il pulsante "Ricava le tabelle" le trascrive con una chiamata
+dalle sezioni che hanno la forma di una tabella; il codice scarta quelle che non quadrano.
+I tipi di tiro del profilo possono avere `alias`: il nome che il manuale usa in quel passo.
+
 ## Orologi: i fili che avanzano li conta il programma
 
 Una minaccia o un progetto che matura nel tempo e' un orologio a segmenti in
@@ -800,6 +811,7 @@ master/
   modi.py         i modi di gioco: la lente sul narratore (tre predefiniti o meccanica/modi.json), nel prompt in cache
   fatti.py        i fatti da non perdere: lettura, aggiunta con tetto e senza doppioni, pertinenza al turno
   trigger.py      i trigger: regole condizioni->effetti su scheda, orologi, relazioni, esiti; valutate dal codice a ogni turno
+  tabelle.py      le tabelle casuali come dati: forma, tiro dal marcatore [[tabella: ...]], estrazione dalle sezioni
   docs.py         la documentazione a sezioni (--doc): quattro generate da schemi e prompt, quattro scritte in docs/sezioni/
   models.py       modelli, prezzi, calcolo dei costi, impostazioni salvate
   explorer.py     scelta del PDF da Esplora risorse o dalla pagina

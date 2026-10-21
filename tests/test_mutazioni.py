@@ -38,7 +38,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from master import Campaign, dice, modi, relazioni, trigger  # noqa: E402
+from master import Campaign, dice, modi, relazioni, tabelle, trigger  # noqa: E402
 from master.memory import write_scene  # noqa: E402
 from master.sheet import Sheet  # noqa: E402
 from master.validate import validate  # noqa: E402
@@ -47,6 +47,7 @@ DELETE = object()      # la chiave sparisce
 RAW = object()         # il valore e' il testo intero del file (file illeggibile, JSON non oggetto)
 DADI, STATO, SCHEDA, RELAZ, MODI = "meccanica/dadi.json", "stato.json", "schede/kael.json", "meccanica/relazioni.json", "meccanica/modi.json"
 TRIG = "meccanica/trigger.json"
+TAB = "meccanica/tabelle.json"
 
 # --- la campagna sintetica: pulita per costruzione (lo prova il primo test) ----------------------
 
@@ -54,7 +55,7 @@ PROFILO: dict[str, Any] = {
     "sistema": "Prova",
     "note": "Il margine misura l'efficacia.",
     "tiri": [
-        {"nome": "riserva", "uso": "tiri a riserva", "tipo": "successi", "dado": 10, "dadi_fissi": None, "successo_da": 6,
+        {"nome": "riserva", "alias": ["test"], "uso": "tiri a riserva", "tipo": "successi", "dado": 10, "dadi_fissi": None, "successo_da": 6,
          "vantaggio": False, "nome_zero_successi": "fallimento totale",
          "coppie": {"faccia": 10, "successi_extra": 2, "nome": "critico"},
          "speciali": {"nome": "fame", "quanti_da": "stato.fame", "sostituiscono": True},
@@ -90,6 +91,10 @@ STATO_BASE: dict[str, Any] = {
     "modo": "cupo",
     "trigger_scattati": ["una tantum"],
 }
+TABELLE_BASE: dict[str, Any] = {"tabelle": [
+    {"nome": "incontri", "uso": "ogni ora", "dado": "1d6", "fonte": "x",
+     "righe": [{"da": 1, "a": 3, "risultato": "Nulla"}, {"da": 4, "a": 5, "risultato": "Un lupo"}, {"da": 6, "a": 6, "risultato": "Un orso"}]},
+]}
 TRIGGER_BASE: dict[str, Any] = {"trigger": [
     {"nome": "fame alta", "ricorrente": True,
      "quando": [{"scheda": "stato.fame", "op": ">=", "valore": 4}, {"contatore": "sessione", "op": ">", "valore": 0}],
@@ -258,7 +263,18 @@ def codice_trigger(camp: Campaign) -> bool:
     return True
 
 
-CODICE = {DADI: codice_dadi, STATO: codice_stato, SCHEDA: codice_scheda, RELAZ: codice_relazioni, MODI: codice_modi, TRIG: codice_trigger}
+def codice_tabelle(camp: Campaign) -> bool:
+    """Specchio di tabelle.carica + tira: un file che non passa `problems` viene ignorato intero."""
+    data = json.loads((camp.root / TAB).read_text(encoding="utf-8"))
+    if tabelle.problems(data):
+        return False
+    with patch("master.dice._die", side_effect=itertools.cycle(FACCE)):
+        for t in data["tabelle"]:
+            tabelle.tira(t["nome"], data["tabelle"])
+    return True
+
+
+CODICE = {DADI: codice_dadi, STATO: codice_stato, SCHEDA: codice_scheda, RELAZ: codice_relazioni, MODI: codice_modi, TRIG: codice_trigger, TAB: codice_tabelle}
 
 
 def accetta(fn, camp: Campaign) -> bool:
@@ -287,6 +303,10 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (DADI, "tiri.0.nome", DELETE, "errore", "rifiuta", "il marcatore non trova il tipo"),
     (DADI, "tiri.1.nome", "riserva", "errore", "rifiuta", "il marcatore prende il primo: il secondo tipo tira con i dadi sbagliati o si ferma"),
     (DADI, "tiri.0.uso", 7, None, "accetta", "testo per il prompt"),
+    (DADI, "tiri.0.alias", DELETE, None, "accetta", "nessun alias"),
+    (DADI, "tiri.0.alias", "x", "errore", "accetta", "oltre: il codice ignora un alias che non e' un elenco"),
+    (DADI, "tiri.0.alias.0", "prova", "errore", "accetta", "oltre: alias uguale al nome di un altro tipo, vince il nome"),
+    (DADI, "tiri.0.alias.0", "", "errore", "accetta", "oltre: alias vuoto, mai raggiunto"),
     (DADI, "tiri.0.tipo", "boh", "errore", "accetta", "oltre: il codice tira come somma"),
     (DADI, "tiri.0.dado", "dieci", "errore", "rifiuta", "int() fallisce"),
     (DADI, "tiri.0.dado", 1, "errore", "rifiuta", "_check rifiuta un dado a 1 faccia"),
@@ -460,6 +480,25 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (TRIG, "trigger.1.effetti.1.verso", "su", "errore", "rifiuta", "verso fuori vocabolario"),
     (TRIG, "trigger.1.effetti.1.forza", "enorme", "errore", "rifiuta", "forza fuori vocabolario"),
     (TRIG, "extra", 1, None, "accetta", "chiave in piu' ignorata"),
+    # --- meccanica/tabelle.json (le righe coprono tutto il dado, o il file si ignora) ---
+    (TAB, "", "{", "errore", "rifiuta", "illeggibile: nessuna tabella"),
+    (TAB, "", "[1]", "errore", "rifiuta", "non e' un oggetto"),
+    (TAB, "tabelle", DELETE, "errore", "rifiuta", "senza elenco"),
+    (TAB, "tabelle", [], None, "accetta", "nessuna tabella e' lecito"),
+    (TAB, "tabelle.0", "x", "errore", "rifiuta", "tabella non oggetto"),
+    (TAB, "tabelle.0.nome", DELETE, "errore", "rifiuta", "senza nome"),
+    (TAB, "tabelle.0.uso", DELETE, None, "accetta", "uso facoltativo"),
+    (TAB, "tabelle.0.fonte", DELETE, None, "accetta", "fonte facoltativa"),
+    (TAB, "tabelle.0.dado", "banana", "errore", "rifiuta", "notazione sconosciuta"),
+    (TAB, "tabelle.0.dado", "1d8", "errore", "rifiuta", "le righe non coprono piu' tutto il dado"),
+    (TAB, "tabelle.0.righe", [], "errore", "rifiuta", "senza righe"),
+    (TAB, "tabelle.0.righe.0", "x", "errore", "rifiuta", "riga non oggetto"),
+    (TAB, "tabelle.0.righe.0.da", 2, "errore", "rifiuta", "la prima riga non comincia dal minimo"),
+    (TAB, "tabelle.0.righe.1.da", 3, "errore", "rifiuta", "righe sovrapposte"),
+    (TAB, "tabelle.0.righe.1.a", 4, "errore", "rifiuta", "un buco fra le righe"),
+    (TAB, "tabelle.0.righe.2.a", 7, "errore", "rifiuta", "l'ultima riga oltre il massimo"),
+    (TAB, "tabelle.0.righe.0.risultato", "", "errore", "rifiuta", "riga senza risultato"),
+    (TAB, "extra", 1, None, "accetta", "chiave in piu' ignorata"),
     # --- schede/kael.json (la parte con una forma: nome, esperienza, e stato.fame letto dai dadi) ---
     (SCHEDA, "", "{", "errore", "rifiuta", "illeggibile: il gioco si ferma"),
     (SCHEDA, "", "[]", "errore", "rifiuta", "non e' un oggetto"),
@@ -498,6 +537,7 @@ class Base(unittest.TestCase):
         self.write(RELAZ, STADI_BASE)
         self.write(MODI, MODI_BASE)
         self.write(TRIG, TRIGGER_BASE)
+        self.write(TAB, TABELLE_BASE)
         sheet = json.loads((self.camp.root / SCHEDA).read_text(encoding="utf-8"))
         sheet["stato"]["fame"] = 2
         sheet["esperienza"] = {"registro": copy.deepcopy(REGISTRO)}
@@ -571,7 +611,8 @@ class TestMutazioni(Base):
         for name, path, _, _, _, _ in TABELLA:
             if path:
                 mutati.setdefault(name, set()).add(_norm(path))
-        campi = {DADI: _paths(PROFILO), STATO: _paths(STATO_BASE), RELAZ: _paths(STADI_BASE), MODI: _paths(MODI_BASE), TRIG: _paths(TRIGGER_BASE)}
+        campi = {DADI: _paths(PROFILO), STATO: _paths(STATO_BASE), RELAZ: _paths(STADI_BASE), MODI: _paths(MODI_BASE), TRIG: _paths(TRIGGER_BASE),
+                 TAB: _paths(TABELLE_BASE)}
         sheet = self.read(SCHEDA)
         campi[SCHEDA] = {p for p in _paths(sheet) if p.startswith(COPERTURA_SCHEDA)}
         for name, paths in campi.items():

@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import dice, explorer, modi
+from . import dice, explorer, modi, tabelle
 from .campaign import DIARY, MECHANICS_DIR, SHEETS_DIR, Campaign
 from .character import CharacterBuilder
 from .engine import MasterEngine
@@ -263,6 +263,8 @@ class App:
             "memory_pending": self._memory_pending(),
             "spend": self.campaign.spend_summary(),
             "dice": [k.get("nome") for k in (dice.load_profile(self.campaign) or {}).get("tiri", [])],
+            "tables": [t.get("nome") for t in tabelle.carica(self.campaign)],
+            "has_table_sections": bool(tabelle.sections_with_tables(self.campaign)),
             "mode": modi.attivo(self.campaign)["nome"],
             "modes": [{"name": m["nome"], "description": m.get("descrizione", "")} for m in modi.carica(self.campaign)],
             "has_creation_rules": self.campaign.file(f"{MECHANICS_DIR}/creazione-pg.md").exists()
@@ -321,6 +323,21 @@ class App:
         log.info("tiro: %s", rolled["text"])
         turn = self.play(rolled["text"])
         return {**turn.__dict__, "roll_text": rolled["text"], "roll_success": rolled["success"]}
+
+    def table(self, spec: str) -> dict[str, Any]:
+        """Le tabelle le tira il codice: la riga uscita diventa il messaggio del giocatore."""
+        camp = self._open_campaign()
+        rolled = tabelle.tira(spec, tabelle.carica(camp))
+        log.info("tabella: %s", rolled["text"])
+        turn = self.play(rolled["text"])
+        return {**turn.__dict__, "roll_text": rolled["text"], "roll_success": None}
+
+    def make_tables(self) -> dict[str, Any]:
+        """Ricava `meccanica/tabelle.json` dalle sezioni che hanno la forma di una tabella: una chiamata."""
+        camp = self._open_campaign()
+        with self.lock:
+            found = tabelle.extract_tables(camp, self.client or self.engine.client, self.settings.model_for("prepare"))
+        return {"tables": [t["nome"] for t in found]}
 
     def consolidate(self) -> dict[str, Any]:
         """Il livello lento, a comando: il giocato non ancora consolidato diventa memoria."""
@@ -721,17 +738,20 @@ async function showExplorer(ex,src,err,start){
 /* ===== CAMPAGNA ===== */
 function add(cls,text,which){const l=logs[which||mode],d=document.createElement('div');d.className='msg '+cls;d.textContent=text;l.appendChild(d);l.scrollTop=l.scrollHeight;return d}
 /* dadi: il narratore lascia [[tiro: nome | dadi | opzioni]], qui diventa un pulsante; tira il programma */
-const ROLL_RE=/\[\[\s*tiro\s*:([\s\S]*?)\]\]/i;
-function gmText(el,text,which){const m=text.match(ROLL_RE);el.textContent=text.replace(ROLL_RE,'').trim();
+const ROLL_RE=/\[\[\s*tiro\s*:([\s\S]*?)\]\]/i, TABLE_RE=/\[\[\s*tabella\s*:([\s\S]*?)\]\]/i;
+function gmText(el,text,which){const m=text.match(ROLL_RE), t=text.match(TABLE_RE);el.textContent=text.replace(ROLL_RE,'').replace(TABLE_RE,'').trim();
   const l=logs[which||mode];l.querySelectorAll('.rollbar').forEach(b=>b.remove());
   if(m&&(which||mode)==='play'){const parts=m[1].split('|').map(x=>x.trim()).filter(Boolean);
     const bar=document.createElement('div');bar.className='meta rollbar';const b=document.createElement('button');b.type='button';b.className='btn gold small';
     b.textContent='Tira: '+parts[0]+(parts.length>1?'  ('+parts.slice(1).join(', ')+')':'');b.title='I dadi li tira il programma: l\u2019esito va al master così com\u2019è';
     b.onclick=()=>doRoll(m[1]);bar.appendChild(b);l.appendChild(bar)}
+  if(t&&(which||mode)==='play'){const name=t[1].trim();const bar=document.createElement('div');bar.className='meta rollbar';const b=document.createElement('button');b.type='button';b.className='btn gold small';
+    b.textContent='Tabella: '+name;b.title='La tabella la tira il programma: la riga uscita va al master così com\u2019è';
+    b.onclick=()=>doRoll(name,'/api/table');bar.appendChild(b);l.appendChild(bar)}
   l.scrollTop=l.scrollHeight}
-async function doRoll(spec){const c=io.play;logs.play.querySelectorAll('.rollbar').forEach(b=>b.remove());
+async function doRoll(spec,url){const c=io.play;logs.play.querySelectorAll('.rollbar').forEach(b=>b.remove());
   const me=add('me','Tiro i dadi…','play');c.b.disabled=true;const wait=add('gm','…','play');
-  try{const j=await api('/api/roll',{spec});me.textContent=j.roll_text;gmText(wait,j.text,'play');meta(usageLine(j),'play');await load()}
+  try{const j=await api(url||'/api/roll',url?{name:spec}:{spec});me.textContent=j.roll_text;gmText(wait,j.text,'play');meta(usageLine(j),'play');await load()}
   catch(e){me.remove();wait.textContent='Errore: '+e.message;wait.classList.add('hint')}finally{c.b.disabled=false;c.t.focus()}}
 function meta(text,which){const l=logs[which||mode],d=document.createElement('div');d.className='meta';d.textContent=text;l.appendChild(d);l.scrollTop=l.scrollHeight}
 function setMode(m){if(m==='play'&&!(state&&state.pg))m='sheet';mode=m;
@@ -833,6 +853,11 @@ function labelSession(){renderSpend();const m=$('#memory');if(m){const n=state&&
   b.textContent=close?'Chiudi sessione':'Nuova sessione';
   b.title=close?'Il master riepiloga, aggiorna i fili aperti e assegna i punti esperienza; poi la conversazione viene archiviata.':'Archivia la conversazione corrente e ne apre una nuova. La storia nei file della campagna resta.'}
 /* senza profilo dei dadi il master scrive i tiri per esteso: qui lo si ricava dalle regole estratte, una volta */
+function tablesHint(){const had=logs.play.querySelector('.tableshint');if(!state.pg||!state.has_table_sections||(state.tables&&state.tables.length)){if(had)had.remove();return}
+  if(had)return;const d=document.createElement('div');d.className='meta tableshint';const t=document.createElement('span');t.textContent='Le regole hanno tabelle casuali: ricavale come dati e le tira il programma. ';d.appendChild(t);
+  const b=document.createElement('button');b.type='button';b.className='btn small';b.textContent='Ricava le tabelle';
+  b.onclick=async()=>{b.disabled=true;b.textContent='Leggo le tabelle…';try{const r=await api('/api/tables/extract',{});d.textContent='Tabelle ricavate: '+(r.tables.join(', ')||'nessuna valida');d.classList.remove('tableshint');await load()}catch(e){b.disabled=false;b.textContent='Ricava le tabelle';t.textContent='Errore: '+e.message+' '}};
+  d.appendChild(b);logs.play.appendChild(d)}
 function diceHint(){const had=logs.play.querySelector('.dicehint');if(!state.pg||!state.has_creation_rules||(state.dice&&state.dice.length)){if(had)had.remove();return}
   if(had)return;const d=document.createElement('div');d.className='meta dicehint';
   const t=document.createElement('span');t.textContent='Questa campagna non ha ancora il profilo dei dadi: il programma può ricavarlo dalle regole estratte dal manuale (una chiamata, pochi centesimi, una volta sola). ';
@@ -850,7 +875,7 @@ function renderPlay(){
   if(fresh){shownCampaign=state.campaign;viewing=null;for(const k in logs)logs[k].innerHTML='';
     add('gm hint',!state.has_creation_rules?'Questa campagna non ha ancora regole di creazione in meccanica/creazione-pg.md: preparala da un manuale dal menu principale, oppure descrivimi il personaggio e lo imposto in forma libera.'
       :(state.sheets.length?'Qui crei un nuovo personaggio o modifichi una scheda, seguendo le regole della campagna.':'Creiamo il tuo personaggio seguendo le regole della campagna. Scegli un avvio qui sotto o descrivimi chi vuoi interpretare.'),'sheet')}
-  renderPgList();renderChips();diceHint();
+  renderPgList();renderChips();diceHint();tablesHint();
   if(fresh)restore();
   if(fresh){setMode(state.pg?'play':'sheet');if(state.pg)showSheet(state.pg.slug)}
   else if(mode==='play'&&!state.pg)setMode('sheet');
@@ -973,6 +998,12 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     self._json(HTTPStatus.OK, out)
                 elif path == "/api/dice/profile":
                     self._json(HTTPStatus.OK, app.make_dice_profile())
+                elif path == "/api/table":
+                    out = app.table(str(body.get("name", "")))
+                    log.info("%s ok in %.1fs", path, time.monotonic() - started)
+                    self._json(HTTPStatus.OK, out)
+                elif path == "/api/tables/extract":
+                    self._json(HTTPStatus.OK, app.make_tables())
                 elif path == "/api/roll":
                     out = app.roll(str(body.get("spec", "")))
                     log.info("%s ok in %.1fs", path, time.monotonic() - started)

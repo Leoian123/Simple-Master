@@ -173,10 +173,17 @@ def save_profile(campaign: Campaign, profile: dict[str, Any]) -> None:
 
 
 def _kind(profile: dict[str, Any] | None, name: str) -> dict[str, Any] | None:
+    """Il tipo di tiro per nome, o per uno dei suoi alias (il nome che il manuale usa in quel passo)."""
     if not profile:
         return None
     wanted = name.strip().lower()
-    return next((k for k in profile["tiri"] if str(k.get("nome", "")).lower() == wanted), None)
+    for k in profile["tiri"]:
+        if str(k.get("nome", "")).lower() == wanted:
+            return k
+    for k in profile["tiri"]:
+        if any(str(a).strip().lower() == wanted for a in (k.get("alias") or []) if isinstance(k.get("alias"), list)):
+            return k
+    return None
 
 
 # --- marcatore -----------------------------------------------------------------------------
@@ -494,7 +501,8 @@ def prompt_section(profile: dict[str, Any] | None) -> str:
         if special:
             how += (f"; i dadi {special.get('nome')} li mette il programma leggendo `{special.get('quanti_da')}` dalla scheda"
                     f" (per forzarli: `| {special.get('nome')} <N>`)")
-        lines.append(f"- `{name}` ({how}): {shape}" + (f" — {k['uso']}" if k.get("uso") else ""))
+        aliases = [str(a) for a in (k.get("alias") or []) if str(a).strip()] if isinstance(k.get("alias"), list) else []
+        lines.append(f"- `{name}` ({how}): {shape}" + (f" — {k['uso']}" if k.get("uso") else "") + (f" (anche: {', '.join(aliases)})" if aliases else ""))
         if k.get("tipo") == "sotto":
             lines.append(f"  esiti sul totale: {scala_sotto(k)}")
         elif k.get("esiti_su") == "dado":
@@ -609,6 +617,7 @@ PROFILE_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "properties": {
                     "nome": {"type": "string", "description": "Una parola minuscola, come la usa il manuale (una per ogni modo di tirare)"},
+                    "alias": {"type": "array", "items": {"type": "string"}, "description": "Altri nomi con cui il manuale chiama lo stesso tiro ('test', 'prova di abilita''); [] se nessuno"},
                     "uso": {"type": "string", "description": "Quando si usa, in una frase"},
                     "tipo": {"type": "string", "enum": ["successi", "somma", "sotto"], "description": "successi = si contano i dadi riusciti; somma = si sommano i dadi e un bonus contro una difficolta'; sotto = si riesce con un totale fino al valore della scheda (d100 roll-under)"},
                     "dado": {"type": "integer", "description": "Facce del dado"},
@@ -657,7 +666,7 @@ PROFILE_SCHEMA: dict[str, Any] = {
                         "items": _ESITO,
                     },
                 },
-                "required": ["nome", "uso", "tipo", "dado", "dadi_fissi", "successo_da", "vantaggio", "nome_zero_successi", "coppie", "speciali", "eventi", "esiti",
+                "required": ["nome", "alias", "uso", "tipo", "dado", "dadi_fissi", "successo_da", "vantaggio", "nome_zero_successi", "coppie", "speciali", "eventi", "esiti",
                              "soglie", "fallimento_critico", "successo_critico_fino_a", "tieni", "esiti_su", "esplode_su", "esempi"],
                 "additionalProperties": False,
             },

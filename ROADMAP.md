@@ -280,6 +280,14 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > (roll-under con soglie derivate, tieni il piu' alto/basso, piu' assi per tiro) e ha un metodo
 > da prendere: il profilo si valida eseguendo campioni. Da qui la Fase 1b.
 
+## Fase 8 — Preparazione v2 (dallo studio 7) — IN CORSO
+> FATTO (2026-10-21): **alias** dei tipi di tiro (`alias` nel profilo, `_kind` li risolve, la
+> verifica li vuole unici) e **tabelle casuali come dati** (`master/tabelle.py`,
+> `meccanica/tabelle.json`, marcatore `[[tabella: ...]]` -> pulsante -> `POST /api/table`,
+> estrazione `extract_tables` con scarto di cio' che non quadra, pulsante 'Ricava le tabelle',
+> settimo file del test di mutazione, sezione generata `--doc tabelle`). Restano la prefazione
+> generata delle regole e i trigger ricavati dal manuale.
+
 ## Fase 1b — Profilo dei dadi v2 (dallo studio 7) — FATTO (2026-10-20)
 > **Campioni** (`esempi` nello schema, `verifica_esempi`, un retry in `extract_profile`,
 > `campioni_falliti`, errore nella verifica); **`tipo: "sotto"`** (`soglie`, `fallimento_critico`,

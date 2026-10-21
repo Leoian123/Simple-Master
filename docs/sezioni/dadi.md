@@ -22,6 +22,7 @@ che superano un valore (`successi`). Tutto il resto e' nel profilo.
 | parametro | tipo | obbligatorio | significato |
 |---|---|---|---|
 | `nome` | string | si | Una parola minuscola, come la usa il manuale (una per ogni modo di tirare) |
+| `alias` | elenco di string | si | Altri nomi con cui il manuale chiama lo stesso tiro ('test', 'prova di abilita''); [] se nessuno |
 | `uso` | string | si | Quando si usa, in una frase |
 | `tipo` | string (`successi`, `somma`, `sotto`) | si | successi = si contano i dadi riusciti; somma = si sommano i dadi e un bonus contro una difficolta'; sotto = si riesce con un totale fino al valore della scheda (d100 roll-under) |
 | `dado` | integer | si | Facce del dado |

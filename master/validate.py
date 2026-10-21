@@ -27,6 +27,7 @@ from .campaign import DIARY, MECHANICS_DIR, PREP_DIR, SETTING_DIR, SHEETS_DIR, S
 from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_dice, verifica_esempi
 from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
 from .modi import FILE_NAME as MODES_NAME, modi_problems
+from .tabelle import FILE_NAME as TABLES_NAME, problems as table_problems
 from .trigger import FILE_NAME as TRIGGER_NAME, problems as trigger_problems, sheet_path_problems
 from .relazioni import FILE_NAME as RELATIONS_NAME, MAX as REL_MAX, MIN as REL_MIN, stadi_problems
 from .sheet import XP_KEY, XP_ROUTES
@@ -133,6 +134,7 @@ def validate(campaign: Campaign) -> ValidationReport:
     _check_relations(campaign, report)
     _check_modes(campaign, report)
     _check_triggers(campaign, report)
+    _check_tables(campaign, report)
     _check_lineage(campaign, report)
     _check_play(campaign, report)
     return report
@@ -245,6 +247,18 @@ def _profile_problems(data: Any) -> list[tuple[str, str]]:
         elif name in names:
             out.append((f"{at}.nome", f"'{name}' e' gia' usato da un altro tipo: il marcatore prenderebbe il primo"))
         names.add(name)
+        aliases = kind.get("alias")
+        if aliases is not None:
+            if not isinstance(aliases, list) or not all(isinstance(a, str) for a in aliases):
+                out.append((f"{at}.alias", "un elenco di testi"))
+            else:
+                for j, a in enumerate(aliases):
+                    key = a.strip().lower()
+                    if not key:
+                        out.append((f"{at}.alias[{j}]", "alias vuoto"))
+                    elif key in names:
+                        out.append((f"{at}.alias[{j}]", f"'{key}' e' gia' un nome o un alias di un altro tipo"))
+                    names.add(key)
         if kind.get("tipo") not in ("successi", "somma", "sotto"):
             out.append((f"{at}.tipo", "dev'essere `successi`, `somma` o `sotto`"))
         dado = kind.get("dado")
@@ -638,6 +652,20 @@ def _check_triggers(campaign: Campaign, report: ValidationReport) -> None:
     for where, problem in sheet_path_problems(data, sheet):
         report.add("error", f"{name}:{where}", "percorso assente dalla scheda", problem,
                    "allinea il percorso alla scheda (o la scheda al percorso)")
+
+
+def _check_tables(campaign: Campaign, report: ValidationReport) -> None:
+    name = f"{MECHANICS_DIR}/{TABLES_NAME}"
+    data, err = _read_json(campaign.root / MECHANICS_DIR / TABLES_NAME)
+    if err is not None:
+        report.add("error", name, "tabelle illeggibili", f"non e' JSON valido ({err}): nessuna tabella si tira",
+                   "ripara il JSON, oppure cancella il file")
+        return
+    if data is None:
+        return
+    for where, problem in table_problems(data):
+        report.add("error", f"{name}:{where}" if where else name, "tabelle malformate", problem + ": il file viene ignorato intero",
+                   "correggi la tabella indicata (python main.py --doc tabelle)")
 
 
 def _check_lineage(campaign: Campaign, report: ValidationReport) -> None:

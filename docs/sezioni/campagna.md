@@ -14,6 +14,10 @@ campaigns/<nome>/
     oggetti.md            statistiche di armi e oggetti
     creature.md           statistiche di mostri e creature
     dadi.json             il profilo dei dadi ricavato dalle regole (sezione `dadi`)
+    tabelle.json          le tabelle casuali del manuale come dati, tirate dal programma (sezione `tabelle`)
+    relazioni.json        la scala degli stadi di relazione, se il manuale ha la sua (sezione `relazioni`)
+    modi.json             i modi di gioco della campagna, se diversi dai predefiniti (sezione `modi`)
+    trigger.json          le regole condizioni->effetti valutate dal programma a ogni turno (sezione `trigger`)
   ambientazione/        MONDO: cio' che il master narra e puo' inventare.
     mondo.md              luoghi, fazioni, storia
     npc.md                personaggi non giocanti
