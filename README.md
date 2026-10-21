@@ -307,7 +307,9 @@ unici percorsi quelli della scheda attiva: il codice scarta cio' che non quadra 
 regole gia' scritte a mano.
 
 Le quattro estrazioni (dadi, tabelle, prefazione, trigger) si lanciano anche senza pagina:
-`python main.py --campaign campaigns/<nome> --ricava tabelle trigger`. Il tavolo mostra accanto
+`python main.py --campaign campaigns/<nome> --ricava tabelle trigger`; con `--anteprima` si vede
+cosa leggerebbe ciascuna e il costo stimato, senza chiamate. Il rapporto di preparazione chiude
+con la riga "Dati che il programma gestisce". Il tavolo mostra accanto
 a ogni pulsante quanti caratteri di regole leggerebbe e il costo stimato; la verifica consiglia
 le estrazioni che mancano. Le sezioni con soglie si scelgono per densita' (una parola come
 "scende", "raggiunge", "almeno" vicina a un numero), non per ordine dei file: sul manuale di

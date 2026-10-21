@@ -257,6 +257,9 @@ class TestPreparer(unittest.TestCase):
         self.assertIn("1. La scheda sulle regole generali", regole)
         self.assertEqual(client.trigger_calls, [])
         self.assertFalse((self.root / "meccanica" / "trigger.json").exists())
+        self.assertEqual(report.dati["trigger"], [])
+        self.assertIn("Dati che il programma gestisce: dadi: ", report.summary())
+        self.assertIn("| tabelle: 0 | prefazione: 0 rimandi | trigger: 0", report.summary())
         self.assertEqual(self.camp.glossary.entries()[0].kind, "regola")
         # cache condivisa fuori dalla campagna, per manuale e non per campagna
         self.assertEqual(len(self.cached_blocks()), 2)

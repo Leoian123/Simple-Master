@@ -306,6 +306,17 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 10 — Collaudo a secco della v2 — FATTO (2026-10-21)
+> `tests/test_collaudo.py`: un manuale inventato ("Cronache della Marea", testo) entra nella
+> preparazione con un copione al posto del modello; escono regole in sezioni, glossario, dadi,
+> tabelle, prefazione (il rimando inventato sparisce), trigger (il percorso che la scheda non ha
+> sparisce); la verifica e' muta; il manuale di nuovo non costa nulla; poi un turno: il prompt in
+> cache porta tabelle e prefazione, il narratore chiede `[[tabella: ...]]`, il programma tira, e
+> una soglia della scheda arriva come `[TRIGGER ...]`. Il collaudo ha trovato subito un buco: la
+> preparazione non ricavava le tabelle (solo il pulsante lo faceva); ora e' il terzo passo in
+> cache. Intorno: il rapporto chiude con "Dati che il programma gestisce", `--ricava --anteprima`
+> dice cosa leggerebbe ogni estrazione e quanto costerebbe, a zero chiamate.
+
 ## Fase 1b — Profilo dei dadi v2 (dallo studio 7) — FATTO (2026-10-20)
 > **Campioni** (`esempi` nello schema, `verifica_esempi`, un retry in `extract_profile`,
 > `campioni_falliti`, errore nella verifica); **`tipo: "sotto"`** (`soglie`, `fallimento_critico`,

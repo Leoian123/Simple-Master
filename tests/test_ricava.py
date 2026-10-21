@@ -55,6 +55,18 @@ class TestRicava(Base):
         args = parser.parse_args(["--campaign", "x", "--ricava", "dadi", "trigger"])
         self.assertEqual(args.ricava, ["dadi", "trigger"])
 
+    def test_anteprima_reads_the_disk_and_calls_nothing(self) -> None:
+        self.camp.file("meccanica/creature.md").set_section(
+            "Incontri casuali", "Tira 1d6 ogni ora.\n\n| 1-3 | Nulla |\n| 4-5 | Un lupo |\n| 6 | Un orso |")
+        self.camp.file("meccanica/regole.md").set_section("Fame", "Quando la Fame raggiunge 4 serve una prova; a 5 scende in frenesia.")
+        lines = main.anteprima(self.camp, ["dadi", "tabelle", "prefazione", "trigger"], "claude-sonnet-5")
+        self.assertTrue(lines[0].startswith("Gia' su disco: dadi: d20 | tabelle: 0 | prefazione: assente | trigger: 0"), lines[0])
+        self.assertIn("tabelle: 1 sezioni con la forma di una tabella (Incontri casuali)", lines[2])
+        self.assertIn("trigger: 1 sezioni con soglie (Fame [", lines[4])
+        for line in lines[1:]:
+            self.assertRegex(line, r"circa \$\d+\.\d\d$")
+        self.assertEqual(main.build_parser().parse_args(["--campaign", "x", "--ricava", "dadi", "--anteprima"]).anteprima, True)
+
     def test_estimate_grows_with_the_text_and_is_informative_only(self) -> None:
         small, big = estimate_usd("claude-sonnet-5", 1_000), estimate_usd("claude-sonnet-5", 100_000)
         self.assertLess(small, big)

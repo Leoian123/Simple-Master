@@ -112,6 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
                       help="fonde il manuale anche se e' di un'edizione diversa da quella della campagna (di norma viene rifiutato)")
     prep.add_argument("--ricava", nargs="+", choices=["dadi", "tabelle", "prefazione", "trigger"], metavar="COSA",
                       help="ricava dalle regole gia' estratte, una chiamata ciascuno: dadi, tabelle, prefazione, trigger")
+    prep.add_argument("--anteprima", action="store_true",
+                      help="con --ricava: mostra cosa leggerebbe ogni estrazione e il costo stimato, senza chiamate")
     prep.add_argument("--tidy-glossary", action="store_true",
                       help="solo riordino del glossario: allinea ai file e pulisce con una chiamata veloce")
     prep.add_argument("--sanitize", action="store_true",
@@ -137,6 +139,37 @@ def build_parser() -> argparse.ArgumentParser:
     logs.add_argument("--log-days", type=int, metavar="N", help="con clean/dismiss/purge: soglia in giorni")
     logs.add_argument("--log-all", action="store_true", help="con purge: cancella anche i registri correnti, tranne oggi")
     return parser
+
+
+def anteprima(campaign: Campaign, what: list[str], model: str) -> list[str]:
+    """Cosa leggerebbe ogni estrazione e quanto costerebbe, circa: per decidere prima di pagare. Zero chiamate."""
+    from master import dice, prefazione, tabelle, trigger
+    from master.models import estimate_usd
+    from master.prepare import campaign_data, describe_data
+
+    num = lambda n: f"{n:,}".replace(",", ".")  # 16.167, all'italiana
+    out = ["Gia' su disco: " + describe_data(campaign_data(campaign))]
+    for item in what:
+        if item == "dadi":
+            text = dice.rules_about_dice(campaign)
+            titles = [l[3:] for l in text.splitlines() if l.startswith("## ")]
+            out.append(f"dadi: {len(titles)} sezioni sui tiri ({', '.join(titles[:6])}{', ...' if len(titles) > 6 else ''}), "
+                       f"{num(len(text))} caratteri, circa ${estimate_usd(model, len(text), out_tokens=4000):.2f}")
+        elif item == "tabelle":
+            found = tabelle.sections_with_tables(campaign)
+            size = sum(len(b) for _, _, b in found)
+            out.append(f"tabelle: {len(found)} sezioni con la forma di una tabella ({', '.join(t for _, t, _ in found[:6])}"
+                       f"{', ...' if len(found) > 6 else ''}), {num(size)} caratteri, circa ${estimate_usd(model, size, out_tokens=3000):.2f}")
+        elif item == "prefazione":
+            size = len(prefazione.materials(campaign))
+            n = len(campaign.file(prefazione.RULES_FILE).outline()) if campaign.file(prefazione.RULES_FILE).exists() else 0
+            out.append(f"prefazione: indice di {n} sezioni di regole, {num(size)} caratteri, circa ${estimate_usd(model, size, out_tokens=1500):.2f}")
+        elif item == "trigger":
+            found = trigger.threshold_sections(campaign)
+            size = sum(len(b) for _, _, _, b in found)
+            out.append(f"trigger: {len(found)} sezioni con soglie ({', '.join(f'{t} [{s}]' for s, _, t, _ in found[:6])}"
+                       f"{', ...' if len(found) > 6 else ''}), {num(size)} caratteri, circa ${estimate_usd(model, size, out_tokens=3000):.2f}")
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -312,7 +345,9 @@ def _run(args: argparse.Namespace, log: logging.Logger) -> int:
         from master.models import Settings
 
         s = Settings.load(ROOT / "impostazioni.json")
-        for line in ricava(Campaign(args.campaign), args.ricava, args.model or s.model_for("prepare")):
+        model = args.model or s.model_for("prepare")
+        lines = anteprima(Campaign(args.campaign), args.ricava, model) if args.anteprima else ricava(Campaign(args.campaign), args.ricava, model)
+        for line in lines:
             print(line)
         return 0
 

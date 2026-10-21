@@ -256,6 +256,7 @@ class PrepReport:
     composition: str = ""
     clashes: str = ""
     resolution: Any = None  # ResolveReport: cosa si e' deciso dove due manuali si toccano
+    dati: dict[str, Any] = field(default_factory=dict)  # cio' che il programma gestisce da solo: dadi, tabelle, prefazione, trigger
 
     def summary(self) -> str:
         lines = [
@@ -268,6 +269,8 @@ class PrepReport:
             f"File toccati: {', '.join(self.files_touched) or '-'}",
             f"Voci glossario aggiunte o aggiornate: {self.glossary_entries}",
         ]
+        if self.dati:
+            lines.append("Dati che il programma gestisce: " + describe_data(self.dati))
         if self.composition:
             lines.append("Campagna: " + self.composition)
         if self.clashes:
@@ -284,6 +287,29 @@ class PrepReport:
             lines += ["Riordino glossario:"] + ["  " + l for l in self.tidy.splitlines()]
         lines += [f"Attenzione: {w}" for w in self.warnings]
         return "\n".join(lines)
+
+
+def campaign_data(campaign: Campaign) -> dict[str, Any]:
+    """Cio' che la campagna ha gia' come dati (letto da disco, zero chiamate): per il rapporto e per `--ricava --anteprima`."""
+    from . import dice, prefazione, tabelle, trigger
+
+    profile = dice.load_profile(campaign) or {}
+    return {
+        "dadi": [str(k.get("nome")) for k in profile.get("tiri", [])],
+        "tabelle": [str(t.get("nome")) for t in tabelle.carica(campaign)],
+        "prefazione": len(prefazione.lookups(prefazione.leggi(campaign))) if prefazione.leggi(campaign) else None,
+        "trigger": [str(t.get("nome")) for t in trigger.carica(campaign)],
+    }
+
+
+def describe_data(data: dict[str, Any]) -> str:
+    parts = [
+        "dadi: " + (", ".join(data.get("dadi") or []) or "nessuno"),
+        f"tabelle: {len(data.get('tabelle') or [])}",
+        "prefazione: " + (f"{data['prefazione']} rimandi" if data.get("prefazione") is not None else "assente"),
+        f"trigger: {len(data.get('trigger') or [])}",
+    ]
+    return " | ".join(parts)
 
 
 # --- sorgente ---------------------------------------------------------------
@@ -717,6 +743,7 @@ class Preparer:
 
         # come usare le regole, e le regole che il programma puo' contare: una chiamata ciascuna, in cache per contenuto
         self._preface_and_triggers(report, progress)
+        report.dati = campaign_data(self.campaign)
 
         log.info("preparazione FINITA | blocchi=%d (cache %d, batch %d) chiamate=%d token in/out=%d/%d | file=%s | avvisi=%d",
                  report.chunks, report.chunks_from_cache, report.chunks_batched, report.calls, report.input_tokens,
@@ -736,9 +763,33 @@ class Preparer:
         return sheet if sheet.exists else None
 
     def _preface_and_triggers(self, report: PrepReport, progress: Callable[[str], None]) -> None:
-        """La prefazione d'uso in testa alle regole e i trigger dalle soglie: si rifanno solo se cambia cio' che leggono."""
-        from . import prefazione, trigger
+        """Tabelle casuali, prefazione d'uso e trigger dalle soglie: una chiamata ciascuno, rifatta solo se cambia cio' che legge."""
+        from . import prefazione, tabelle, trigger
 
+        try:
+            found = tabelle.sections_with_tables(self.campaign)
+            if found:
+                digest = fingerprint("\n".join(f"{n}|{t}|{b}" for n, t, b in found))
+                cached = self.cache_root / "tabelle" / f"{CACHE_VERSION}-{digest}.json"
+                data = self._load_json(cached)
+                on_disk = (self.campaign.root / MECHANICS_DIR / tabelle.FILE_NAME).exists()
+                if data is not None and on_disk:
+                    pass  # ricavate da queste stesse sezioni
+                elif data is not None:
+                    tables = data.get("tabelle") if isinstance(data, dict) else None
+                    if isinstance(tables, list) and not tabelle.problems({"tabelle": tables}):
+                        tabelle.salva(self.campaign, tables)
+                        progress("  tabelle: riprese dalla cache")
+                else:
+                    progress(f"  tabelle: ricavo {len(found)} sezioni con la forma di una tabella casuale")
+                    tables = tabelle.extract_tables(self.campaign, self.client, self.model)
+                    report.calls += 1
+                    cached.parent.mkdir(parents=True, exist_ok=True)
+                    cached.write_text(json.dumps({"tabelle": tables}, ensure_ascii=False, indent=1), encoding="utf-8")
+                    progress("  tabelle: " + (", ".join(t["nome"] for t in tables) or "nessuna valida"))
+        except Exception as exc:
+            log.warning("tabelle non ricavate: %s", describe_error(exc))
+            report.warnings.append(f"tabelle casuali non ricavate: {exc}")
         try:
             rules_file = self.campaign.file(prefazione.RULES_FILE)
             if rules_file.exists() and rules_file.outline():

@@ -45,7 +45,8 @@ Tirare non costa chiamate. Il prompt di sistema elenca le tabelle con il loro us
 
 ## Da dove vengono
 
-`extract_tables` (pulsante 'Ricava le tabelle' nel tavolo, `POST /api/tables/extract`): una chiamata sulle sezioni
+`extract_tables` (pulsante 'Ricava le tabelle' nel tavolo, `POST /api/tables/extract`; alla fine della preparazione
+di un manuale, in cache per contenuto delle sezioni): una chiamata sulle sezioni
 di `meccanica/` e `ambientazione/` che hanno la forma di una tabella (almeno 3 righe con un intervallo
 come `01-05` e una notazione di dado nel testo), con schema forzato; il codice controlla ogni tabella e scarta
 quelle che non quadrano (registrate nel log). Si possono scrivere anche a mano. La verifica consiglia di ricavarle
