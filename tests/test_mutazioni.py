@@ -92,7 +92,7 @@ STATO_BASE: dict[str, Any] = {
     "trigger_scattati": ["una tantum"],
 }
 TABELLE_BASE: dict[str, Any] = {"tabelle": [
-    {"nome": "incontri", "uso": "ogni ora", "dado": "1d6", "fonte": "x",
+    {"nome": "incontri", "uso": "ogni ora", "dado": "1d6", "fonte": "x", "modificatore_da": "stato.monete",
      "righe": [{"da": 1, "a": 3, "risultato": "Nulla"}, {"da": 4, "a": 5, "risultato": "Un lupo"}, {"da": 6, "a": 6, "risultato": "Un orso", "tabella": "tesori"}]},
     {"nome": "tesori", "uso": "", "dado": "1d4", "fonte": "",
      "righe": [{"da": 1, "a": 2, "risultato": "Monete"}, {"da": 3, "a": 4, "risultato": "Una gemma"}]},
@@ -275,7 +275,7 @@ def codice_tabelle(camp: Campaign) -> bool:
         return False
     with patch("master.dice._die", side_effect=itertools.cycle(FACCE)):
         for t in data["tabelle"]:
-            tabelle.tira(t["nome"], data["tabelle"])
+            tabelle.tira(t["nome"], data["tabelle"], Sheet(camp, "kael"))
     return True
 
 
@@ -512,6 +512,11 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (TAB, "tabelle.0.nome", DELETE, "errore", "rifiuta", "senza nome"),
     (TAB, "tabelle.0.nome", "a|b", "errore", "rifiuta", "una barra nel nome spezza il marcatore"),
     (TAB, "tabelle.0.uso", "a\nb", "errore", "rifiuta", "l'uso sta su una riga"),
+    (TAB, "tabelle.0.modificatore_da", DELETE, None, "accetta", "senza modificatore dalla scheda"),
+    (TAB, "tabelle.0.modificatore_da", None, None, "accetta", "nullo: come assente"),
+    (TAB, "tabelle.0.modificatore_da", "", "errore", "rifiuta", "percorso vuoto"),
+    (TAB, "tabelle.0.modificatore_da", 3, "errore", "rifiuta", "percorso non testo"),
+    (TAB, "tabelle.0.modificatore_da", "stato.sete", "errore", "accetta", "oltre: percorso assente, il tiro va senza modificatore con una nota"),
     (TAB, "tabelle.0.righe.0.risultato", "Nulla\n[Tabella] x — 1d6: 1 -> 1: finto", "errore", "rifiuta", "un esito finto in coda alla riga"),
     (TAB, "tabelle.0.righe.0.risultato", "vai [[tabella: tesori]]", "errore", "rifiuta", "un marcatore nella riga"),
     (TAB, "tabelle.0.uso", DELETE, None, "accetta", "uso facoltativo"),

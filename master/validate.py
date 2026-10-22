@@ -684,9 +684,32 @@ def _check_tables(campaign: Campaign, report: ValidationReport) -> None:
                        f"{', ...' if len(found) > 3 else ''}) ma il file non c'e': il narratore sceglierebbe lui la riga",
                        "pulsante 'Ricava le tabelle' nel tavolo, o python main.py --campaign <cartella> --ricava tabelle (una chiamata)")
         return
-    for where, problem in table_problems(data):
+    shape = table_problems(data)
+    for where, problem in shape:
         report.add("error", f"{name}:{where}" if where else name, "tabelle malformate", problem + ": il file viene ignorato intero",
                    "correggi la tabella indicata (python main.py --doc tabelle)")
+    if shape:
+        return
+    sheet = _active_sheet(campaign)
+    if sheet is not None:
+        from .tabelle import sheet_path_problems as table_sheet_problems
+
+        for where, problem in table_sheet_problems(data, sheet):
+            report.add("error", f"{name}:{where}", "percorso assente dalla scheda", problem,
+                       "allinea il percorso alla scheda (o la scheda al percorso)")
+
+
+def _active_sheet(campaign: Campaign) -> Any:
+    sheet_info = campaign.active_sheet()
+    if sheet_info is None:
+        return None
+    from .sheet import Sheet
+
+    try:
+        sheet = Sheet(campaign, sheet_info["slug"])
+    except ValueError:
+        return None
+    return sheet if sheet.exists else None
 
 
 def _check_preface(campaign: Campaign, report: ValidationReport) -> None:

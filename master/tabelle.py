@@ -91,6 +91,8 @@ def problems(data: Any) -> list[tuple[str, str]]:
         names.add(name)
         if t.get("uso") not in (None, "") and testi.problema_riga(t.get("uso")):
             out.append((f"{at}.uso", testi.problema_riga(t.get("uso"))))
+        if "modificatore_da" in t and t["modificatore_da"] is not None and (not isinstance(t["modificatore_da"], str) or not t["modificatore_da"].strip()):
+            out.append((f"{at}.modificatore_da", "un percorso della scheda (es. `stato.fortuna`), o niente"))
         span = dice_range(str(t.get("dado") or ""))
         if span is None:
             out.append((f"{at}.dado", "una notazione come 1d100, 2d6, 1d20+1"))
@@ -135,6 +137,21 @@ def problems(data: Any) -> list[tuple[str, str]]:
     for where, target in links:
         if target not in names:
             out.append((where, f"'{target}' non e' una tabella di questo file"))
+    return out
+
+
+def sheet_path_problems(data: Any, sheet: Any) -> list[tuple[str, str]]:
+    """I `modificatore_da` che nella scheda attiva non esistono: il tiro andrebbe senza modificatore, con una nota."""
+    out = []
+    if not isinstance(data, dict) or not isinstance(data.get("tabelle"), list) or sheet is None:
+        return out
+    for i, t in enumerate(data["tabelle"]):
+        path = t.get("modificatore_da") if isinstance(t, dict) else None
+        if isinstance(path, str) and path.strip():
+            try:
+                sheet.get(path)
+            except ValueError:
+                out.append((f"tabelle[{i}].modificatore_da", f"`{path}` non esiste nella scheda attiva: il modificatore non verrebbe letto"))
     return out
 
 
@@ -184,15 +201,16 @@ def parse(spec: str) -> tuple[str, int]:
     return name, modifier
 
 
-def tira(spec: str, tables: list[dict[str, Any]]) -> dict[str, Any]:
-    """`<nome tabella> | +N`: tira il dado della tabella, somma il modificatore, trova la riga; se la riga manda a
-    un'altra tabella, tira anche quella (una riga di `[Tabella]` per ciascuna). Tirare non costa chiamate."""
+def tira(spec: str, tables: list[dict[str, Any]], sheet: Any = None) -> dict[str, Any]:
+    """`<nome tabella> | +N`: tira il dado della tabella, somma il modificatore (quello del marcatore piu' quello che
+    la tabella legge dalla scheda, `modificatore_da`), trova la riga; se la riga manda a un'altra tabella, tira anche
+    quella (una riga di `[Tabella]` per ciascuna). Tirare non costa chiamate."""
     name, modifier = parse(spec)
-    first = _tira_una(name, modifier, tables)
+    first = _tira_una(name, modifier, tables, sheet)
     chain = [first]
     seen = {first["name"].lower()}
     while chain[-1].get("next") and len(chain) < MAX_CHAIN and chain[-1]["next"].lower() not in seen:
-        step = _tira_una(chain[-1]["next"], 0, tables)
+        step = _tira_una(chain[-1]["next"], 0, tables, sheet)
         seen.add(step["name"].lower())
         chain.append(step)
     out = {**first, "chain": chain[1:], "text": "\n".join(step["text"] for step in chain)}
@@ -200,18 +218,36 @@ def tira(spec: str, tables: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def _tira_una(name: str, modifier: int, tables: list[dict[str, Any]]) -> dict[str, Any]:
+def _from_sheet(table: dict[str, Any], sheet: Any) -> tuple[int, str]:
+    """(modificatore, nota) letti dalla scheda per `modificatore_da`; (0, nota) se il percorso non da' un numero."""
+    path = str(table.get("modificatore_da") or "").strip()
+    if not path:
+        return 0, ""
+    if sheet is None or not getattr(sheet, "exists", False):
+        return 0, f" ({path}: nessuna scheda, non letto)"
+    try:
+        value = sheet.get(path)
+    except ValueError:
+        return 0, f" ({path}: non nella scheda, non letto)"
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0, f" ({path}: non e' un numero, non letto)"
+    return int(value), f" (da {path})"
+
+
+def _tira_una(name: str, modifier: int, tables: list[dict[str, Any]], sheet: Any = None) -> dict[str, Any]:
     table = trova(tables, name)
     if table is None:
         known = [t.get("nome") for t in tables]
         raise ValueError(f"'{name}' non e' una tabella di questa campagna ({known or 'nessuna tabella'})")
+    from_sheet, note = _from_sheet(table, sheet)
+    modifier += from_sheet
     rolled = dice.roll(f"{table['nome']} | {table['dado']}")
     lo, hi = dice_range(str(table["dado"])) or (rolled["value"], rolled["value"])
     value = max(lo, min(hi, rolled["value"] + modifier))  # fuori scala si ferma al capo: la tabella non ha righe oltre
     row = next((r for r in table["righe"] if int(r["da"]) <= value <= int(r["a"])), None)
     result = str(row["risultato"]).strip() if row else "(nessuna riga per questo valore: la tabella ha un buco)"
     faces = rolled["rolls"] if len(rolled["rolls"]) > 1 else rolled["rolls"][0]
-    shown = f"{faces} {modifier:+d}" if modifier else f"{faces}"
+    shown = (f"{faces} {modifier:+d}" if modifier else f"{faces}") + note
     if modifier and value != rolled["value"] + modifier:
         shown += f" (fermato a {value})"
     text = f"[Tabella] {table['nome']} — {table['dado']}: {shown} -> {value}: {result}"

@@ -336,7 +336,9 @@ class App:
     def table(self, spec: str) -> dict[str, Any]:
         """Le tabelle le tira il codice: la riga uscita diventa il messaggio del giocatore."""
         camp = self._open_campaign()
-        rolled = tabelle.tira(spec, tabelle.carica(camp))
+        active = camp.active_sheet()
+        sheet = Sheet(camp, active["slug"]) if active else None
+        rolled = tabelle.tira(spec, tabelle.carica(camp), sheet if sheet is not None and sheet.exists else None)
         log.info("tabella: %s", rolled["text"])
         turn = self.play(rolled["text"])
         return {**turn.__dict__, "roll_text": rolled["text"], "roll_success": None}
@@ -930,6 +932,7 @@ function renderPlay(){
 }
 async function send(which){which=which||mode;const c=io[which];const text=c.t.value.trim();if(!text||!state||!state.campaign)return;
   if(which==='play'&&/^\/tira\s+/i.test(text)){c.t.value='';return doRoll(text.replace(/^\/tira\s+/i,''))}
+  if(which==='play'&&/^\/tabella\s+/i.test(text)){c.t.value='';return doRoll(text.replace(/^\/tabella\s+/i,''),'/api/table')}
   c.t.value='';add('me',text,which);c.b.disabled=true;const wait=add('gm','…',which);
   try{const j=await api(c.url,{text});gmText(wait,j.text,which);
     meta(usageLine(j),which);

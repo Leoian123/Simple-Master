@@ -336,8 +336,16 @@ def _apply(campaign: Campaign, name: str, effect: dict[str, Any]) -> list[str]:
     if "tabella" in effect:
         from . import tabelle
 
+        sheet = None
+        if campaign.active_pg:
+            from .sheet import Sheet
+
+            try:
+                sheet = Sheet(campaign, campaign.active_pg)
+            except ValueError:
+                sheet = None
         try:
-            rolled = tabelle.tira(str(effect["tabella"]), tabelle.carica(campaign))
+            rolled = tabelle.tira(str(effect["tabella"]), tabelle.carica(campaign), sheet)
         except ValueError as exc:  # la tabella non c'e' (la verifica lo dice): la regola scatta senza riga
             log.warning("trigger '%s': %s", name, exc)
             return []

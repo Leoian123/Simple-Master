@@ -306,6 +306,14 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 17 — La tabella legge la scheda; il giocatore consulta — FATTO (2026-10-22)
+> `modificatore_da` sulla tabella (un percorso della scheda, "1d100 + Fortuna"): il numero si
+> somma al tiro insieme al modificatore del marcatore, con la nota `(da stato.fortuna)` o
+> `(... non letto)` nel `[Tabella]`; la verifica segnala come errore un percorso che la scheda
+> attiva non ha (`tabelle.sheet_path_problems`); la pagina e l'effetto `tabella` dei trigger
+> passano la scheda. `/tabella <nome> | +N` nel campo di testo: il giocatore consulta una
+> tabella da solo, come `/tira`. 5 righe di mutazione (il loader tira con la scheda).
+
 ## Fase 16 — Il tempo nei trigger — FATTO (2026-10-22)
 > `ricorrente: "sessione"` (una volta per sessione di gioco: si segna `nome@N` in
 > `trigger_scattati`) e l'operatore `ogni` sui contatori (`contatore turni, op ogni, valore 3`:

@@ -305,6 +305,8 @@ riga di tabella puo' far avanzare un orologio o avvisare il narratore senza che 
 Vale anche al contrario: un trigger con l'effetto `{"tabella": "incontri"}` tira la tabella e
 porta la riga al narratore; e una riga puo' mandare a un'altra tabella ("tira sui tesori"), che
 il programma tira di seguito, fino a tre in fila.
+Una tabella puo' leggere un modificatore dalla scheda (`"modificatore_da": "stato.fortuna"`,
+"1d100 + Fortuna"), e il giocatore puo' consultarne una da solo con `/tabella incontri | +2`.
 Un nome scritto a meta' ("incontri" per "incontri nella palude") vale se e' uno solo a
 contenerlo, per le tabelle come per i tipi di tiro; la verifica avvisa se l'ultima narrazione
 chiude con un marcatore che il programma non saprebbe tirare.

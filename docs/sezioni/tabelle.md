@@ -28,6 +28,10 @@ come dati, e le tira il programma. Lasciate in prosa il narratore sceglierebbe l
 | `risultato` | string | si | Il testo della riga, breve, com'e' nel manuale |
 | `tabella` | string o null | si | Se la riga manda a un'altra tabella ('tira sulla tabella dei tesori'), il suo nome esatto; altrimenti null |
 
+Un campo in piu', fuori dallo schema di estrazione (si scrive a mano): `modificatore_da`, un percorso della scheda
+(es. `stato.fortuna`) il cui numero si somma al tiro ("1d100 + Fortuna"); la verifica segnala come errore un percorso
+che la scheda attiva non ha, e il tiro lo dice nel `[Tabella]` (`(da stato.fortuna)`, o `(... non letto)`).
+
 Regole (`tabelle.problems`, usate anche dalla verifica): nomi unici; `dado` e' una notazione NdS+K; le righe coprono
 tutto l'intervallo del dado (dal minimo al massimo) senza buchi ne' sovrapposizioni; al massimo 60 tabelle e
 200 righe per tabella. Un file che non le rispetta si ignora intero e la verifica lo segnala come errore.
@@ -51,7 +55,8 @@ avvisa se l'ultima narrazione ha un marcatore che il programma non saprebbe tira
 [Tabella] incontri nella palude — 1d100: 37 -> 37: Un branco di cani selvatici
 ```
 
-Tirare non costa chiamate. Il prompt di sistema elenca le tabelle con il loro uso (blocco in cache).
+Tirare non costa chiamate. Il prompt di sistema elenca le tabelle con il loro uso (blocco in cache). Il giocatore
+puo' consultare una tabella da solo: `/tabella <nome> | +N` nel campo di testo, come `/tira`.
 
 Un modificatore al tiro ("+10 di notte") sta nel marcatore: `[[tabella: <nome> | +10]]`; il totale si ferma ai capi
 del dado (`1d100: 95 +10 (fermato a 100) -> 100: ...`). La riga uscita e' un fatto per i trigger: la condizione

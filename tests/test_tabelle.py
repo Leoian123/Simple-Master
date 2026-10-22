@@ -65,6 +65,28 @@ class TestTiro(unittest.TestCase):
         self.assertEqual(tabelle.find_marker("Buio.\n[[tabella: incontri nella palude]]"), "incontri nella palude")
         self.assertIsNone(tabelle.find_marker("Nessuna tabella."))
 
+    def test_a_table_can_read_its_modifier_from_the_sheet(self) -> None:
+        from types import SimpleNamespace
+
+        table = {**INCONTRI, "modificatore_da": "stato.fortuna"}
+        self.assertEqual(tabelle.problems({"tabelle": [table]}), [])
+        self.assertIn("tabelle[0].modificatore_da", [p for p, _ in tabelle.problems({"tabelle": [{**table, "modificatore_da": ""}]})])
+        sheet = SimpleNamespace(exists=True, get=lambda path: {"stato.fortuna": 2}[path] if path in ("stato.fortuna",) else (_ for _ in ()).throw(ValueError(path)))
+        with fixed(4):
+            r = tabelle.tira("incontri nella palude", [table], sheet)
+        self.assertEqual((r["value"], r["result"]), (6, "Un orso"))
+        self.assertEqual(r["text"], "[Tabella] incontri nella palude — 1d6: 4 +2 (da stato.fortuna) -> 6: Un orso")
+        with fixed(4):
+            r = tabelle.tira("incontri nella palude | +1", [table], sheet)  # marcatore e scheda si sommano, fermati al capo
+        self.assertIn("4 +3 (da stato.fortuna) (fermato a 6) -> 6", r["text"])
+        with fixed(4):
+            self.assertIn("(stato.fortuna: nessuna scheda, non letto) -> 4: Un lupo", tabelle.tira("incontri nella palude", [table], None)["text"])
+        missing = SimpleNamespace(exists=True, get=lambda path: (_ for _ in ()).throw(ValueError(path)))
+        with fixed(4):
+            self.assertIn("(stato.fortuna: non nella scheda, non letto) -> 4", tabelle.tira("incontri nella palude", [table], missing)["text"])
+        self.assertEqual([p for p, _ in tabelle.sheet_path_problems({"tabelle": [table]}, missing)], ["tabelle[0].modificatore_da"])
+        self.assertEqual(tabelle.sheet_path_problems({"tabelle": [table]}, sheet), [])
+
     def test_modifier_in_the_marker_shifts_the_roll_and_stops_at_the_ends(self) -> None:
         self.assertEqual(tabelle.parse("incontri | +2"), ("incontri", 2))
         self.assertEqual(tabelle.parse("[[tabella: incontri | - 3 | +1]]"), ("incontri", -2))
@@ -166,6 +188,15 @@ class TestInCampagna(Base):
         self.assertFalse(any("Scegli le sezioni" in str(c.get("system")) for c in client.calls))  # e non si instrada
         self.assertIn("TABLE_RE", PAGE)
         self.assertIn("/api/table", PAGE)
+
+    def test_the_validator_checks_the_sheet_path_and_the_page_has_the_command(self) -> None:
+        self.write([{**INCONTRI, "modificatore_da": "stato.fortuna"}])
+        self.assertEqual([f.title for f in validate(self.camp).errors], ["percorso assente dalla scheda"])
+        self.write([{**INCONTRI, "modificatore_da": "stato.monete"}])
+        self.assertEqual(validate(self.camp).errors, [])
+        from master.ui import PAGE
+
+        self.assertIn("/^\\/tabella\\s+/i", PAGE)
 
     def test_a_broken_file_is_ignored_whole_and_reported(self) -> None:
         self.write([{**INCONTRI, "dado": "1d8"}])
