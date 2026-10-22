@@ -29,7 +29,7 @@ from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
 from .modi import FILE_NAME as MODES_NAME, modi_problems
 from .prefazione import MIN_SECTIONS, RULES_FILE, SECTION_TITLE as PREFACE_TITLE, broken_lookups, leggi as read_preface
 from .tabelle import FILE_NAME as TABLES_NAME, problems as table_problems, sections_with_tables
-from .trigger import FILE_NAME as TRIGGER_NAME, problems as trigger_problems, sheet_path_problems, threshold_sections
+from .trigger import FILE_NAME as TRIGGER_NAME, problems as trigger_problems, sheet_path_problems, table_name_problems, threshold_sections
 from .relazioni import FILE_NAME as RELATIONS_NAME, MAX as REL_MAX, MIN as REL_MIN, stadi_problems
 from .sheet import XP_KEY, XP_ROUTES
 
@@ -646,6 +646,11 @@ def _check_triggers(campaign: Campaign, report: ValidationReport) -> None:
                    "correggi la regola indicata (python main.py --doc trigger)")
     if found:
         return
+    from .tabelle import carica as load_tables
+
+    for where, problem in table_name_problems(data, load_tables(campaign)):
+        report.add("warning", f"{name}:{where}", "tabella sconosciuta nell'effetto", problem,
+                   "usa il nome esatto di una tabella di meccanica/tabelle.json, o ricava le tabelle")
     sheet_info = campaign.active_sheet()
     if sheet_info is None:
         return

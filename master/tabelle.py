@@ -32,6 +32,7 @@ log = logging.getLogger("master.tabelle")
 FILE_NAME = "tabelle.json"
 MARK_RE = re.compile(r"\[\[\s*tabella\s*:(.*?)\]\]", re.S | re.I)
 MAX_TABLES, MAX_ROWS = 60, 200
+MAX_CHAIN = 3  # una riga che manda a un'altra tabella: al massimo tre tabelle in fila, poi ci si ferma
 # una riga di tabella: `01-05 ...`, `| 1-3 | ...` o `| 6 | ...`; non un passo numerato `1. ...`
 _RANGE_LINE = re.compile(r"(?m)^\s*(?:\|\s*\d{1,3}(?:\s*[-–]\s*\d{1,3})?\s*\||\d{1,3}\s*[-–]\s*\d{1,3}\b)")
 _DICE_WORD = re.compile(r"\b\d{0,2}d\d{1,3}\b", re.I)
@@ -75,6 +76,7 @@ def problems(data: Any) -> list[tuple[str, str]]:
     if len(tables) > MAX_TABLES:
         out.append(("tabelle", f"al massimo {MAX_TABLES} tabelle"))
     names: set[str] = set()
+    links: list[tuple[str, str]] = []  # (percorso, tabella a cui una riga manda): si controllano a nomi raccolti
     for i, t in enumerate(tables):
         at = f"tabelle[{i}]"
         if not isinstance(t, dict):
@@ -106,6 +108,14 @@ def problems(data: Any) -> list[tuple[str, str]]:
                 continue
             if not str(r.get("risultato") or "").strip():
                 out.append((f"{where}.risultato", "manca il risultato"))
+            if "tabella" in r and r["tabella"] is not None:
+                target = str(r["tabella"]).strip().lower() if isinstance(r["tabella"], str) else ""
+                if not target:
+                    out.append((f"{where}.tabella", "il nome di un'altra tabella di questo file, o niente"))
+                elif target == name:
+                    out.append((f"{where}.tabella", "una riga non puo' rimandare alla propria tabella"))
+                else:
+                    links.append((f"{where}.tabella", target))
             clean.append((j, r))
         if span is None or len(clean) != len(rows):
             continue
@@ -118,6 +128,9 @@ def problems(data: Any) -> list[tuple[str, str]]:
         for (_, r), (j, s) in zip(ordered, ordered[1:]):
             if s["da"] != r["a"] + 1:
                 out.append((f"{at}.righe[{j}].da", f"deve valere {r['a'] + 1}: le righe si toccano senza buchi ne' sovrapposizioni"))
+    for where, target in links:
+        if target not in names:
+            out.append((where, f"'{target}' non e' una tabella di questo file"))
     return out
 
 
@@ -144,7 +157,7 @@ def trova(tables: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
 # --- il tiro --------------------------------------------------------------------------------------
 
 _MODIFIER = re.compile(r"^[+-]\s*\d+$")
-OUTCOME_RE = re.compile(r"^\[Tabella\] (?P<name>.+?) — .+? -> (?P<value>\d+): (?P<result>.*)$", re.S)
+OUTCOME_RE = re.compile(r"^\[Tabella\] (?P<name>.+?) — .+? -> (?P<value>\d+): (?P<result>.*)$")
 
 
 def parse(spec: str) -> tuple[str, int]:
@@ -163,8 +176,22 @@ def parse(spec: str) -> tuple[str, int]:
 
 
 def tira(spec: str, tables: list[dict[str, Any]]) -> dict[str, Any]:
-    """`<nome tabella> | +N`: tira il dado della tabella, somma il modificatore, trova la riga. Tirare non costa chiamate."""
+    """`<nome tabella> | +N`: tira il dado della tabella, somma il modificatore, trova la riga; se la riga manda a
+    un'altra tabella, tira anche quella (una riga di `[Tabella]` per ciascuna). Tirare non costa chiamate."""
     name, modifier = parse(spec)
+    first = _tira_una(name, modifier, tables)
+    chain = [first]
+    seen = {first["name"].lower()}
+    while chain[-1].get("next") and len(chain) < MAX_CHAIN and chain[-1]["next"].lower() not in seen:
+        step = _tira_una(chain[-1]["next"], 0, tables)
+        seen.add(step["name"].lower())
+        chain.append(step)
+    out = {**first, "chain": chain[1:], "text": "\n".join(step["text"] for step in chain)}
+    out.pop("next", None)
+    return out
+
+
+def _tira_una(name: str, modifier: int, tables: list[dict[str, Any]]) -> dict[str, Any]:
     table = trova(tables, name)
     if table is None:
         known = [t.get("nome") for t in tables]
@@ -179,13 +206,24 @@ def tira(spec: str, tables: list[dict[str, Any]]) -> dict[str, Any]:
     if modifier and value != rolled["value"] + modifier:
         shown += f" (fermato a {value})"
     text = f"[Tabella] {table['nome']} — {table['dado']}: {shown} -> {value}: {result}"
-    return {"name": table["nome"], "value": value, "rolls": rolled["rolls"], "modifier": modifier, "result": result, "text": text}
+    return {"name": table["nome"], "value": value, "rolls": rolled["rolls"], "modifier": modifier, "result": result, "text": text,
+            "next": str(row.get("tabella") or "").strip() if row else ""}
+
+
+def outcomes(spoken: str) -> list[tuple[str, str]]:
+    """(nome tabella, riga uscita) per ogni riga `[Tabella] ...` del messaggio: i fatti che i trigger leggono."""
+    out = []
+    for line in str(spoken).strip().splitlines():
+        found = OUTCOME_RE.match(line.strip())
+        if found:
+            out.append((found.group("name").strip(), found.group("result").strip()))
+    return out
 
 
 def outcome(spoken: str) -> tuple[str, str] | None:
-    """(nome tabella, riga uscita) da un messaggio `[Tabella] ...`, o None: il fatto che i trigger leggono."""
-    found = OUTCOME_RE.match(str(spoken).strip())
-    return (found.group("name").strip(), found.group("result").strip()) if found else None
+    """La prima tabella uscita, o None."""
+    found = outcomes(spoken)
+    return found[0] if found else None
 
 
 # --- cio' che il narratore deve sapere ---------------------------------------------------------------
@@ -207,8 +245,9 @@ def prompt_section(tables: list[dict[str, Any]]) -> str:
 
 _ROW = {
     "type": "object",
-    "properties": {"da": {"type": "integer"}, "a": {"type": "integer"}, "risultato": {"type": "string", "description": "Il testo della riga, breve, com'e' nel manuale"}},
-    "required": ["da", "a", "risultato"],
+    "properties": {"da": {"type": "integer"}, "a": {"type": "integer"}, "risultato": {"type": "string", "description": "Il testo della riga, breve, com'e' nel manuale"},
+                   "tabella": {"type": ["string", "null"], "description": "Se la riga manda a un'altra tabella ('tira sulla tabella dei tesori'), il suo nome esatto; altrimenti null"}},
+    "required": ["da", "a", "risultato", "tabella"],
     "additionalProperties": False,
 }
 TABLES_SCHEMA: dict[str, Any] = {
@@ -238,7 +277,8 @@ Trascrivi le TABELLE CASUALI di un gioco di ruolo: quelle in cui un tiro di dado
 (incontri, tesori, effetti, eventi: "1d100: 01-05 ..."). Solo cio' che le sezioni qui sotto contengono, senza
 inventare righe ne' completare a memoria. Gli intervalli vanno riportati esatti e devono coprire tutto il dado:
 se nel manuale una tabella ha buchi o sovrapposizioni, riportala com'e' (il programma la scartera'). Lascia fuori
-le tabelle che non si tirano (listini, tabelle di modificatori): quelle il master le legge."""
+le tabelle che non si tirano (listini, tabelle di modificatori): quelle il master le legge. Se una riga manda a
+un'altra tabella ("tira sui tesori"), trascrivi anche quella e scrivi il suo nome nel campo `tabella` della riga."""
 
 
 def sections_with_tables(campaign: Campaign) -> list[tuple[str, str, str]]:

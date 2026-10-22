@@ -306,6 +306,15 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 12 — Le tabelle chiamano: righe che rimandano, trigger che tirano — FATTO (2026-10-22)
+> Una riga puo' mandare a un'altra tabella (`"tabella": "tesori"`): il programma tira anche quella,
+> fino a tre in fila, una riga di `[Tabella]` per ciascuna, e i trigger leggono tutte le righe
+> uscite (`tabelle.outcomes`). Effetto `tabella` nei trigger: la regola tira una tabella della
+> campagna e porta le righe al narratore (`[TRIGGER <nome>: tabella <t> -> riga]`); la verifica
+> avvisa se il nome non esiste. `problems` rifiuta rimandi vuoti, a se stessa o a tabelle che il
+> file non ha; due tabelle che si rimandano a vicenda si fermano. Schema di estrazione con il
+> campo `tabella` per riga, 9 righe di mutazione, docs rigenerate.
+
 ## Fase 11 — Tabelle e trigger si compongono — FATTO (2026-10-21)
 > Modificatore nel marcatore (`[[tabella: <nome> | +10]]`, `tabelle.parse`, totale fermato ai
 > capi del dado, mostrato nel `[Tabella]`); la riga uscita come fatto (`tabelle.outcome`,

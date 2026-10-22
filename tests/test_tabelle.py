@@ -91,6 +91,27 @@ class TestTiro(unittest.TestCase):
             text = tabelle.tira("tesori", [TESORI])["text"]
         self.assertEqual(tabelle.outcome(text), ("tesori", "Una gemma"))
 
+    def test_a_row_can_send_to_another_table_and_the_code_rolls_it_too(self) -> None:
+        incontri = {**INCONTRI, "righe": [INCONTRI["righe"][0], INCONTRI["righe"][1], {**INCONTRI["righe"][2], "tabella": "tesori"}]}
+        self.assertEqual(tabelle.problems({"tabelle": [incontri, TESORI]}), [])
+        self.assertEqual([p for p, _ in tabelle.problems({"tabelle": [incontri]})], ["tabelle[0].righe[2].tabella"])  # tesori non c'e'
+        loop = {**incontri, "righe": [INCONTRI["righe"][0], INCONTRI["righe"][1], {**INCONTRI["righe"][2], "tabella": "Incontri nella palude"}]}
+        self.assertEqual([p for p, _ in tabelle.problems({"tabelle": [loop, TESORI]})], ["tabelle[0].righe[2].tabella"])
+        with fixed(6, 3, 4):
+            r = tabelle.tira("incontri nella palude", [incontri, TESORI])
+        self.assertEqual((r["result"], [c["result"] for c in r["chain"]]), ("Un orso", ["Una gemma"]))
+        self.assertEqual(r["text"], "[Tabella] incontri nella palude — 1d6: 6 -> 6: Un orso\n[Tabella] tesori — 2d6+1: [3, 4] -> 8: Una gemma")
+        self.assertEqual(tabelle.outcomes(r["text"]), [("incontri nella palude", "Un orso"), ("tesori", "Una gemma")])
+        self.assertEqual(tabelle.outcome(r["text"]), ("incontri nella palude", "Un orso"))
+        with fixed(2):
+            self.assertEqual(tabelle.tira("incontri nella palude", [incontri, TESORI])["chain"], [])
+        # due tabelle che si rimandano a vicenda: il giro si ferma, non gira in tondo
+        a = {"nome": "a", "uso": "", "dado": "1d2", "fonte": "", "righe": [{"da": 1, "a": 2, "risultato": "vai a b", "tabella": "b"}]}
+        b = {"nome": "b", "uso": "", "dado": "1d2", "fonte": "", "righe": [{"da": 1, "a": 2, "risultato": "vai ad a", "tabella": "a"}]}
+        self.assertEqual(tabelle.problems({"tabelle": [a, b]}), [])
+        with fixed(1, 1, 1, 1):
+            self.assertEqual(len(tabelle.tira("a", [a, b])["chain"]), 1)
+
     def test_prompt_lists_the_tables(self) -> None:
         text = tabelle.prompt_section([INCONTRI, TESORI])
         self.assertIn("## Tabelle: le tira il programma", text)

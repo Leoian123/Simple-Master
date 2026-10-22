@@ -93,7 +93,9 @@ STATO_BASE: dict[str, Any] = {
 }
 TABELLE_BASE: dict[str, Any] = {"tabelle": [
     {"nome": "incontri", "uso": "ogni ora", "dado": "1d6", "fonte": "x",
-     "righe": [{"da": 1, "a": 3, "risultato": "Nulla"}, {"da": 4, "a": 5, "risultato": "Un lupo"}, {"da": 6, "a": 6, "risultato": "Un orso"}]},
+     "righe": [{"da": 1, "a": 3, "risultato": "Nulla"}, {"da": 4, "a": 5, "risultato": "Un lupo"}, {"da": 6, "a": 6, "risultato": "Un orso", "tabella": "tesori"}]},
+    {"nome": "tesori", "uso": "", "dado": "1d4", "fonte": "",
+     "righe": [{"da": 1, "a": 2, "risultato": "Monete"}, {"da": 3, "a": 4, "risultato": "Una gemma"}]},
 ]}
 TRIGGER_BASE: dict[str, Any] = {"trigger": [
     {"nome": "fame alta", "ricorrente": True,
@@ -103,7 +105,7 @@ TRIGGER_BASE: dict[str, Any] = {"trigger": [
      "effetti": [{"orologio": "La Bestia", "avanza": 1, "segmenti": 6, "conseguenza": "x"},
                  {"relazione": "Mira Sol", "verso": "scende", "forza": "lieve"}]},
     {"nome": "il gorgo", "ricorrente": True, "quando": [{"tabella": "incontri", "op": "contiene", "valore": "orso"}],
-     "effetti": [{"avviso": "un orso: le regole sugli animali"}]},
+     "effetti": [{"avviso": "un orso: le regole sugli animali"}, {"tabella": "tesori"}]},
 ]}
 MODI_BASE: dict[str, Any] = {"modi": [{"nome": "cupo", "descrizione": "x", "istruzioni": "tono cupo", "png": "diffidenti"},
                                       {"nome": "lieve", "descrizione": "y", "istruzioni": "tono lieve"}]}
@@ -489,6 +491,9 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (TRIG, "trigger.2.quando.0.op", ">", "errore", "rifiuta", "per tabella solo ==, != o contiene"),
     (TRIG, "trigger.2.quando.0.valore", 3, "errore", "rifiuta", "la riga e' un testo"),
     (TRIG, "trigger.2.effetti.0.avviso", "", "errore", "rifiuta", "avviso vuoto"),
+    (TRIG, "trigger.2.effetti.1.tabella", DELETE, "errore", "rifiuta", "effetto senza la sua chiave"),
+    (TRIG, "trigger.2.effetti.1.tabella", "", "errore", "rifiuta", "nome di tabella vuoto"),
+    (TRIG, "trigger.2.effetti.1.tabella", "ignota", "avviso", "accetta", "oltre: la regola scatta senza riga, la verifica avvisa"),
     (TRIG, "extra", 1, None, "accetta", "chiave in piu' ignorata"),
     # --- meccanica/tabelle.json (le righe coprono tutto il dado, o il file si ignora) ---
     (TAB, "", "{", "errore", "rifiuta", "illeggibile: nessuna tabella"),
@@ -508,6 +513,12 @@ TABELLA: list[tuple[str, str, Any, str | None, str, str]] = [
     (TAB, "tabelle.0.righe.1.a", 4, "errore", "rifiuta", "un buco fra le righe"),
     (TAB, "tabelle.0.righe.2.a", 7, "errore", "rifiuta", "l'ultima riga oltre il massimo"),
     (TAB, "tabelle.0.righe.0.risultato", "", "errore", "rifiuta", "riga senza risultato"),
+    (TAB, "tabelle.0.righe.2.tabella", DELETE, None, "accetta", "riga senza rimando"),
+    (TAB, "tabelle.0.righe.2.tabella", None, None, "accetta", "rimando nullo: come assente"),
+    (TAB, "tabelle.0.righe.2.tabella", "", "errore", "rifiuta", "rimando vuoto"),
+    (TAB, "tabelle.0.righe.2.tabella", "incontri", "errore", "rifiuta", "rimando a se stessa"),
+    (TAB, "tabelle.0.righe.2.tabella", "ignota", "errore", "rifiuta", "rimando a una tabella che il file non ha"),
+    (TAB, "tabelle.0.righe.2.tabella", 3, "errore", "rifiuta", "rimando non testo"),
     (TAB, "extra", 1, None, "accetta", "chiave in piu' ignorata"),
     # --- schede/kael.json (la parte con una forma: nome, esperienza, e stato.fame letto dai dadi) ---
     (SCHEDA, "", "{", "errore", "rifiuta", "illeggibile: il gioco si ferma"),

@@ -55,6 +55,7 @@ EFFETTI: dict[str, str] = {
     "avviso": "una riga al narratore in testa al messaggio del turno: `[TRIGGER <nome>: avviso]`",
     "orologio": "fa avanzare l'orologio di `avanza` segmenti (anche negativi); se non esiste e c'e' `segmenti`, lo crea (con `conseguenza`)",
     "relazione": "muove la relazione del PNG di un passo: `verso` sale|scende, `forza` lieve|media|forte",
+    "tabella": "tira la tabella con quel nome (meccanica/tabelle.json) e porta la riga al narratore: `[TRIGGER <nome>: tabella <t> -> riga]`",
 }
 _ROLL_OUTCOME = re.compile(r"contro difficolta' \d+: ([^(]+?) \(")
 
@@ -154,7 +155,7 @@ def _effect_problems(e: Any) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     if not isinstance(e[kind], str) or not e[kind].strip():
         out.append((f".{kind}", "un testo (l'avviso, o il nome)"))
-    allowed = {"avviso": set(), "orologio": {"avanza", "segmenti", "conseguenza"}, "relazione": {"verso", "forza"}}[kind]
+    allowed = {"avviso": set(), "orologio": {"avanza", "segmenti", "conseguenza"}, "relazione": {"verso", "forza"}, "tabella": set()}[kind]
     if kind == "orologio":
         if not _is_int(e.get("avanza")):
             out.append((".avanza", "intero, anche negativo"))
@@ -267,8 +268,8 @@ class _Fatti:
         if "tabella" in c:
             from . import tabelle
 
-            found = tabelle.outcome(self.spoken)
-            return found is not None and found[0].lower() == str(c["tabella"]).strip().lower() and _compare(found[1], op, wanted)
+            wanted_table = str(c["tabella"]).strip().lower()
+            return any(name.lower() == wanted_table and _compare(result, op, wanted) for name, result in tabelle.outcomes(self.spoken))
         if "contatore" in c:
             which = str(c["contatore"]).strip().lower()
             value = self.campaign.played_turns() if which == "turni" else self.campaign.session_number
@@ -317,7 +318,30 @@ def _apply(campaign: Campaign, name: str, effect: dict[str, Any]) -> list[str]:
     if "relazione" in effect:
         campaign.shift_relation(str(effect["relazione"]), str(effect["verso"]), str(effect["forza"]), f"trigger: {name}")
         return []
+    if "tabella" in effect:
+        from . import tabelle
+
+        try:
+            rolled = tabelle.tira(str(effect["tabella"]), tabelle.carica(campaign))
+        except ValueError as exc:  # la tabella non c'e' (la verifica lo dice): la regola scatta senza riga
+            log.warning("trigger '%s': %s", name, exc)
+            return []
+        rows = [rolled] + rolled.get("chain", [])
+        return [f"[TRIGGER {name}: tabella {step['name']} -> {step['result']}]" for step in rows]
     return []
+
+
+def table_name_problems(data: Any, tables: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """Gli effetti `tabella` che nominano una tabella che la campagna non ha: scatterebbero a vuoto."""
+    out = []
+    known = {str(t.get("nome", "")).strip().lower() for t in tables}
+    if not isinstance(data, dict) or not isinstance(data.get("trigger"), list):
+        return out
+    for i, t in enumerate(data["trigger"]):
+        for j, e in enumerate(t.get("effetti") or [] if isinstance(t, dict) else []):
+            if isinstance(e, dict) and isinstance(e.get("tabella"), str) and e["tabella"].strip().lower() not in known:
+                out.append((f"trigger[{i}].effetti[{j}].tabella", f"'{e['tabella']}' non e' una tabella di meccanica/tabelle.json: la regola scatterebbe senza riga"))
+    return out
 
 
 # --- dal manuale ai trigger: una chiamata, poi il codice controlla ---------------------------------
@@ -430,7 +454,7 @@ TRIGGERS_PROMPT = """\
 Trascrivi come TRIGGER le regole di un gioco di ruolo che il programma puo' contare da solo: una SOGLIA su un valore
 che il programma possiede (un numero della scheda, fra i percorsi dati; un orologio; la relazione o lo stadio di un PNG;
 la fascia dell'ultimo tiro; la riga uscita da una tabella che il programma tira; i turni giocati) e una CONSEGUENZA chiusa (un avviso al master con la regola da applicare,
-un orologio che avanza, una relazione che si muove). Esempi: "con lo stress a 4 o piu' ogni tentazione richiede una
+un orologio che avanza, una relazione che si muove, una tabella da tirare fra quelle che il programma tira). Esempi: "con lo stress a 4 o piu' ogni tentazione richiede una
 prova" -> scheda stato.stress >= 4, avviso ricorrente; "a 0 punti ferita il personaggio cade" -> avviso.
 Solo cio' che le sezioni dicono, con i numeri del manuale. Usa SOLO percorsi della scheda fra quelli elencati: se la
 regola parla di un valore che la scheda non ha, lasciala fuori. L'avviso cita la regola in una frase, non la narra.
@@ -467,6 +491,8 @@ def _to_rule(t: dict[str, Any]) -> dict[str, Any]:
                 out["conseguenza"] = str(e.get("conseguenza") or "").strip()
         if kind == "relazione":
             out["verso"], out["forza"] = e.get("verso"), e.get("forza")
+        if kind == "tabella":
+            out[kind] = str(e.get("testo", "")).strip()  # il nome della tabella da tirare
         effects.append(out)
     rule = {"nome": str(t.get("nome", "")).strip().lower(), "ricorrente": bool(t.get("ricorrente")), "quando": conds, "effetti": effects}
     if t.get("fonte"):

@@ -54,9 +54,12 @@ Un confronto fra tipi diversi e' falso, mai un errore: una regola scritta male n
 | `avviso` | una riga al narratore in testa al messaggio del turno: `[TRIGGER <nome>: avviso]` |
 | `orologio` | fa avanzare l'orologio di `avanza` segmenti (anche negativi); se non esiste e c'e' `segmenti`, lo crea (con `conseguenza`) |
 | `relazione` | muove la relazione del PNG di un passo: `verso` sale|scende, `forza` lieve|media|forte |
+| `tabella` | tira la tabella con quel nome (meccanica/tabelle.json) e porta la riga al narratore: `[TRIGGER <nome>: tabella <t> -> riga]` |
 
 L'avviso arriva al narratore come `[TRIGGER <nome>: testo]`, come gli orologi pieni; gli altri effetti
-cambiano `stato.json` e si vedono dove si vedono gli orologi e le relazioni. Nessun effetto tocca la scheda:
+cambiano `stato.json` e si vedono dove si vedono gli orologi e le relazioni. L'effetto `tabella` tira una tabella
+di `meccanica/tabelle.json` e porta la riga (e le righe delle tabelle a cui manda) al narratore nella stessa forma;
+la verifica avvisa se il nome non e' una tabella della campagna. Nessun effetto tocca la scheda:
 i numeri del personaggio li muove solo lo scriba, su indicazione del narratore.
 
 ## Verifica

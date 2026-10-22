@@ -298,6 +298,9 @@ Un modificatore al tiro ("+10 di notte") sta nel marcatore: `[[tabella: incontri
 totale si ferma ai capi del dado. La riga uscita e' un fatto per i trigger: `{"tabella":
 "incontri", "op": "contiene", "valore": "gorgo"}` scatta solo nel turno in cui arriva, cosi' una
 riga di tabella puo' far avanzare un orologio o avvisare il narratore senza che nessuno ricordi.
+Vale anche al contrario: un trigger con l'effetto `{"tabella": "incontri"}` tira la tabella e
+porta la riga al narratore; e una riga puo' mandare a un'altra tabella ("tira sui tesori"), che
+il programma tira di seguito, fino a tre in fila.
 
 ## La prefazione delle regole e i trigger dal manuale
 

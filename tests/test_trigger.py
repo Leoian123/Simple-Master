@@ -157,6 +157,32 @@ class TestTabella(Base):
         self.assertEqual([p for p, _ in trigger.problems(bad)],
                          ["trigger[0].quando[0].op", "trigger[0].quando[0].valore", "trigger[1].quando[0].valore"])  # >= vuole anche un numero
 
+    def test_an_effect_can_roll_a_table_and_the_rows_reach_the_narrator(self) -> None:
+        from test_dice import fixed
+
+        tables = {"tabelle": [
+            {"nome": "incontri in mare", "uso": "", "dado": "1d6", "fonte": "",
+             "righe": [{"da": 1, "a": 5, "risultato": "Mare calmo"}, {"da": 6, "a": 6, "risultato": "Il Gorgo", "tabella": "relitti"}]},
+            {"nome": "relitti", "uso": "", "dado": "1d4", "fonte": "", "righe": [{"da": 1, "a": 4, "risultato": "Una chiglia spezzata"}]},
+        ]}
+        (self.camp.root / "meccanica" / "tabelle.json").write_text(json.dumps(tables), encoding="utf-8")
+        rule = {"trigger": [{"nome": "nuova sessione in mare", "ricorrente": True,
+                             "quando": [{"contatore": "sessione", "op": ">=", "valore": 1}],
+                             "effetti": [{"tabella": "incontri in mare"}]}]}
+        (self.camp.root / "meccanica" / "trigger.json").write_text(json.dumps(rule), encoding="utf-8")
+        self.assertEqual(trigger.problems(rule), [])
+        self.assertEqual(validate(self.camp).errors, [])
+        with fixed(6, 2):
+            notes = trigger.valuta(self.camp, "Salpo.")
+        self.assertEqual(notes, ["[TRIGGER nuova sessione in mare: tabella incontri in mare -> Il Gorgo]",
+                                 "[TRIGGER nuova sessione in mare: tabella relitti -> Una chiglia spezzata]"])
+        # una tabella che la campagna non ha: la regola scatta senza riga, e la verifica lo dice prima
+        rule["trigger"][0]["effetti"] = [{"tabella": "ignota"}]
+        (self.camp.root / "meccanica" / "trigger.json").write_text(json.dumps(rule), encoding="utf-8")
+        self.assertEqual(trigger.valuta(self.camp, "Salpo."), [])
+        self.assertEqual([f.title for f in validate(self.camp).warnings if "tabella" in f.title], ["tabella sconosciuta nell'effetto"])
+        self.assertEqual(validate(self.camp).errors, [])
+
     def test_fires_only_in_the_turn_the_row_arrives_and_only_for_its_table(self) -> None:
         (self.camp.root / "meccanica" / "trigger.json").write_text(json.dumps(self.RULE), encoding="utf-8")
         self.assertEqual(validate(self.camp).errors, [])

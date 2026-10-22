@@ -18,7 +18,7 @@ come dati, e le tira il programma. Lasciate in prosa il narratore sceglierebbe l
 | `nome` | string | si | Il nome della tabella, minuscolo, come la chiama il manuale |
 | `uso` | string | si | Quando si tira, in una frase |
 | `dado` | string | si | La notazione del dado che la tabella usa: 1d100, 2d6, 1d20... |
-| `righe` | elenco di object | si | Tutte le righe, con gli intervalli del manuale: devono coprire tutto il dado senza buchi Ogni elemento: `da`, `a`, `risultato` (Il testo della riga, breve, com'e' nel manuale). |
+| `righe` | elenco di object | si | Tutte le righe, con gli intervalli del manuale: devono coprire tutto il dado senza buchi Ogni elemento: `da`, `a`, `risultato` (Il testo della riga, breve, com'e' nel manuale), `tabella` (Se la riga manda a un'altra tabella ('tira sulla tabella dei tesori'), il suo nome esatto; altrimenti null). |
 | `fonte` | string | si | File e sezione da cui viene |
 
 | parametro | tipo | obbligatorio | significato |
@@ -26,10 +26,15 @@ come dati, e le tira il programma. Lasciate in prosa il narratore sceglierebbe l
 | `da` | integer | si |  |
 | `a` | integer | si |  |
 | `risultato` | string | si | Il testo della riga, breve, com'e' nel manuale |
+| `tabella` | string o null | si | Se la riga manda a un'altra tabella ('tira sulla tabella dei tesori'), il suo nome esatto; altrimenti null |
 
 Regole (`tabelle.problems`, usate anche dalla verifica): nomi unici; `dado` e' una notazione NdS+K; le righe coprono
 tutto l'intervallo del dado (dal minimo al massimo) senza buchi ne' sovrapposizioni; al massimo 60 tabelle e
 200 righe per tabella. Un file che non le rispetta si ignora intero e la verifica lo segnala come errore.
+
+Una riga puo' mandare a un'altra tabella dello stesso file (`"tabella": "tesori"`: 'tira sui tesori'): il
+programma tira anche quella, fino a 3 tabelle in fila, una riga di `[Tabella]` per ciascuna. Il nome deve
+esistere nel file e non essere la tabella stessa (`problems`).
 
 ## Il marcatore e l'esito
 

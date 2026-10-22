@@ -531,7 +531,9 @@ def _gen_triggers() -> str:
         *[f"| `{k}` | {v} |" for k, v in EFFETTI.items()],
         "",
         "L'avviso arriva al narratore come `[TRIGGER <nome>: testo]`, come gli orologi pieni; gli altri effetti",
-        "cambiano `stato.json` e si vedono dove si vedono gli orologi e le relazioni. Nessun effetto tocca la scheda:",
+        "cambiano `stato.json` e si vedono dove si vedono gli orologi e le relazioni. L'effetto `tabella` tira una tabella",
+        "di `meccanica/tabelle.json` e porta la riga (e le righe delle tabelle a cui manda) al narratore nella stessa forma;",
+        "la verifica avvisa se il nome non e' una tabella della campagna. Nessun effetto tocca la scheda:",
         "i numeri del personaggio li muove solo lo scriba, su indicazione del narratore.",
         "",
         "## Verifica",
@@ -556,7 +558,7 @@ def _gen_triggers() -> str:
 
 
 def _gen_tables() -> str:
-    from .tabelle import FILE_NAME, MAX_ROWS, MAX_TABLES, MIN_RANGE_LINES, TABLES_SCHEMA
+    from .tabelle import FILE_NAME, MAX_CHAIN, MAX_ROWS, MAX_TABLES, MIN_RANGE_LINES, TABLES_SCHEMA
 
     item = TABLES_SCHEMA["properties"]["tabelle"]["items"]
     out = [
@@ -578,6 +580,10 @@ def _gen_tables() -> str:
         f"Regole (`tabelle.problems`, usate anche dalla verifica): nomi unici; `dado` e' una notazione NdS+K; le righe coprono",
         f"tutto l'intervallo del dado (dal minimo al massimo) senza buchi ne' sovrapposizioni; al massimo {MAX_TABLES} tabelle e",
         f"{MAX_ROWS} righe per tabella. Un file che non le rispetta si ignora intero e la verifica lo segnala come errore.",
+        "",
+        "Una riga puo' mandare a un'altra tabella dello stesso file (`\"tabella\": \"tesori\"`: 'tira sui tesori'): il",
+        f"programma tira anche quella, fino a {MAX_CHAIN} tabelle in fila, una riga di `[Tabella]` per ciascuna. Il nome deve",
+        "esistere nel file e non essere la tabella stessa (`problems`).",
         "",
         "## Il marcatore e l'esito",
         "",
