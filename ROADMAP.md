@@ -306,6 +306,14 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 13 — Il promemoria dove serve, i dati sulla carta — FATTO (2026-10-22)
+> Quando una sezione di regole entra nel contesto del turno e contiene una tabella del file
+> (nome nel titolo o titolo nella `fonte`), sotto la sezione va il promemoria "questa tabella la
+> tira il programma: chiudi con `[[tabella: ...]]`" (`tabelle.promemoria`, `TurnContext.tables`,
+> nel log del turno): la prosa della tabella resta, ma la riga non la sceglie piu' il narratore.
+> La carta della campagna nel menu chiude con "dadi: ... | tabelle: N | prefazione: ... |
+> trigger: N", la stessa riga del rapporto di preparazione.
+
 ## Fase 12 — Le tabelle chiamano: righe che rimandano, trigger che tirano — FATTO (2026-10-22)
 > Una riga puo' mandare a un'altra tabella (`"tabella": "tesori"`): il programma tira anche quella,
 > fino a tre in fila, una riga di `[Tabella]` per ciascuna, e i trigger leggono tutte le righe

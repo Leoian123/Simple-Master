@@ -84,6 +84,8 @@ class TestUI(unittest.TestCase):
         self.assertTrue(state["campaigns"][0]["has_rules"])
         self.assertFalse(state["campaigns"][0]["preparing"])
         self.assertEqual(state["campaigns"][0]["sheets"], ["Kael"])
+        self.assertEqual(state["campaigns"][0]["data"], "dadi: d20 | tabelle: 0 | prefazione: assente | trigger: 0")
+        self.assertIn("c.data", page)
         self.assertEqual(state["campaigns"][0]["pg"], "Kael")  # unica scheda: e' il personaggio della campagna
         # dal menu non si gioca
         status, err = self.call("POST", "/api/play", {"text": "Ciao"})

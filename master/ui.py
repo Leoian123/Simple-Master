@@ -70,6 +70,8 @@ class App:
     # --- campagne ---------------------------------------------------------------------
 
     def list_campaigns(self) -> list[dict[str, Any]]:
+        from .prepare import campaign_data, describe_data
+
         out = []
         for p in sorted(self.campaigns_dir.iterdir()):
             if not p.is_dir() or p.name.startswith("."):
@@ -87,6 +89,7 @@ class App:
                     "turns": camp.turn_count(camp.active_pg) if camp.active_pg else 0,
                     "last_played": ((camp.read_turns(camp.active_pg, 1) or [{}])[-1].get("t", "") if camp.active_pg else ""),
                     "entries": len(camp.glossary.entries()),
+                    "data": describe_data(campaign_data(camp)),
                     "has_rules": rules.exists() and len(rules.read()) > 80,
                     "diary_sections": len(diary.outline()) if diary.exists() else 0,
                     "current": self.campaign is not None and self.campaign.root == p.resolve(),
@@ -697,7 +700,7 @@ function renderHome(){
     const el=$('#card-tpl').content.firstElementChild.cloneNode(true);
     el.querySelector('.n').textContent=c.name;
     const tag=el.querySelector('.tag');const tt=c.preparing?'in preparazione':(!c.has_rules?'da preparare':'');tag.textContent=tt;tag.classList.toggle('warn',tt==='da preparare');
-    el.querySelector('.d').textContent=c.files+' file \u00b7 '+c.entries+' voci di glossario \u00b7 '+(c.sheets.length?'personaggi: '+c.sheets.join(', ')+(c.pg?' (in gioco: '+c.pg+')':''):'nessun personaggio')+' \u00b7 '+c.diary_sections+' voci di diario'+(c.turns?' · giocato: '+c.turns+' turni, ultimo il '+c.last_played.slice(0,10):'');
+    el.querySelector('.d').textContent=c.files+' file \u00b7 '+c.entries+' voci di glossario \u00b7 '+(c.sheets.length?'personaggi: '+c.sheets.join(', ')+(c.pg?' (in gioco: '+c.pg+')':''):'nessun personaggio')+' \u00b7 '+c.diary_sections+' voci di diario'+(c.turns?' · giocato: '+c.turns+' turni, ultimo il '+c.last_played.slice(0,10):'')+(c.data?' · '+c.data:'');
     const err=el.querySelector('.err'), form=el.querySelector('.prepform');
     el.querySelector('.enter').disabled=!!c.preparing;
     el.querySelector('.enter').onclick=()=>enter(c.name,err);

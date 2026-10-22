@@ -41,10 +41,11 @@ class TurnContext:
     rules: list[str] = field(default_factory=list)
     exchanges: int = 0
     facts: list[str] = field(default_factory=list)
+    tables: list[str] = field(default_factory=list)  # le regole sotto cui e' andato il promemoria della tabella
 
     def stats(self) -> str:
         return (f"{len(self.text)} car | entita': {', '.join(self.entities) or '-'} | regole: {', '.join(self.rules) or '-'} "
-                f"| scambi testuali: {self.exchanges}")
+                f"| scambi testuali: {self.exchanges}" + (f" | tabelle: {', '.join(self.tables)}" if self.tables else ""))
 
 
 def _mentions(term: str, text: str) -> bool:
@@ -216,6 +217,15 @@ def compose(campaign: Campaign, player_text: str, save_name: str, router=None) -
     if world:
         parts.append("## Chi e cosa e' in gioco adesso\n" + "\n\n".join(world))
     if rules:
+        # una regola che contiene una tabella tirata dal programma: il promemoria sotto, dove serve
+        from . import tabelle
+
+        tables = tabelle.carica(campaign)
+        for i, title in enumerate(ctx.rules):
+            note = tabelle.promemoria(tables, title.replace(" (instradata)", "")) if tables else None
+            if note:
+                rules[i] += "\n" + note
+                ctx.tables.append(title)
         parts.append("## Regole pertinenti (dal manuale: applicale alla lettera)\n" + "\n\n".join(rules))
 
     if turns:

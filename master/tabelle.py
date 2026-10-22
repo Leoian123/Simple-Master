@@ -226,6 +226,20 @@ def outcome(spoken: str) -> tuple[str, str] | None:
     return found[0] if found else None
 
 
+def promemoria(tables: list[dict[str, Any]], title: str) -> str | None:
+    """La riga da appendere a una sezione di regole che porta nel contesto una tabella che il programma tira:
+    letta in prosa, il narratore sceglierebbe la riga; con il promemoria chiude con il marcatore."""
+    wanted = str(title or "").strip().lower()
+    if not wanted:
+        return None
+    for t in tables:
+        name = str(t.get("nome", "")).strip().lower()
+        source = str(t.get("fonte", "")).strip().lower()
+        if name and (name in wanted or wanted in name or (source and wanted in source)):
+            return f"> Questa tabella la tira il programma: non scegliere la riga, chiudi con `[[tabella: {t['nome']}]]`."
+    return None
+
+
 # --- cio' che il narratore deve sapere ---------------------------------------------------------------
 
 def prompt_section(tables: list[dict[str, Any]]) -> str:

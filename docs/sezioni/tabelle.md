@@ -53,6 +53,11 @@ del dado (`1d100: 95 +10 (fermato a 100) -> 100: ...`). La riga uscita e' un fat
 `{"tabella": "<nome>", "op": "contiene", "valore": "..."}` vale solo nel turno in cui arriva (`--doc trigger`).
 Nel codice: `tabelle.parse(spec) -> (nome, modificatore)`, `tabelle.tira(spec, tabelle)`, `tabelle.outcome(messaggio)`.
 
+Quando una sezione di regole entra nel contesto del turno e contiene una tabella del file (il nome della tabella
+nel titolo, o il titolo nella `fonte`), il programma appende sotto la sezione il promemoria `> Questa tabella la
+tira il programma: ... chiudi con [[tabella: <nome>]]` (`tabelle.promemoria`, `TurnContext.tables`): letta in prosa,
+la riga la sceglierebbe il narratore.
+
 ## Da dove vengono
 
 `extract_tables` (pulsante 'Ricava le tabelle' nel tavolo, `POST /api/tables/extract`; alla fine della preparazione

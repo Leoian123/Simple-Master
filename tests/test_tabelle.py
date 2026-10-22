@@ -125,6 +125,27 @@ class TestInCampagna(Base):
     def write(self, tables) -> None:
         (self.camp.root / "meccanica" / "tabelle.json").write_text(json.dumps({"tabelle": tables}), encoding="utf-8")
 
+    def test_a_rule_that_carries_a_table_gets_the_reminder_in_the_turn_context(self) -> None:
+        from master.context import compose
+
+        self.camp.file("meccanica/creature.md").set_section(
+            "Incontri nella palude", "Ogni ora di marcia tira 1d6.\n\n| 1-3 | Nulla |\n| 4-5 | Un lupo |\n| 6 | Un orso |")
+        self.camp.file("meccanica/creature.md").set_section("Lupi", "Il lupo attacca con 2 dadi.")
+        self.assertIsNone(tabelle.promemoria([INCONTRI], "Lupi"))
+        self.assertIn("[[tabella: incontri nella palude]]", tabelle.promemoria([INCONTRI], "Incontri nella palude"))
+        self.assertIn("[[tabella: palude]]", tabelle.promemoria([{**INCONTRI, "nome": "palude", "fonte": "meccanica/creature.md: Incontri nella palude"}], "Incontri nella palude") or "")  # via `fonte`
+        ctx = compose(self.camp, "Marcio un'ora nella palude: tiro sugli incontri nella palude", "")
+        self.assertIn("### Incontri nella palude (meccanica/creature.md)", ctx.text)
+        self.assertNotIn("la tira il programma", ctx.text)  # senza il file delle tabelle, nessun promemoria
+        self.assertEqual(ctx.tables, [])
+        self.write([INCONTRI])
+        ctx = compose(self.camp, "Marcio un'ora nella palude: tiro sugli incontri nella palude", "")
+        self.assertIn("| 6 | Un orso |\n> Questa tabella la tira il programma: non scegliere la riga, chiudi con `[[tabella: incontri nella palude]]`.", ctx.text)
+        self.assertEqual(ctx.tables, ["Incontri nella palude"])
+        self.assertIn("tabelle: Incontri nella palude", ctx.stats())
+        ctx = compose(self.camp, "Attacco i lupi", "")
+        self.assertNotIn("la tira il programma", ctx.text)
+
     def test_tables_enter_the_cached_prompt_and_the_page_rolls_them(self) -> None:
         engine = MasterEngine(self.camp, client=ScriptedClient([]))
         self.assertNotIn("## Tabelle", engine.system_blocks()[0]["text"])
