@@ -173,7 +173,11 @@ hanno la riga `pe` (mai di sua iniziativa), una voce di glossario e' rifiutata s
 termine non compare nel file indicato (prima la sezione, poi la voce), la scena e'
 rifiutata se `presenti` non e' un elenco. Ogni rifiuto torna allo scriba come errore e
 ha un secondo giro per correggersi; `tests/test_scriba_ostile.py` prova tutte le
-scappatoie con un modello finto che rispetta lo schema.
+scappatoie con un modello finto che rispetta lo schema. Lo stesso vale per le quattro
+estrazioni della preparazione (dadi, tabelle, prefazione, trigger): i testi che il programma
+ricopia hanno una regola sola (`master/testi.py`: nomi senza barre ne' parentesi quadre, righe
+singole senza segnali del programma) e `tests/test_estrattore_ostile.py` prova a infilare un
+`[Tabella]` finto in una riga o un `## Titolo` in una voce di prefazione.
 Sotto ogni risposta il costo riporta la quota dello scriba. Il costruttore di schede
 non usa lo scriba: salva lui, alla conferma del giocatore.
 

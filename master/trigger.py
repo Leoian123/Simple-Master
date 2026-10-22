@@ -33,6 +33,7 @@ import logging
 import re
 from typing import Any
 
+from . import testi
 from .campaign import MECHANICS_DIR, Campaign
 
 log = logging.getLogger("master.trigger")
@@ -87,8 +88,9 @@ def problems(data: Any) -> list[tuple[str, str]]:
             out.append((at, "una regola e' {nome, quando, effetti, ricorrente}"))
             continue
         name = str(t.get("nome") or "").strip().lower()
-        if not name:
-            out.append((f"{at}.nome", "manca il nome della regola"))
+        bad_name = testi.problema_nome(t.get("nome"))
+        if bad_name:
+            out.append((f"{at}.nome", bad_name))
         elif name in names:
             out.append((f"{at}.nome", f"'{name}' e' gia' usato da un'altra regola"))
         names.add(name)
@@ -153,8 +155,11 @@ def _effect_problems(e: Any) -> list[tuple[str, str]]:
         return [("", "un effetto ha esattamente una chiave fra " + ", ".join(EFFETTI))]
     kind = kinds[0]
     out: list[tuple[str, str]] = []
-    if not isinstance(e[kind], str) or not e[kind].strip():
-        out.append((f".{kind}", "un testo (l'avviso, o il nome)"))
+    bad_text = testi.problema_riga(e[kind]) if kind == "avviso" else testi.problema_nome(e[kind])
+    if bad_text:
+        out.append((f".{kind}", bad_text))
+    if kind == "orologio" and e.get("conseguenza") not in (None, "") and testi.problema_riga(e.get("conseguenza")):
+        out.append((".conseguenza", testi.problema_riga(e.get("conseguenza"))))
     allowed = {"avviso": set(), "orologio": {"avanza", "segmenti", "conseguenza"}, "relazione": {"verso", "forza"}, "tabella": set()}[kind]
     if kind == "orologio":
         if not _is_int(e.get("avanza")):

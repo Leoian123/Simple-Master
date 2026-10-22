@@ -65,7 +65,9 @@ i numeri del personaggio li muove solo lo scriba, su indicazione del narratore.
 ## Verifica
 
 La verifica segnala come errore un file illeggibile o malformato (con il percorso della regola) e un percorso
-`scheda` che nella scheda attiva non esiste (la regola non scatterebbe mai). Nel codice: `trigger.problems(data)`,
+`scheda` che nella scheda attiva non esiste (la regola non scatterebbe mai). Il nome segue la regola dei nomi di
+`testi.py` (niente `|`, parentesi quadre, a capo); `avviso` e `conseguenza` stanno su una riga, senza segnali del
+programma (`[TRIGGER`, `[[`, `[Tabella]`), entro 300 caratteri. Nel codice: `trigger.problems(data)`,
 `trigger.carica(campaign)`, `trigger.valuta(campaign, messaggio_del_turno)`.
 
 ## Da dove vengono

@@ -16,6 +16,7 @@ import logging
 import re
 from typing import Any
 
+from . import testi
 from .campaign import MECHANICS_DIR, Campaign
 
 log = logging.getLogger("master.prefazione")
@@ -145,12 +146,13 @@ def clean(campaign: Campaign, data: Any) -> dict[str, Any]:
     for c in (data.get("cercare") or [])[:MAX_ITEMS] if isinstance(data.get("cercare"), list) else []:
         if not isinstance(c, dict):
             continue
-        file, section, topic = str(c.get("file", "")).strip(), str(c.get("sezione", "")).strip(), str(c.get("argomento", "")).strip()
+        file, section = str(c.get("file", "")).strip(), str(c.get("sezione", "")).strip()
+        topic = testi.riga_pulita(c.get("argomento")).replace("`", "'").replace(" § ", " - ")  # la riga del rimando si rilegge: niente segni suoi
         if topic and file in existing and section.lower() in existing[file]:
             kept.append({"argomento": topic, "file": file, "sezione": existing[file][section.lower()]})
         else:
             log.warning("prefazione: rimando scartato (%s -> %s § %s): non esiste", topic, file, section)
-    texts = lambda key: [str(x).strip() for x in (data.get(key) or [])[:MAX_ITEMS] if str(x).strip()] if isinstance(data.get(key), list) else []
+    texts = lambda key: [t for t in (testi.riga_pulita(x) for x in (data.get(key) or [])[:MAX_ITEMS]) if t] if isinstance(data.get(key), list) else []
     return {"precedenza": texts("precedenza"), "cercare": kept, "riserva": texts("riserva")}
 
 

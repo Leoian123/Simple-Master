@@ -31,6 +31,9 @@ come dati, e le tira il programma. Lasciate in prosa il narratore sceglierebbe l
 Regole (`tabelle.problems`, usate anche dalla verifica): nomi unici; `dado` e' una notazione NdS+K; le righe coprono
 tutto l'intervallo del dado (dal minimo al massimo) senza buchi ne' sovrapposizioni; al massimo 60 tabelle e
 200 righe per tabella. Un file che non le rispetta si ignora intero e la verifica lo segnala come errore.
+I testi che il programma ricopia hanno la regola di `testi.py`: il nome senza `|`, `[`, `]`, backtick ne' a capo
+(finisce in un marcatore); `uso` e `risultato` su una riga sola, senza segnali del programma (`[[`, `[Tabella]`,
+`[Tiro]`, `[TRIGGER`), entro 300 caratteri. L'estrazione scarta le tabelle che non la rispettano.
 
 Una riga puo' mandare a un'altra tabella dello stesso file (`"tabella": "tesori"`: 'tira sui tesori'): il
 programma tira anche quella, fino a 3 tabelle in fila, una riga di `[Tabella]` per ciascuna. Il nome deve

@@ -306,6 +306,16 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 15 — L'estrattore ostile — FATTO (2026-10-22)
+> La fase 0.4 per la preparazione v2. `master/testi.py`: una regola per i testi che il programma
+> ricopia (nome senza `|`, `[`, `]`, backtick, a capo; riga singola senza `[[`, `[Tabella]`,
+> `[Tiro]`, `[TRIGGER`, entro 300 caratteri), usata da `tabelle.problems`, `trigger.problems`,
+> dalla verifica del profilo dei dadi, da `extract_profile` (tipi scartati) e da `prefazione.clean`
+> (voci ridotte a una riga, segnali tolti). `tests/test_estrattore_ostile.py`: un nome di tabella
+> con la barra, un esito `[Tabella]` finto in coda a una riga, un `## Titolo` dentro una voce di
+> prefazione, un `[TRIGGER` finto in un avviso, un tipo di tiro "riserva | dadi 99": tutto
+> respinto o ripulito, disco pulito, verifica muta. 11 righe di mutazione in piu'.
+
 ## Fase 14 — Nomi a meta' e marcatori verificati — FATTO (2026-10-22)
 > `master/nomi.py`: un nome scritto a meta' ("incontri" per "incontri nella palude", "abilita'"
 > per "prova di abilita'") vale se e' uno solo a contenerlo; due candidati fermano il tiro

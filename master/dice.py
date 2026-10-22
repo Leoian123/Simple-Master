@@ -779,6 +779,24 @@ def rules_about_dice(campaign: Campaign) -> str:
     return "\n\n".join(parts)
 
 
+def _nomi_puliti(kinds: Any) -> list[dict[str, Any]]:
+    """I tipi di tiro il cui nome puo' stare in un marcatore; gli altri (una barra, una parentesi quadra) si scartano."""
+    from . import testi
+
+    out = []
+    for k in kinds if isinstance(kinds, list) else []:
+        if not isinstance(k, dict):
+            continue
+        problem = testi.problema_nome(k.get("nome"))
+        if problem:
+            log.warning("profilo dadi: tipo scartato %r: %s", k.get("nome"), problem)
+            continue
+        if isinstance(k.get("alias"), list):
+            k["alias"] = [a for a in k["alias"] if isinstance(a, str) and not testi.problema_nome(a)]
+        out.append(k)
+    return out
+
+
 def extract_profile(campaign: Campaign, client: Any, model: str, sheet_json: str = "") -> dict[str, Any] | None:
     """Una chiamata: dalle sezioni di `meccanica/` che parlano di tiri al profilo in `meccanica/dadi.json`."""
     rules = rules_about_dice(campaign)
@@ -797,6 +815,7 @@ def extract_profile(campaign: Campaign, client: Any, model: str, sheet_json: str
     campaign.record_spend("dadi", model, cost_usd(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0))
     raw = "\n".join(b.text for b in response.content if b.type == "text")
     profile = parse_json_object(raw)
+    profile["tiri"] = _nomi_puliti(profile.get("tiri"))
     if not profile.get("tiri"):
         log.warning("profilo dadi: il modello non ha trovato tipi di tiro")
         return None

@@ -48,7 +48,10 @@ committa i file in `docs/sezioni/` insieme al codice (`tests/test_docs.py` lo pr
 Tutti i test sono offline (client finto o risposte preparate): un test che chiama la rete e'
 un errore. Un campo nuovo in `dadi.json`, `stato.json` o nella parte fissa della scheda vuole
 una riga nella tabella di `tests/test_mutazioni.py` (cosa fa il codice, cosa dice il
-validatore) e, se ha una forma, un controllo in `validate.py`. Prima di committare: suite verde, `python main.py --validate` muto,
+validatore) e, se ha una forma, un controllo in `validate.py`. Un testo che il modello scrive
+e il programma ricopia (un nome che finisce in un marcatore, una riga che torna al narratore)
+passa da `master/testi.py`: niente barre o parentesi quadre nei nomi, una riga sola senza
+segnali del programma nei testi. Prima di committare: suite verde, `python main.py --validate` muto,
 `python main.py --doc` senza avviso di sezioni non aggiornate. All'apertura di una sessione
 girano da soli `--logs diagnose` (interruzioni nei registri, skill `diagnosi-registri`) e
 `--validate` su tutte le campagne.

@@ -24,7 +24,7 @@ import logging
 import re
 from typing import Any
 
-from . import dice
+from . import dice, testi
 from .campaign import MECHANICS_DIR, SETTING_DIR, Campaign
 
 log = logging.getLogger("master.tabelle")
@@ -83,11 +83,14 @@ def problems(data: Any) -> list[tuple[str, str]]:
             out.append((at, "una tabella e' {nome, uso, dado, righe}"))
             continue
         name = str(t.get("nome") or "").strip().lower()
-        if not name:
-            out.append((f"{at}.nome", "manca il nome della tabella"))
+        bad_name = testi.problema_nome(t.get("nome"))
+        if bad_name:
+            out.append((f"{at}.nome", bad_name))
         elif name in names:
             out.append((f"{at}.nome", f"'{name}' e' gia' usato da un'altra tabella"))
         names.add(name)
+        if t.get("uso") not in (None, "") and testi.problema_riga(t.get("uso")):
+            out.append((f"{at}.uso", testi.problema_riga(t.get("uso"))))
         span = dice_range(str(t.get("dado") or ""))
         if span is None:
             out.append((f"{at}.dado", "una notazione come 1d100, 2d6, 1d20+1"))
@@ -106,8 +109,9 @@ def problems(data: Any) -> list[tuple[str, str]]:
             if not _is_int(r.get("da")) or not _is_int(r.get("a")) or r["a"] < r["da"]:
                 out.append((f"{where}.da", "`da` e `a` sono interi, con `a` non minore di `da`"))
                 continue
-            if not str(r.get("risultato") or "").strip():
-                out.append((f"{where}.risultato", "manca il risultato"))
+            bad_text = testi.problema_riga(r.get("risultato"))
+            if bad_text:
+                out.append((f"{where}.risultato", bad_text))
             if "tabella" in r and r["tabella"] is not None:
                 target = str(r["tabella"]).strip().lower() if isinstance(r["tabella"], str) else ""
                 if not target:

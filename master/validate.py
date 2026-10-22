@@ -28,6 +28,7 @@ from .dice import PROFILE_NAME, WHEN, esiti_problems, profile_path, rules_about_
 from .lineage import REGISTRY_NAME, SCHEMA as LINEAGE_SCHEMA
 from .modi import FILE_NAME as MODES_NAME, modi_problems
 from .prefazione import MIN_SECTIONS, RULES_FILE, SECTION_TITLE as PREFACE_TITLE, broken_lookups, leggi as read_preface
+from .testi import problema_nome
 from .tabelle import FILE_NAME as TABLES_NAME, problems as table_problems, sections_with_tables
 from .trigger import FILE_NAME as TRIGGER_NAME, problems as trigger_problems, sheet_path_problems, table_name_problems, threshold_sections
 from .relazioni import FILE_NAME as RELATIONS_NAME, MAX as REL_MAX, MIN as REL_MIN, stadi_problems
@@ -244,8 +245,9 @@ def _profile_problems(data: Any) -> list[tuple[str, str]]:
             out.append((at, "non e' un oggetto"))
             continue
         name = str(kind.get("nome") or "").strip().lower()
-        if not name:
-            out.append((f"{at}.nome", "manca il nome del tipo di tiro"))
+        bad_name = problema_nome(kind.get("nome"))
+        if bad_name:
+            out.append((f"{at}.nome", bad_name))
         elif name in names:
             out.append((f"{at}.nome", f"'{name}' e' gia' usato da un altro tipo: il marcatore prenderebbe il primo"))
         names.add(name)
@@ -256,8 +258,8 @@ def _profile_problems(data: Any) -> list[tuple[str, str]]:
             else:
                 for j, a in enumerate(aliases):
                     key = a.strip().lower()
-                    if not key:
-                        out.append((f"{at}.alias[{j}]", "alias vuoto"))
+                    if problema_nome(a):
+                        out.append((f"{at}.alias[{j}]", problema_nome(a)))
                     elif key in names:
                         out.append((f"{at}.alias[{j}]", f"'{key}' e' gia' un nome o un alias di un altro tipo"))
                     names.add(key)
