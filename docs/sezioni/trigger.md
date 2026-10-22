@@ -26,7 +26,7 @@ nessuna chiamata. Un file che non rispetta la forma viene ignorato intero, e la 
 | `nome` | unico; e' cio' che il narratore legge in `[TRIGGER nome: ...]` |
 | `quando` | da 1 a 5 condizioni, tutte vere insieme (AND); non esiste OR: due regole |
 | `effetti` | da 1 a 3 effetti, applicati in ordine |
-| `ricorrente` | `true`: scatta a ogni turno in cui vale; `false` (default): una volta sola, poi il nome finisce in `stato.json` -> `trigger_scattati` |
+| `ricorrente` | `true`: scatta a ogni turno in cui vale; `false` (default): una volta sola, poi il nome finisce in `stato.json` -> `trigger_scattati`; `"sessione"`: una volta per sessione di gioco (si segna `nome@N`) |
 
 Al massimo 100 regole per campagna.
 
@@ -40,9 +40,9 @@ Al massimo 100 regole per campagna.
 | `stadio` | lo stadio della relazione di un PNG, per nome (es. `Ostile`), confronto solo con `==` / `!=` |
 | `esito` | il nome della fascia dell'ultimo tiro, solo nel turno in cui l'esito arriva (es. `fallito`), `==` / `!=` |
 | `tabella` | la riga uscita da una tabella, per nome della tabella, solo nel turno in cui l'esito arriva: `==` / `!=` / `contiene` con un testo |
-| `contatore` | `turni` (giocati dal personaggio) o `sessione` (in corso) |
+| `contatore` | `turni` (giocati dal personaggio) o `sessione` (in corso); con `op: ogni` e un intero N: vero al turno (o sessione) N, 2N, 3N... |
 
-`op`: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contiene`. Con `<`, `<=`, `>`, `>=` il valore e' un numero; `contiene` cerca un
+`op`: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contiene`, `ogni`. Con `<`, `<=`, `>`, `>=` il valore e' un numero; `contiene` cerca un
 elemento in un elenco (o un pezzo in un testo); `stadio` ed `esito` ammettono solo `==` / `!=` con un nome; `tabella`
 anche `contiene`, sul testo della riga uscita (`[Tabella] <nome> — ... -> N: <riga>`), solo in quel turno.
 Un confronto fra tipi diversi e' falso, mai un errore: una regola scritta male non scatta.

@@ -137,6 +137,50 @@ class TestInGioco(Base):
         self.assertEqual(validate(self.camp).errors, [])
 
 
+class TestTempo(Base):
+    """Il tempo come fatto: una volta per sessione, ogni N turni. Niente AI, niente memoria: contatori."""
+
+    RULE = {"trigger": [
+        {"nome": "apertura", "ricorrente": "sessione",
+         "quando": [{"contatore": "sessione", "op": ">=", "valore": 1}],
+         "effetti": [{"avviso": "Inizio di sessione: le regole sul riposo"}]},
+        {"nome": "marea", "ricorrente": True,
+         "quando": [{"contatore": "turni", "op": "ogni", "valore": 2}],
+         "effetti": [{"orologio": "La marea", "avanza": 1, "segmenti": 4, "conseguenza": "l'isola si copre"}]},
+    ]}
+
+    def test_shape(self) -> None:
+        self.assertEqual(trigger.problems(self.RULE), [])
+        bad = json.loads(json.dumps(self.RULE))
+        bad["trigger"][0]["ricorrente"] = "ogni"
+        bad["trigger"][1]["quando"][0]["valore"] = 0
+        bad["trigger"].append({"nome": "x", "quando": [{"scheda": "stato.monete", "op": "ogni", "valore": 2}], "effetti": [{"avviso": "y"}]})
+        self.assertEqual([p for p, _ in trigger.problems(bad)], ["trigger[0].ricorrente", "trigger[1].quando[0].valore", "trigger[2].quando[0].op"])
+
+    def test_once_per_session_and_every_n_turns(self) -> None:
+        (self.camp.root / "meccanica" / "trigger.json").write_text(json.dumps(self.RULE), encoding="utf-8")
+        self.assertEqual(validate(self.camp).errors, [])
+        slug = self.camp.active_sheet()["slug"]
+        self.assertEqual(trigger.valuta(self.camp, "Salpo."), ["[TRIGGER apertura: Inizio di sessione: le regole sul riposo]"])  # sessione 1, turno 0
+        self.assertEqual(trigger.valuta(self.camp, "Guardo."), [])  # stessa sessione: gia' scattato
+        self.assertEqual(self.camp.triggers_fired(), {"apertura@1"})
+        self.camp.append_turn(slug, "a", "b")
+        self.assertEqual(trigger.valuta(self.camp, "Remo."), [])  # turno 1: non multiplo di 2
+        self.camp.append_turn(slug, "a", "b")
+        trigger.valuta(self.camp, "Remo.")  # turno 2
+        self.assertEqual(self.camp.clocks()["La marea"]["pieni"], 1)
+        self.camp.append_turn(slug, "a", "b")
+        trigger.valuta(self.camp, "Remo.")  # turno 3
+        self.assertEqual(self.camp.clocks()["La marea"]["pieni"], 1)
+        self.camp.append_turn(slug, "a", "b")
+        trigger.valuta(self.camp, "Remo.")  # turno 4
+        self.assertEqual(self.camp.clocks()["La marea"]["pieni"], 2)
+        self.camp.next_session()
+        self.assertEqual(trigger.valuta(self.camp, "Riprendo."), ["[TRIGGER apertura: Inizio di sessione: le regole sul riposo]"])  # sessione 2
+        self.assertEqual(self.camp.triggers_fired(), {"apertura@1", "apertura@2"})
+        self.assertEqual(validate(self.camp).errors, [])
+
+
 class TestTabella(Base):
     """La riga uscita da una tabella e' un fatto: vale nel turno in cui arriva, per quella tabella, e poi sparisce."""
 

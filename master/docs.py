@@ -511,7 +511,7 @@ def _gen_triggers() -> str:
         "| `nome` | unico; e' cio' che il narratore legge in `[TRIGGER nome: ...]` |",
         f"| `quando` | da 1 a {MAX_CONDITIONS} condizioni, tutte vere insieme (AND); non esiste OR: due regole |",
         f"| `effetti` | da 1 a {MAX_EFFECTS} effetti, applicati in ordine |",
-        f"| `ricorrente` | `true`: scatta a ogni turno in cui vale; `false` (default): una volta sola, poi il nome finisce in `stato.json` -> `{STATE_KEY}` |",
+        f"| `ricorrente` | `true`: scatta a ogni turno in cui vale; `false` (default): una volta sola, poi il nome finisce in `stato.json` -> `{STATE_KEY}`; `\"sessione\"`: una volta per sessione di gioco (si segna `nome@N`) |",
         "",
         f"Al massimo {MAX_TRIGGERS} regole per campagna.",
         "",

@@ -387,7 +387,9 @@ tiro, i contatori di turni e sessioni. Gli effetti sono tipizzati: un avviso al 
 (`[TRIGGER rischio di frenesia: ...]` in testa al messaggio del turno, come gli orologi
 pieni), un orologio che avanza o nasce, una relazione che si muove di un passo. A ogni
 turno, prima della chiamata del narratore, il codice le valuta tutte e applica gli effetti;
-una regola non ricorrente scatta una volta sola. Niente testo da giudicare, niente script,
+una regola non ricorrente scatta una volta sola, una `"sessione"` una volta per sessione, e
+`contatore turni` con `op: "ogni"` vale al turno N, 2N, 3N ("ogni due turni la marea
+avanza"). Niente testo da giudicare, niente script,
 nessuna chiamata: la regola della frenesia arriva al narratore dal contatore della scheda,
 non dalla sua memoria. Si scrivono a mano; un file malformato si ignora intero e la
 verifica lo dice. `python main.py --doc trigger`.

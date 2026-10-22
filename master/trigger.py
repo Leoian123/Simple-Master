@@ -41,7 +41,8 @@ log = logging.getLogger("master.trigger")
 FILE_NAME = "trigger.json"
 STATE_KEY = "trigger_scattati"
 MAX_TRIGGERS, MAX_CONDITIONS, MAX_EFFECTS = 100, 5, 3
-OPS = ("==", "!=", "<", "<=", ">", ">=", "contiene")
+OPS = ("==", "!=", "<", "<=", ">", ">=", "contiene", "ogni")
+RICORRENZE = (True, False, "sessione")  # ogni turno in cui vale / una volta sola / una volta per sessione
 NUMERIC_OPS = ("<", "<=", ">", ">=")
 CONDIZIONI: dict[str, str] = {
     "scheda": "un valore della scheda del personaggio attivo, per percorso (es. `stato.stress`); se il percorso non esiste la condizione e' falsa",
@@ -50,7 +51,7 @@ CONDIZIONI: dict[str, str] = {
     "stadio": "lo stadio della relazione di un PNG, per nome (es. `Ostile`), confronto solo con `==` / `!=`",
     "esito": "il nome della fascia dell'ultimo tiro, solo nel turno in cui l'esito arriva (es. `fallito`), `==` / `!=`",
     "tabella": "la riga uscita da una tabella, per nome della tabella, solo nel turno in cui l'esito arriva: `==` / `!=` / `contiene` con un testo",
-    "contatore": "`turni` (giocati dal personaggio) o `sessione` (in corso)",
+    "contatore": "`turni` (giocati dal personaggio) o `sessione` (in corso); con `op: ogni` e un intero N: vero al turno (o sessione) N, 2N, 3N...",
 }
 EFFETTI: dict[str, str] = {
     "avviso": "una riga al narratore in testa al messaggio del turno: `[TRIGGER <nome>: avviso]`",
@@ -94,8 +95,8 @@ def problems(data: Any) -> list[tuple[str, str]]:
         elif name in names:
             out.append((f"{at}.nome", f"'{name}' e' gia' usato da un'altra regola"))
         names.add(name)
-        if "ricorrente" in t and not isinstance(t["ricorrente"], bool):
-            out.append((f"{at}.ricorrente", "true o false"))
+        if "ricorrente" in t and not (isinstance(t["ricorrente"], bool) or t["ricorrente"] == "sessione"):
+            out.append((f"{at}.ricorrente", "true, false o \"sessione\" (una volta per sessione)"))
         conds = t.get("quando")
         if not isinstance(conds, list) or not conds:
             out.append((f"{at}.quando", "almeno una condizione, in un elenco"))
@@ -131,6 +132,10 @@ def _condition_problems(c: Any) -> list[tuple[str, str]]:
     op = c.get("op")
     if op not in OPS:
         out.append((".op", f"uno fra {', '.join(OPS)}"))
+    elif op == "ogni" and kind != "contatore":
+        out.append((".op", "`ogni` vale solo per `contatore` (ogni N turni o sessioni)"))
+    elif op == "ogni" and not (_is_int(c.get("valore")) and c.get("valore") >= 1):
+        out.append((".valore", "con `ogni` serve un intero da 1 in su"))
     elif kind in ("stadio", "esito") and op not in ("==", "!="):
         out.append((".op", f"per `{kind}` solo == o !="))
     elif kind == "tabella" and op not in ("==", "!=", "contiene"):
@@ -278,6 +283,8 @@ class _Fatti:
         if "contatore" in c:
             which = str(c["contatore"]).strip().lower()
             value = self.campaign.played_turns() if which == "turni" else self.campaign.session_number
+            if op == "ogni":  # "ogni 3 turni": al terzo, al sesto...; mai al turno zero
+                return _is_int(wanted) and wanted >= 1 and value > 0 and value % wanted == 0
             return _compare(value, op, wanted)
         return False
 
@@ -293,14 +300,17 @@ def valuta(campaign: Campaign, spoken: str = "") -> list[str]:
     newly: list[str] = []
     for rule in rules:
         name = str(rule["nome"]).strip()
-        if not rule.get("ricorrente") and name.lower() in fired:
+        mode = rule.get("ricorrente")
+        # la chiave con cui la regola si segna come scattata: il nome (una volta sola) o nome@sessione (una per sessione)
+        key = None if mode is True else name.lower() if not mode else f"{name.lower()}@{campaign.session_number}"
+        if key is not None and key in fired:
             continue
         if not all(facts.holds(c) for c in rule["quando"]):
             continue
         for effect in rule["effetti"]:
             notes += _apply(campaign, name, effect)
-        if not rule.get("ricorrente"):
-            newly.append(name.lower())
+        if key is not None:
+            newly.append(key)
         log.info("trigger '%s' scattato", name)
     if newly:
         campaign.mark_triggers_fired(newly)
@@ -442,7 +452,8 @@ TRIGGERS_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "properties": {
                     "nome": {"type": "string", "description": "Breve, minuscolo, unico"},
-                    "ricorrente": {"type": "boolean", "description": "true se vale ogni turno in cui la condizione regge; false se scatta una volta sola"},
+                    "ricorrente": {"type": ["boolean", "string"], "enum": [True, False, "sessione"],
+                                   "description": "true se vale ogni turno in cui la condizione regge; false se scatta una volta sola; \"sessione\" se una volta per sessione di gioco"},
                     "quando": {"type": "array", "items": _CONDITION, "description": f"Da 1 a {MAX_CONDITIONS} condizioni, tutte vere insieme"},
                     "effetti": {"type": "array", "items": _EFFECT, "description": f"Da 1 a {MAX_EFFECTS} effetti"},
                     "fonte": {"type": "string", "description": "La sezione da cui viene"},
@@ -461,6 +472,8 @@ che il programma possiede (un numero della scheda, fra i percorsi dati; un orolo
 la fascia dell'ultimo tiro; la riga uscita da una tabella che il programma tira; i turni giocati) e una CONSEGUENZA chiusa (un avviso al master con la regola da applicare,
 un orologio che avanza, una relazione che si muove, una tabella da tirare fra quelle che il programma tira). Esempi: "con lo stress a 4 o piu' ogni tentazione richiede una
 prova" -> scheda stato.stress >= 4, avviso ricorrente; "a 0 punti ferita il personaggio cade" -> avviso.
+Il tempo: "all'inizio di ogni sessione" -> ricorrente "sessione" con contatore sessione >= 1; "ogni 3 turni" -> contatore
+turni op "ogni" valore 3.
 Solo cio' che le sezioni dicono, con i numeri del manuale. Usa SOLO percorsi della scheda fra quelli elencati: se la
 regola parla di un valore che la scheda non ha, lasciala fuori. L'avviso cita la regola in una frase, non la narra.
 Lascia fuori cio' che richiede un giudizio ("se il personaggio e' in pericolo") o un tiro: quello lo fa il master."""
@@ -499,7 +512,8 @@ def _to_rule(t: dict[str, Any]) -> dict[str, Any]:
         if kind == "tabella":
             out[kind] = str(e.get("testo", "")).strip()  # il nome della tabella da tirare
         effects.append(out)
-    rule = {"nome": str(t.get("nome", "")).strip().lower(), "ricorrente": bool(t.get("ricorrente")), "quando": conds, "effetti": effects}
+    mode = t.get("ricorrente")
+    rule = {"nome": str(t.get("nome", "")).strip().lower(), "ricorrente": "sessione" if mode == "sessione" else bool(mode), "quando": conds, "effetti": effects}
     if t.get("fonte"):
         rule["fonte"] = str(t["fonte"]).strip()
     return rule

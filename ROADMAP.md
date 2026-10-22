@@ -306,6 +306,13 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 16 — Il tempo nei trigger — FATTO (2026-10-22)
+> `ricorrente: "sessione"` (una volta per sessione di gioco: si segna `nome@N` in
+> `trigger_scattati`) e l'operatore `ogni` sui contatori (`contatore turni, op ogni, valore 3`:
+> vero al terzo, al sesto... turno; mai al turno zero). "All'inizio di ogni sessione tira sugli
+> incontri" e "ogni due turni la marea avanza" diventano dati: contatori, non memoria. Lo schema
+> di estrazione li ammette, il prompt li spiega, 3 righe di mutazione, `test_trigger.TestTempo`.
+
 ## Fase 15 — L'estrattore ostile — FATTO (2026-10-22)
 > La fase 0.4 per la preparazione v2. `master/testi.py`: una regola per i testi che il programma
 > ricopia (nome senza `|`, `[`, `]`, backtick, a capo; riga singola senza `[[`, `[Tabella]`,
