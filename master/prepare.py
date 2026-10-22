@@ -812,8 +812,8 @@ class Preparer:
             log.warning("prefazione non scritta: %s", describe_error(exc))
             report.warnings.append(f"prefazione delle regole non scritta: {exc}")
         try:
-            rules = trigger.rules_with_thresholds(self.campaign)
             sheet = self._active_sheet()
+            rules = trigger.rules_with_thresholds(self.campaign, sheet)
             if rules and sheet is None:
                 progress("  trigger: senza una scheda attiva i percorsi non si verificano: ricavali dal tavolo ('Ricava i trigger')")
             elif rules:

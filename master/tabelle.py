@@ -361,6 +361,22 @@ def setaccia(tables: list[Any]) -> list[dict[str, Any]]:
     return kept
 
 
+GROUP_CHARS = 12_000  # sezioni per chiamata: l'uscita (le tabelle trascritte) pesa quanto l'ingresso
+
+
+def _groups(found: list[tuple[str, str, str]], limit: int) -> list[list[tuple[str, str, str]]]:
+    """Le sezioni a gruppi che stanno nel limite di caratteri, nell'ordine in cui arrivano."""
+    groups: list[list[tuple[str, str, str]]] = [[]]
+    size = 0
+    for row in found:
+        if groups[-1] and size + len(row[2]) > limit:
+            groups.append([])
+            size = 0
+        groups[-1].append(row)
+        size += len(row[2])
+    return [g for g in groups if g]
+
+
 def sections_with_tables(campaign: Campaign) -> list[tuple[str, str, str]]:
     """(file, titolo, corpo) delle sezioni che hanno la forma di una tabella casuale, fino a un tetto di caratteri."""
     out, size = [], 0
@@ -386,16 +402,26 @@ def extract_tables(campaign: Campaign, client: Any, model: str) -> list[dict[str
     from .models import cost_usd
     from .prepare import create_message, parse_json_object
 
-    content = "\n\n".join(f"## {title} ({name})\n{body}" for name, title, body in found)
-    response = create_message(client, max_seconds=300, model=model, max_tokens=8000, system=TABLES_PROMPT,
-                              messages=[{"role": "user", "content": content}],
-                              output_config={"format": {"type": "json_schema", "schema": TABLES_SCHEMA}})
-    usage = getattr(response, "usage", None)
-    campaign.record_spend("tabelle", model, cost_usd(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0))
-    data = parse_json_object("\n".join(b.text for b in response.content if b.type == "text"))
-    tables = data.get("tabelle") if isinstance(data, dict) else None
-    if not isinstance(tables, list):
-        return []
+    # a gruppi: un manuale vero (Cyberpunk RED, 19 sezioni, 40k caratteri) in una chiamata sola supera i token di
+    # uscita e il JSON arriva tagliato; ogni gruppo sta nel suo budget, poi le tabelle si setacciano insieme
+    tables: list[Any] = []
+    for group in _groups(found, GROUP_CHARS):
+        content = "\n\n".join(f"## {title} ({name})\n{body}" for name, title, body in group)
+        response = create_message(client, max_seconds=300, model=model, max_tokens=16000, system=TABLES_PROMPT,
+                                  messages=[{"role": "user", "content": content}],
+                                  output_config={"format": {"type": "json_schema", "schema": TABLES_SCHEMA}})
+        usage = getattr(response, "usage", None)
+        campaign.record_spend("tabelle", model, cost_usd(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0))
+        if getattr(response, "stop_reason", "") == "max_tokens":
+            log.warning("tabelle: risposta tagliata per il gruppo '%s'...: le sue tabelle si perdono", group[0][1])
+            continue
+        try:
+            data = parse_json_object("\n".join(b.text for b in response.content if b.type == "text"))
+        except ValueError as exc:
+            log.warning("tabelle: JSON illeggibile per il gruppo '%s'...: %s", group[0][1], exc)
+            continue
+        part = data.get("tabelle") if isinstance(data, dict) else None
+        tables += part if isinstance(part, list) else []
     kept = setaccia(tables)
     salva(campaign, kept)
     log.info("tabelle salvate: %s", ", ".join(t["nome"] for t in kept) or "nessuna")

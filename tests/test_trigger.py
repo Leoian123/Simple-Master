@@ -295,6 +295,21 @@ class TestEstrazione(Base):
         self.assertIn("REGOLE GIA' SCRITTE (non riproporle, nemmeno con un altro nome): ferito", client.calls[0]["messages"][0]["content"])
         self.assertEqual([t["nome"] for t in trigger.carica(self.camp)], ["ferito", "senza un soldo"])
 
+    def test_table_rows_do_not_count_and_sheet_resources_weigh(self) -> None:
+        """Manuale vero (2026-10-22): una tabella di veicoli vinceva con 'superiore' accanto a ogni numero; le soglie
+        vere ('meno di meta' dei punti ferita') non avevano cifre ma nominavano le risorse della scheda."""
+        veicoli = "| Veicolo | Velocita' |\n|---|---|\n" + "\n".join(f"| Moto {i} | superiore a {i * 10} |" for i in range(8))
+        soglie = "Quando i punti ferita scendono sotto la meta' dei punti ferita massimi il personaggio e' ferito gravemente; i punti ferita a zero sono la morte."
+        self.assertEqual(trigger.threshold_score(veicoli), 0)
+        self.assertEqual(trigger.threshold_score(soglie), 0)  # nessuna cifra: le parole di soglia da sole non contano
+        self.assertEqual(trigger.resource_words(self.sheet()), ["punti ferita", "monete"])  # le foglie sotto `stato`, senza attuale/massimo
+        self.assertEqual(trigger.threshold_score(soglie, ["punti ferita"]), trigger.RESOURCE_WEIGHT * 3)
+        self.camp.file("meccanica/regole.md").set_section("Veicoli", veicoli)
+        self.camp.file("meccanica/regole.md").set_section("Soglie", soglie)
+        ranked = trigger.threshold_sections(self.camp, self.sheet())
+        self.assertEqual([t for _, _, t, _ in ranked][:1], ["Soglie"])
+        self.assertNotIn("Veicoli", [t for _, _, t, _ in ranked])
+
     def test_flat_answer_becomes_the_file_shape(self) -> None:
         rule = trigger._to_rule({"nome": "Ferito", "ricorrente": True, "fonte": "Ferite",
                                  "quando": [{"tipo": "scheda", "soggetto": "stato.punti_ferita.attuale", "op": "<=", "valore": "4"}],

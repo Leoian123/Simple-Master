@@ -165,7 +165,11 @@ def anteprima(campaign: Campaign, what: list[str], model: str) -> list[str]:
             n = len(campaign.file(prefazione.RULES_FILE).outline()) if campaign.file(prefazione.RULES_FILE).exists() else 0
             out.append(f"prefazione: indice di {n} sezioni di regole, {num(size)} caratteri, circa ${estimate_usd(model, size, out_tokens=1500):.2f}")
         elif item == "trigger":
-            found = trigger.threshold_sections(campaign)
+            from master.sheet import Sheet
+
+            info = campaign.active_sheet()
+            sheet = Sheet(campaign, info["slug"]) if info else None
+            found = trigger.threshold_sections(campaign, sheet if sheet is not None and sheet.exists else None)
             size = sum(len(b) for _, _, _, b in found)
             out.append(f"trigger: {len(found)} sezioni con soglie ({', '.join(f'{t} [{s}]' for s, _, t, _ in found[:6])}"
                        f"{', ...' if len(found) > 6 else ''}), {num(size)} caratteri, circa ${estimate_usd(model, size, out_tokens=3000):.2f}")

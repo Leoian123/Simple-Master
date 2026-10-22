@@ -75,7 +75,9 @@ programma (`[TRIGGER`, `[[`, `[Tabella]`), entro 300 caratteri. Nel codice: `tri
 Si scrivono a mano, oppure `trigger.extract_triggers(campaign, client, model, sheet)` (pulsante 'Ricava i trigger' nel
 tavolo, `POST /api/triggers/extract`; alla fine della preparazione se c'e' una scheda attiva, in cache per contenuto):
 una chiamata sulle sezioni di `meccanica/` che legano un numero a una conseguenza (`trigger.threshold_sections`: una
-parola di soglia a meno di 60 caratteri da un numero vale un punto, servono almeno 2 punti, le sezioni
+parola di soglia a meno di 60 caratteri da un numero vale un punto, solo nella prosa (le righe di tabella non
+contano); con la scheda attiva, una risorsa della scheda nominata accanto a una parola di soglia vale due punti
+(`trigger.resource_words`: le foglie sotto `stato`); servono almeno 2 punti, le sezioni
 entrano dalla piu' densa fino a 36k caratteri), con i percorsi della scheda attiva
 come unici percorsi ammessi (`trigger.sheet_paths`), schema forzato in forma piatta (`tipo`, `soggetto`, `op`, `valore`
 per le condizioni; `tipo`, `testo` e i campi dell'effetto). Il codice ritraduce nella forma del file, passa ogni regola

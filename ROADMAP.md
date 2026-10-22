@@ -306,6 +306,18 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 19 — Un manuale vero: Cyberpunk RED (458 pagine) — FATTO (2026-10-22)
+> Preparazione in batch, modalita' testo: 33 blocchi, 364 sezioni, 589 voci di glossario,
+> profilo dei dadi a tre tipi (prova 1d10 che esplode, tiro della morte roll-under, ferita
+> critica 2d6) con 9 campioni verificati, prefazione con 12 rimandi. Trovato: le tabelle in una
+> chiamata sola superavano i token di uscita e il JSON arrivava tagliato (ora `extract_tables`
+> lavora a gruppi di 12k caratteri, max_tokens 16000, e scarta i gruppi tagliati): 60 tabelle
+> di lifepath e strada, tutte valide. Il selettore delle soglie, per punteggio grezzo, premiava
+> le tabelle di veicoli ("superiore" accanto a ogni numero): ora conta solo la prosa, e con la
+> scheda attiva pesano le risorse nominate accanto a una parola di soglia; resta un'euristica:
+> le soglie scritte in righe di tabella ("meno di meta' dei PF") non si vedono. Spesa: ~$7,5
+> di preparazione piu' $1,52 di dati. I trigger aspettano un personaggio.
+
 ## Fase 18 — Collaudo vero: un manuale inventato, chiamate vere — FATTO (2026-10-22)
 > Campagna `prova-marea` (locale), manuale di 5k caratteri, personaggio con stress e fortuna.
 > La preparazione a secco mentiva su tre cose che solo l'API poteva dire: (1) `PROFILE_SCHEMA`

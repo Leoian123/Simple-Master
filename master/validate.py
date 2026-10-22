@@ -635,7 +635,7 @@ def _check_triggers(campaign: Campaign, report: ValidationReport) -> None:
                    "ripara il JSON, oppure cancella il file")
         return
     if data is None:
-        found = threshold_sections(campaign)
+        found = threshold_sections(campaign, _active_sheet(campaign))
         if found and campaign.active_sheet() is not None:
             report.add("recommendation", name, "trigger non ancora ricavati",
                        f"{len(found)} sezioni legano un numero a una conseguenza ({', '.join(t for _, _, t, _ in found[:3])}"

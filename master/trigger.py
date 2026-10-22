@@ -394,23 +394,68 @@ def sheet_paths(data: Any, prefix: str = "") -> list[str]:
     return out[:MAX_PATHS]
 
 
-def threshold_score(body: str) -> int:
-    """Quante parole di soglia stanno a un passo da un numero: la misura di quanto una sezione 'conta'."""
-    return sum(1 for m in _STRONG.finditer(body) if _NUMBER.search(body[max(0, m.start() - NEAR_CHARS): m.end() + NEAR_CHARS]))
+RESOURCE_WEIGHT, RESOURCE_CAP = 2, 5  # ogni volta che una sezione nomina una risorsa della scheda: due punti, fino a dieci
 
 
-def threshold_sections(campaign: Campaign) -> list[tuple[int, str, str, str]]:
+def _prose(body: str) -> str:
+    """Il testo senza le righe di tabella: in una tabella di veicoli 'superiore' e 'almeno' stanno accanto a
+    numeri a ogni riga, senza che ci sia una soglia (manuale vero, 2026-10-22)."""
+    return "\n".join(line for line in body.splitlines() if not line.lstrip().startswith("|"))
+
+
+def _plain(text: str) -> str:
+    import unicodedata
+
+    return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if unicodedata.category(c) != "Mn")
+
+
+def resource_words(sheet: Any) -> list[str]:
+    """I nomi delle risorse della scheda (le foglie sotto `stato`): sono le parole con cui il manuale scrive le soglie."""
+    data = dict(getattr(sheet, "data", {}) or {}) if sheet is not None else {}
+    words = []
+    for path in sheet_paths({"stato": data.get("stato")} if isinstance(data.get("stato"), dict) else {}):
+        for part in path.split(".")[1:]:
+            word = _plain(part.replace("_", " ")).strip()
+            if len(word) >= 4 and word not in words and word not in ("attuale", "massimo", "valore", "totale"):
+                words.append(word)
+    return words
+
+
+def threshold_score(body: str, resources: list[str] | None = None) -> int:
+    """Quante parole di soglia stanno a un passo da un numero, nella prosa; piu' le risorse della scheda nominate."""
+    prose = _prose(body)
+    score = sum(1 for m in _STRONG.finditer(prose) if _NUMBER.search(prose[max(0, m.start() - NEAR_CHARS): m.end() + NEAR_CHARS]))
+    if resources:
+        # una risorsa della scheda conta solo accanto a una parola di soglia: "i punti ferita scendono sotto",
+        # non "parti con 12 monete" (un numero accanto a una risorsa e' quasi sempre una dotazione, non una soglia)
+        plain = _plain(prose)
+        mentions = 0
+        for word in resources:
+            for found in re.finditer(re.escape(word), plain):
+                around = plain[max(0, found.start() - NEAR_CHARS): found.end() + NEAR_CHARS]
+                if _STRONG.search(around):
+                    mentions += 1
+        score += RESOURCE_WEIGHT * min(RESOURCE_CAP, mentions)
+    return score
+
+
+def threshold_sections(campaign: Campaign, sheet: Any = None) -> list[tuple[int, str, str, str]]:
     """(punteggio, file, titolo, corpo) delle sezioni di `meccanica/` con soglie, dalla piu' densa, entro il tetto.
 
     Misurato su un manuale vero di ~100 sezioni (2026-10-21): per ordine dei file il tetto si riempiva di creature e
-    opzioni di creazione senza arrivare alle risorse con soglie; per punteggio le prime sono proprio quelle."""
+    opzioni di creazione senza arrivare alle risorse con soglie; per punteggio le prime sono proprio quelle. Su un
+    secondo manuale (2026-10-22) le soglie vere stavano in sezioni brevi senza cifre ("meno di meta' dei PF"): con la
+    scheda in mano, le sezioni che nominano le sue risorse salgono."""
+    from .prefazione import SECTION_TITLE
+
+    resources = resource_words(sheet)
     scored = []
     for f in campaign.files():
         if not f.name.startswith(MECHANICS_DIR + "/"):
             continue
         for title, body in f.sections().items():
-            if title:
-                score = threshold_score(body)
+            if title and title.strip().lower() != SECTION_TITLE.lower():  # la prefazione non e' una regola
+                score = threshold_score(body, resources)
                 if score >= MIN_SCORE:
                     scored.append((score, f.name, title, body.strip()))
     scored.sort(key=lambda x: (-x[0], x[1], x[2]))
@@ -423,9 +468,9 @@ def threshold_sections(campaign: Campaign) -> list[tuple[int, str, str, str]]:
     return out
 
 
-def rules_with_thresholds(campaign: Campaign) -> str:
+def rules_with_thresholds(campaign: Campaign, sheet: Any = None) -> str:
     """Il testo che la chiamata legge: le sezioni con soglie, dalla piu' densa."""
-    return "\n\n".join(f"## {title} ({name})\n{body}" for _, name, title, body in threshold_sections(campaign))
+    return "\n\n".join(f"## {title} ({name})\n{body}" for _, name, title, body in threshold_sections(campaign, sheet))
 
 
 _CONDITION = {
@@ -549,7 +594,7 @@ def extract_triggers(campaign: Campaign, client: Any, model: str, sheet: Any = N
     """Una chiamata sulle sezioni con soglie; tiene solo le regole che passano `problems` e i percorsi della scheda.
 
     Le regole scritte a mano in `trigger.json` restano: le nuove si aggiungono se il nome e' libero."""
-    rules = rules_with_thresholds(campaign)
+    rules = rules_with_thresholds(campaign, sheet)
     if not rules:
         log.info("trigger: nessuna sezione con soglie nelle regole")
         return []

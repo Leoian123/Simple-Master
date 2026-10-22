@@ -273,7 +273,7 @@ class App:
             "min_rules_sections": prefazione.MIN_SECTIONS,
             "rules_sections": len(self.campaign.file(prefazione.RULES_FILE).outline()) if self.campaign.file(prefazione.RULES_FILE).exists() else 0,
             "triggers": [t.get("nome") for t in trigger.carica(self.campaign)],
-            "has_threshold_rules": bool(trigger.rules_with_thresholds(self.campaign)),
+            "has_threshold_rules": bool(trigger.rules_with_thresholds(self.campaign, self._sheet_or_none())),
             "mode": modi.attivo(self.campaign)["nome"],
             "modes": [{"name": m["nome"], "description": m.get("descrizione", "")} for m in modi.carica(self.campaign)],
             "has_creation_rules": self.campaign.file(f"{MECHANICS_DIR}/creazione-pg.md").exists()
@@ -343,6 +343,13 @@ class App:
         turn = self.play(rolled["text"])
         return {**turn.__dict__, "roll_text": rolled["text"], "roll_success": None}
 
+    def _sheet_or_none(self) -> Any:
+        info = self.campaign.active_sheet() if self.campaign else None
+        if not info:
+            return None
+        sheet = Sheet(self.campaign, info["slug"])
+        return sheet if sheet.exists else None
+
     def _extract_estimates(self) -> dict[str, dict[str, Any]]:
         """Quanto costerebbe, circa, ogni pulsante 'Ricava': i caratteri che leggerebbe e il prezzo del modello."""
         from .models import estimate_usd
@@ -350,7 +357,7 @@ class App:
         model = self.settings.model_for("prepare")
         sizes = {
             "tables": sum(len(b) for _, _, b in tabelle.sections_with_tables(self.campaign)),
-            "triggers": sum(len(b) for _, _, _, b in trigger.threshold_sections(self.campaign)),
+            "triggers": sum(len(b) for _, _, _, b in trigger.threshold_sections(self.campaign, self._sheet_or_none())),
             "preface": len(prefazione.materials(self.campaign)),
         }
         return {k: {"chars": n, "usd": round(estimate_usd(model, n, out_tokens=3000 if k != "preface" else 1500), 2)} for k, n in sizes.items()}
