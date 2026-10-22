@@ -340,6 +340,27 @@ le tabelle che non si tirano (listini, tabelle di modificatori): quelle il maste
 un'altra tabella ("tira sui tesori"), trascrivi anche quella e scrivi il suo nome nel campo `tabella` della riga."""
 
 
+def setaccia(tables: list[Any]) -> list[dict[str, Any]]:
+    """Le tabelle che passano `problems` prese INSIEME: un rimando a una sorella vale solo se la sorella resta.
+
+    Si toglie una tabella alla volta, quella che `problems` indica, finche' il resto e' pulito; con il controllo
+    una per una (collaudo del 2026-10-22) 'incontri' cadeva perche' 'relitti' non era nel suo stesso probe."""
+    kept = [t for t in tables if isinstance(t, dict)][:MAX_TABLES]
+    while kept:
+        bad = problems({"tabelle": kept})
+        if not bad:
+            break
+        guilty = sorted({int(m.group(1)) for p, _ in bad for m in [re.match(r"tabelle\[(\d+)\]", p)] if m}, reverse=True)
+        if not guilty:  # un problema del file intero, non di una tabella: nulla da tenere
+            log.warning("tabelle scartate tutte: %s", "; ".join(f"{p}: {m}" for p, m in bad[:3]))
+            return []
+        for i in guilty:
+            reasons = [f"{p}: {m}" for p, m in bad if p.startswith(f"tabelle[{i}]")]
+            log.warning("tabella scartata '%s': %s", kept[i].get("nome"), "; ".join(reasons[:3]))
+            kept.pop(i)
+    return kept
+
+
 def sections_with_tables(campaign: Campaign) -> list[tuple[str, str, str]]:
     """(file, titolo, corpo) delle sezioni che hanno la forma di una tabella casuale, fino a un tetto di caratteri."""
     out, size = [], 0
@@ -375,15 +396,7 @@ def extract_tables(campaign: Campaign, client: Any, model: str) -> list[dict[str
     tables = data.get("tabelle") if isinstance(data, dict) else None
     if not isinstance(tables, list):
         return []
-    kept: list[dict[str, Any]] = []
-    for t in tables:
-        bad = problems({"tabelle": [t]})
-        if bad:
-            log.warning("tabella scartata '%s': %s", (t or {}).get("nome") if isinstance(t, dict) else t, "; ".join(f"{p}: {m}" for p, m in bad[:3]))
-            continue
-        if any(str(k.get("nome", "")).lower() == str(t["nome"]).lower() for k in kept):
-            continue
-        kept.append(t)
+    kept = setaccia(tables)
     salva(campaign, kept)
     log.info("tabelle salvate: %s", ", ".join(t["nome"] for t in kept) or "nessuna")
     return kept

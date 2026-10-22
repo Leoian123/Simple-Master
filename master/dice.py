@@ -779,6 +779,31 @@ def rules_about_dice(campaign: Campaign) -> str:
     return "\n\n".join(parts)
 
 
+PROFILE_TOOL = "profilo_dadi"
+
+
+def _ask_profile(client: Any, model: str, messages: list[dict[str, Any]]) -> Any:
+    """Il profilo come input di un tool forzato: lo schema e' troppo ricco per la grammatica dell'output strutturato
+    (misurato il 2026-10-22: 400 "compiled grammar is too large"), mentre l'input di un tool non ha quel limite.
+    La forma la controlla comunque il programma (verifica, campioni)."""
+    from .prepare import create_message
+
+    return create_message(client, max_seconds=300, model=model, max_tokens=4000, system=PROFILE_PROMPT, messages=messages,
+                          tools=[{"name": PROFILE_TOOL, "description": "Consegna il profilo dei dadi ricavato dalle regole.",
+                                  "input_schema": PROFILE_SCHEMA}],
+                          tool_choice={"type": "tool", "name": PROFILE_TOOL})
+
+
+def _profile_from(response: Any) -> dict[str, Any]:
+    """Il profilo dalla risposta: l'input del tool, o (client finti, risposte in testo) il JSON nel testo."""
+    from .prepare import parse_json_object
+
+    for block in getattr(response, "content", []) or []:
+        if getattr(block, "type", "") == "tool_use" and isinstance(getattr(block, "input", None), dict):
+            return dict(block.input)
+    return parse_json_object("\n".join(b.text for b in response.content if getattr(b, "type", "") == "text"))
+
+
 def _nomi_puliti(kinds: Any) -> list[dict[str, Any]]:
     """I tipi di tiro il cui nome puo' stare in un marcatore; gli altri (una barra, una parentesi quadra) si scartano."""
     from . import testi
@@ -803,18 +828,14 @@ def extract_profile(campaign: Campaign, client: Any, model: str, sheet_json: str
     if not rules:
         log.warning("profilo dadi: in %s/ non ci sono sezioni che parlano di tiri", MECHANICS_DIR)
         return None
-    from .prepare import create_message, parse_json_object
-
     content = rules + (f"\n\nSCHEDA DI ESEMPIO (per i percorsi):\n{sheet_json}" if sheet_json else "")
-    response = create_message(client, max_seconds=300, model=model, max_tokens=4000, system=PROFILE_PROMPT,
-                              messages=[{"role": "user", "content": content}],
-                              output_config={"format": {"type": "json_schema", "schema": PROFILE_SCHEMA}})
+    response = _ask_profile(client, model, [{"role": "user", "content": content}])
     usage = getattr(response, "usage", None)
     from .models import cost_usd
 
     campaign.record_spend("dadi", model, cost_usd(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0))
-    raw = "\n".join(b.text for b in response.content if b.type == "text")
-    profile = parse_json_object(raw)
+    profile = _profile_from(response)
+    raw = json.dumps(profile, ensure_ascii=False)
     profile["tiri"] = _nomi_puliti(profile.get("tiri"))
     if not profile.get("tiri"):
         log.warning("profilo dadi: il modello non ha trovato tipi di tiro")
@@ -827,13 +848,10 @@ def extract_profile(campaign: Campaign, client: Any, model: str, sheet_json: str
                      + "\n".join(f"- {p}: {m}" for p, m in problems)
                      + "\nRifai il profilo INTERO: o il tipo di tiro e' descritto male, o il campione sbaglia l'esito "
                        "secondo le regole. Correggi cio' che non rispetta le regole, non il campione per far tornare i conti.")
-        response = create_message(client, max_seconds=300, model=model, max_tokens=4000, system=PROFILE_PROMPT,
-                                  messages=[{"role": "user", "content": content}, {"role": "assistant", "content": raw},
-                                            {"role": "user", "content": complaint}],
-                                  output_config={"format": {"type": "json_schema", "schema": PROFILE_SCHEMA}})
+        response = _ask_profile(client, model, [{"role": "user", "content": f"{content}\n\nLA TUA RISPOSTA PRECEDENTE:\n{raw}\n\n{complaint}"}])
         usage = getattr(response, "usage", None)
         campaign.record_spend("dadi", model, cost_usd(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0))
-        second = parse_json_object("\n".join(b.text for b in response.content if b.type == "text"))
+        second = _profile_from(response)
         if second.get("tiri"):
             profile = second
         problems = verifica_esempi(profile)

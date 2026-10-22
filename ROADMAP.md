@@ -306,6 +306,22 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 18 — Collaudo vero: un manuale inventato, chiamate vere — FATTO (2026-10-22)
+> Campagna `prova-marea` (locale), manuale di 5k caratteri, personaggio con stress e fortuna.
+> La preparazione a secco mentiva su tre cose che solo l'API poteva dire: (1) `PROFILE_SCHEMA`
+> e' oltre il limite della grammatica dell'output strutturato (400 "compiled grammar is too
+> large"): il profilo arriva ora come input di un tool forzato (`dice.PROFILE_TOOL`), senza
+> limite; (2) lo schema dei trigger aveva enum su tipi unione (`ricorrente`, `verso`, `forza`),
+> che l'API rifiuta: ora `ricorrente` e' un enum di testi e verso/forza usano `""`; (3) le
+> tabelle estratte si validavano una per una, e un rimando alla sorella cadeva: `tabelle.setaccia`
+> le valida insieme. Trovati anche: la sezione Stress non entrava nel selettore (parole di
+> conseguenza vicine a un numero: `arriva`, `torna a`, `crolla`, `cade`, `muore`, `azzera`); la
+> seconda estrazione dei trigger riproponeva le stesse regole con un altro nome (ora: stesso nome
+> normalizzato o stesse condizioni = stessa regola, e il prompt elenca le regole gia' scritte).
+> Esito: profilo con 4 campioni tutti verificati, 3 tabelle concatenate, 11 rimandi, 4 trigger,
+> verifica muta; un turno vero chiude con `[[tabella: incontri in mare]]`, il codice tira, il
+> narratore narra la riga. Spesa totale $0.42 (estrazioni $0.25, due turni $0.17).
+
 ## Fase 17 — La tabella legge la scheda; il giocatore consulta — FATTO (2026-10-22)
 > `modificatore_da` sulla tabella (un percorso della scheda, "1d100 + Fortuna"): il numero si
 > somma al tiro insieme al modificatore del marcatore, con la nota `(da stato.fortuna)` o

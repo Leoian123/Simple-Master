@@ -43,6 +43,7 @@ STATE_KEY = "trigger_scattati"
 MAX_TRIGGERS, MAX_CONDITIONS, MAX_EFFECTS = 100, 5, 3
 OPS = ("==", "!=", "<", "<=", ">", ">=", "contiene", "ogni")
 RICORRENZE = (True, False, "sessione")  # ogni turno in cui vale / una volta sola / una volta per sessione
+RICORRENZE_ESTRATTE = {"ogni turno": True, "una volta": False, "ogni sessione": "sessione"}  # cosi' le chiama lo schema di estrazione
 NUMERIC_OPS = ("<", "<=", ">", ">=")
 CONDIZIONI: dict[str, str] = {
     "scheda": "un valore della scheda del personaggio attivo, per percorso (es. `stato.stress`); se il percorso non esiste la condizione e' falsa",
@@ -371,7 +372,8 @@ def table_name_problems(data: Any, tables: list[dict[str, Any]]) -> list[tuple[s
 
 # una parola di soglia vicina a un numero: "scende sotto 5", "raggiunge 4", "a zero"; "se" e "quando" da soli non bastano
 _STRONG = re.compile(r"\b(soglia|soglie|raggiung\w*|scend\w*|sale|salgono|salire|super\w*|almeno|oltre|sotto|a zero|a 0|pari a|"
-                     r"uguale a|maggiore|minore|inferiore|superiore|ogni volta che|ogni turno|ogni sessione|si riempie|pieno|piena)\b", re.I)
+                     r"uguale a|maggiore|minore|inferiore|superiore|ogni volta che|ogni turno|ogni sessione|si riempie|pieno|piena|"
+                     r"arriv\w*|torn\w* a|crolla\w*|cade|muore|azzera\w*)\b", re.I)  # le conseguenze vicine a un numero contano quanto le soglie
 _NUMBER = re.compile(r"\b\d+\b")
 NEAR_CHARS = 60
 MIN_SCORE = 2
@@ -445,8 +447,9 @@ _EFFECT = {
         "avanza": {"type": ["integer", "null"], "description": "Solo per `orologio`: i segmenti che avanza"},
         "segmenti": {"type": ["integer", "null"], "description": "Solo per `orologio` da creare: 2..12"},
         "conseguenza": {"type": ["string", "null"], "description": "Solo per `orologio` da creare: cosa succede quando si riempie"},
-        "verso": {"type": ["string", "null"], "enum": ["sale", "scende", None], "description": "Solo per `relazione`"},
-        "forza": {"type": ["string", "null"], "enum": ["lieve", "media", "forte", None], "description": "Solo per `relazione`"},
+        # niente enum su un tipo unione: l'API lo rifiuta (collaudo del 2026-10-22); "" sta per "non si applica"
+        "verso": {"type": "string", "enum": ["sale", "scende", ""], "description": "Solo per `relazione`; altrimenti \"\""},
+        "forza": {"type": "string", "enum": ["lieve", "media", "forte", ""], "description": "Solo per `relazione`; altrimenti \"\""},
     },
     "required": ["tipo", "testo", "avanza", "segmenti", "conseguenza", "verso", "forza"],
     "additionalProperties": False,
@@ -460,8 +463,8 @@ TRIGGERS_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "properties": {
                     "nome": {"type": "string", "description": "Breve, minuscolo, unico"},
-                    "ricorrente": {"type": ["boolean", "string"], "enum": [True, False, "sessione"],
-                                   "description": "true se vale ogni turno in cui la condizione regge; false se scatta una volta sola; \"sessione\" se una volta per sessione di gioco"},
+                    "ricorrente": {"type": "string", "enum": list(RICORRENZE_ESTRATTE),
+                                   "description": "'ogni turno' se vale ogni turno in cui la condizione regge; 'una volta' se scatta una volta sola; 'ogni sessione' se una volta per sessione di gioco"},
                     "quando": {"type": "array", "items": _CONDITION, "description": f"Da 1 a {MAX_CONDITIONS} condizioni, tutte vere insieme"},
                     "effetti": {"type": "array", "items": _EFFECT, "description": f"Da 1 a {MAX_EFFECTS} effetti"},
                     "fonte": {"type": "string", "description": "La sezione da cui viene"},
@@ -485,6 +488,21 @@ turni op "ogni" valore 3.
 Solo cio' che le sezioni dicono, con i numeri del manuale. Usa SOLO percorsi della scheda fra quelli elencati: se la
 regola parla di un valore che la scheda non ha, lasciala fuori. L'avviso cita la regola in una frase, non la narra.
 Lascia fuori cio' che richiede un giudizio ("se il personaggio e' in pericolo") o un tiro: quello lo fa il master."""
+
+
+def _name_key(name: Any) -> str:
+    """'ferite_sotto_cinque' e 'ferite sotto cinque' sono lo stesso nome."""
+    return re.sub(r"[\s_\-]+", " ", str(name or "")).strip().lower()
+
+
+def _shape_key(rule: dict[str, Any]) -> str:
+    """Due regole con le stesse condizioni sono la stessa regola, comunque si chiamino."""
+    conds = []
+    for c in rule.get("quando") or []:
+        if isinstance(c, dict):
+            kind = next((k for k in CONDIZIONI if k in c), "")
+            conds.append((kind, str(c.get(kind, "")).strip().lower(), str(c.get("op", "")), str(c.get("valore", "")).strip().lower()))
+    return json.dumps(sorted(conds), ensure_ascii=False)
 
 
 def _number_or_text(value: Any) -> Any:
@@ -516,11 +534,11 @@ def _to_rule(t: dict[str, Any]) -> dict[str, Any]:
                 out["segmenti"] = e["segmenti"]
                 out["conseguenza"] = str(e.get("conseguenza") or "").strip()
         if kind == "relazione":
-            out["verso"], out["forza"] = e.get("verso"), e.get("forza")
+            out["verso"], out["forza"] = e.get("verso") or None, e.get("forza") or None
         if kind == "tabella":
             out[kind] = str(e.get("testo", "")).strip()  # il nome della tabella da tirare
         effects.append(out)
-    mode = t.get("ricorrente")
+    mode = RICORRENZE_ESTRATTE.get(str(t.get("ricorrente")).strip().lower(), t.get("ricorrente"))
     rule = {"nome": str(t.get("nome", "")).strip().lower(), "ricorrente": "sessione" if mode == "sessione" else bool(mode), "quando": conds, "effetti": effects}
     if t.get("fonte"):
         rule["fonte"] = str(t["fonte"]).strip()
@@ -541,6 +559,9 @@ def extract_triggers(campaign: Campaign, client: Any, model: str, sheet: Any = N
     paths = sheet_paths(dict(getattr(sheet, "data", {}) or {})) if sheet is not None else []
     head = ("PERCORSI DELLA SCHEDA (gli unici che una condizione `scheda` puo' leggere): " + ", ".join(paths)
             if paths else "La campagna non ha ancora una scheda: non usare condizioni `scheda`.")
+    already = [str(r.get("nome")) for r in carica(campaign)]
+    if already:  # una seconda corsa (collaudo del 2026-10-22) riproponeva le stesse regole con nomi diversi
+        head += "\nREGOLE GIA' SCRITTE (non riproporle, nemmeno con un altro nome): " + ", ".join(already)
     from . import tabelle
 
     clocks = ", ".join(campaign.clocks()) or "nessuno"
@@ -554,12 +575,14 @@ def extract_triggers(campaign: Campaign, client: Any, model: str, sheet: Any = N
     found = data.get("trigger") if isinstance(data, dict) else None
     existing = carica(campaign)
     kept = list(existing)
-    names = {str(r.get("nome", "")).lower() for r in existing}
+    names = {_name_key(r.get("nome")) for r in existing}
+    shapes = {_shape_key(r) for r in existing}
     for raw in found if isinstance(found, list) else []:
         if not isinstance(raw, dict):
             continue
         rule = _to_rule(raw)
-        if rule["nome"] in names:
+        if _name_key(rule["nome"]) in names or _shape_key(rule) in shapes:
+            log.info("trigger '%s' gia' presente (stesso nome o stesse condizioni): non si aggiunge", rule["nome"])
             continue
         probe = {"trigger": [rule]}
         bad = problems(probe)
@@ -571,7 +594,8 @@ def extract_triggers(campaign: Campaign, client: Any, model: str, sheet: Any = N
             log.warning("trigger scartato '%s': %s", rule["nome"], "; ".join(f"{p}: {m}" for p, m in bad[:3]) or "troppe regole")
             continue
         kept.append(rule)
-        names.add(rule["nome"])
+        names.add(_name_key(rule["nome"]))
+        shapes.add(_shape_key(rule))
     if not kept and not existing:
         log.info("trigger: nessuna regola valida nelle soglie trovate")
         return []

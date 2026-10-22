@@ -269,7 +269,7 @@ class TestEstrazione(Base):
         self.camp.file("meccanica/creature.md").set_section(
             "Animali", "Il lupo ha 3 dadi di attacco. Se il branco e' numeroso, quando attacca di notte, il master decide 1 cosa.")
         self.camp.file("meccanica/regole.md").set_section(
-            "Fame", "Quando la Fame raggiunge 4 ogni tentazione richiede una prova con almeno 3 dadi; a 5 il personaggio scende in frenesia se supera 2 fallimenti.")
+            "Fame", "Quando la Fame raggiunge 4 ogni tentazione richiede una prova con almeno 3 dadi; a 5 il personaggio scende in frenesia se supera 2 fallimenti, e torna a 0 quando si nutre.")
         self.camp.file("meccanica/regole.md").set_section("Volonta'", "La Volonta' scende di 1 ogni volta che si cede; a zero il personaggio crolla.")
         ranked = trigger.threshold_sections(self.camp)
         self.assertEqual([(t, s >= trigger.MIN_SCORE) for s, _, t, _ in ranked][:2], [("Fame", True), ("Volonta'", True)])
@@ -277,6 +277,23 @@ class TestEstrazione(Base):
         self.assertGreater(ranked[0][0], ranked[1][0])
         self.assertTrue(trigger.rules_with_thresholds(self.camp).startswith("## Fame (meccanica/regole.md)"))
         self.assertEqual(trigger.threshold_score("Scene brevi e cupe, 3 atti."), 0)
+
+    def test_a_second_run_does_not_duplicate_rules_under_another_name(self) -> None:
+        """Collaudo del 2026-10-22: la seconda corsa riproponeva 'ferite_sotto_cinque' come 'ferite sotto cinque'."""
+        self.camp.file("meccanica/regole.md").set_section("Ferite", "Quando i punti ferita scendono sotto 5 ogni prova perde un dado.")
+        (self.camp.root / "meccanica" / "trigger.json").write_text(json.dumps({"trigger": [RULES["trigger"][0]]}), encoding="utf-8")  # 'ferito': attuale <= 4
+        eff = lambda text: {"tipo": "avviso", "testo": text, "avanza": None, "segmenti": None, "conseguenza": None, "verso": None, "forza": None}
+        answer = {"trigger": [
+            {"nome": "Ferito", "ricorrente": "ogni turno", "fonte": "Ferite", "quando": [{"tipo": "scheda", "soggetto": "stato.monete", "op": "<", "valore": "1"}], "effetti": [eff("x")]},  # stesso nome
+            {"nome": "ferite_basse", "ricorrente": "ogni turno", "fonte": "Ferite", "quando": [{"tipo": "scheda", "soggetto": "stato.punti_ferita.attuale", "op": "<=", "valore": "4"}], "effetti": [eff("y")]},  # stesse condizioni
+            {"nome": "senza un soldo", "ricorrente": "una volta", "fonte": "Ferite", "quando": [{"tipo": "scheda", "soggetto": "stato.monete", "op": "<=", "valore": "0"}], "effetti": [eff("z")]},
+        ]}
+        client = ScriptedClient([[_b(type="text", text=json.dumps(answer))]])
+        new = trigger.extract_triggers(self.camp, client, "m", self.sheet())
+        self.assertEqual([t["nome"] for t in new], ["senza un soldo"])
+        self.assertEqual(new[0]["ricorrente"], False)
+        self.assertIn("REGOLE GIA' SCRITTE (non riproporle, nemmeno con un altro nome): ferito", client.calls[0]["messages"][0]["content"])
+        self.assertEqual([t["nome"] for t in trigger.carica(self.camp)], ["ferito", "senza un soldo"])
 
     def test_flat_answer_becomes_the_file_shape(self) -> None:
         rule = trigger._to_rule({"nome": "Ferito", "ricorrente": True, "fonte": "Ferite",

@@ -290,7 +290,9 @@ class TestCampioniNellEstrazione(Base):
         self.assertEqual(len(client.calls), 2)
         complaint = client.calls[1]["messages"][-1]["content"]
         self.assertIn("tiri[0].esempi[0].atteso.valore: atteso 5, il programma da' 2", complaint)
-        self.assertEqual(client.calls[1]["messages"][1]["role"], "assistant")  # il primo profilo resta sotto gli occhi
+        self.assertIn("LA TUA RISPOSTA PRECEDENTE:", complaint)  # il primo profilo resta sotto gli occhi, nello stesso messaggio
+        self.assertIn('"valore": 5', complaint)
+        self.assertEqual(client.calls[1]["tool_choice"], {"type": "tool", "name": dice.PROFILE_TOOL})
         self.assertNotIn("campioni_falliti", profile)
         self.assertEqual(dice.load_profile(self.camp)["tiri"][0]["esempi"][0]["atteso"]["valore"], 2)
         # se non torna nemmeno la seconda volta: si salva comunque, segnando, e la verifica lo dice
@@ -319,7 +321,10 @@ class TestProfile(Base):
         client = ScriptedClient([[_b(type="text", text=json.dumps(POOL))]])
         profile = dice.extract_profile(self.camp, client, "claude-sonnet-5", sheet_json='{"stato":{"fame":2}}')
         call = client.calls[0]
-        self.assertEqual(call["output_config"]["format"]["type"], "json_schema")
+        # il profilo arriva come input di un tool forzato: lo schema e' troppo ricco per la grammatica dell'output strutturato
+        self.assertEqual(call["tool_choice"], {"type": "tool", "name": dice.PROFILE_TOOL})
+        self.assertEqual(call["tools"][0]["input_schema"], dice.PROFILE_SCHEMA)
+        self.assertNotIn("output_config", call)
         self.assertIn("d20 + modificatore contro una difficolta'", call["messages"][0]["content"])  # le regole estratte
         self.assertIn('"fame":2', call["messages"][0]["content"])  # i percorsi della scheda
         self.assertIn("SOLO cio' che le regole", call["system"])
