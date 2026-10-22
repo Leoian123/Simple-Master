@@ -434,7 +434,11 @@ fermo il prefisso in cache:
 - **Risposta e scritture nello stesso messaggio** chiudono il turno: l'esito delle
   scritture apre il messaggio del turno dopo. Niente giro in piu' solo per dire "fatto".
 - **Lo storico si dimezza, non si lima**, e le letture lunghe dei turni passati
-  diventano una riga ("rileggilo se serve").
+  diventano una riga ("rileggilo se serve"). Nel costruttore di schede la conversazione
+  e' lo stato finche' la scheda non e' salvata: li' il taglio toglie solo le letture e al
+  loro posto tornano i turni di testo salvati in `sessioni/_scheda.jsonl` (nulla si perde;
+  il 2026-10-22 un taglio secco al sesto turno aveva fatto dimenticare al costruttore la
+  scheda a meta').
 
 Il costruttore non porta l'indice del mondo: solo le voci di
 `meccanica/creazione-pg.md` e le schede, il resto a portata di `lookup_glossary`.

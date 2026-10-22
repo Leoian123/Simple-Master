@@ -358,6 +358,57 @@ class TestCharacterBuilder(TempCampaign):
         self.assertEqual(sorted(p.name for p in (self.root / "sessioni").iterdir()), ["_scheda.jsonl", "spese.jsonl"])  # il giocato e il registro delle spese, nient'altro
 
 
+class TestBuilderKeepsItsTurns(TempCampaign):
+    """2026-10-22: al sesto turno di una creazione il taglio dello storico ha lasciato un solo messaggio e il
+    costruttore ha risposto 'non ho nulla di pendente'. La conversazione del costruttore e' lo stato finche'
+    la scheda non e' salvata: il taglio toglie le letture, non i turni."""
+
+    @staticmethod
+    def plain(message) -> str | None:
+        """Il testo di un messaggio senza tool (il giocatore, o una risposta ripresa dal salvataggio), altrimenti None."""
+        content = message["content"]
+        if isinstance(content, str):
+            return content
+        blocks = [b if isinstance(b, dict) else {"type": getattr(b, "type", ""), "text": getattr(b, "text", "")} for b in content]
+        if all(b.get("type") == "text" for b in blocks):
+            return "".join(b.get("text", "") for b in blocks)
+        return None
+
+    class Chatty:
+        """Ogni turno: una lettura lunga di regole, poi una proposta in testo."""
+
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+            self.messages = SimpleNamespace(create=self._create)
+
+        def _create(self, **kwargs):
+            self.calls.append(kwargs)
+            usage = SimpleNamespace(input_tokens=10, output_tokens=5, cache_read_input_tokens=0)
+            msgs = kwargs["messages"]
+            if TestBuilderKeepsItsTurns.plain(msgs[-1]) is not None:  # il giocatore ha parlato: prima si legge
+                return SimpleNamespace(stop_reason="tool_use", usage=usage, content=[
+                    _block(type="tool_use", id=f"r{len(self.calls)}", name="read_file", input={"name": "meccanica/creazione-pg.md"})])
+            n = sum(1 for m in msgs if m["role"] == "user" and TestBuilderKeepsItsTurns.plain(m) is not None)
+            return SimpleNamespace(stop_reason="end_turn", usage=usage, content=[_block(type="text", text=f"Proposta del turno {n}: confermi?")])
+
+    def test_trimming_drops_readings_and_brings_back_the_saved_turns(self) -> None:
+        client = self.Chatty()
+        builder = CharacterBuilder(self.camp, client=client, max_history=6)  # ogni turno vale 4 messaggi: si taglia al terzo
+        builder.play("Guidami nella creazione")
+        builder.play("Vada per il pacchetto completo")
+        self.assertEqual(len(builder.messages), 8)  # due turni interi, letture comprese: nessun taglio finora
+        builder.play("Confermiamo cosi' per ora")
+        sent = client.calls[-1]["messages"]
+        texts = [self.plain(m) for m in sent if self.plain(m) is not None]
+        self.assertEqual(texts, ["Guidami nella creazione", "Proposta del turno 1: confermi?",
+                                 "Vada per il pacchetto completo", "Proposta del turno 2: confermi?", "Confermiamo cosi' per ora"])
+        self.assertEqual(sum(1 for m in sent if self.plain(m) is None), 2)  # restano solo la lettura del turno in corso e il suo esito
+        self.assertEqual(self.camp.read_turns("_scheda", 10)[-1]["master"], "Proposta del turno 3: confermi?")
+        # il gioco, con lo stato nei file, continua a dimezzare come prima
+        self.assertFalse(conversation(self.camp, client=FakeClient()).resume_on_trim)
+        self.assertTrue(builder.resume_on_trim)
+
+
 class TestPersistence(TempCampaign):
     def test_a_new_process_resumes_the_conversation(self) -> None:
         first = conversation(self.camp, client=FakeClient())

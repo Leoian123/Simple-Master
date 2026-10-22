@@ -306,6 +306,16 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 20 — Il costruttore non dimentica la scheda a meta' — FATTO (2026-10-22)
+> Trovato creando un personaggio su Cyberpunk RED: al sesto turno, con 7 letture di regole nel
+> turno prima, lo storico (45 messaggi, limite 30) si e' dimezzato tagliando sull'unico messaggio
+> pulito, l'ultimo: il costruttore ha risposto "non ho nulla di pendente da confermare". I turni
+> erano tutti salvati in `sessioni/_scheda.jsonl`, ma il taglio non li rileggeva. Ora
+> `ConversationEngine(resume_on_trim=True)` (il costruttore: limite 60, ripresa di 40 turni)
+> toglie solo le letture e al loro posto rimette i turni di testo salvati: nulla si perde e il
+> contesto costa meno. Il tavolo di gioco, con lo stato nei file, dimezza come prima.
+> `tests/test_master.TestBuilderKeepsItsTurns`.
+
 ## Fase 19 — Un manuale vero: Cyberpunk RED (458 pagine) — FATTO (2026-10-22)
 > Preparazione in batch, modalita' testo: 33 blocchi, 364 sezioni, 589 voci di glossario,
 > profilo dei dadi a tre tipi (prova 1d10 che esplode, tiro della morte roll-under, ferita

@@ -73,6 +73,7 @@ class ConversationEngine:
         logger_name: str = "master.scheda",
         save_name: str | None = None,
         resume_turns: int = 12,
+        resume_on_trim: bool = False,
     ):
         self.campaign = campaign
         self.model = model or os.environ.get("MASTER_MODEL") or DEFAULT_MODEL
@@ -85,6 +86,7 @@ class ConversationEngine:
         self.log_session = log_session
         self.fixed_save_name = save_name
         self.resume_turns = resume_turns
+        self.resume_on_trim = resume_on_trim  # al taglio dello storico i turni di testo salvati tornano in contesto
         self.log = logging.getLogger(logger_name)
         self.messages: list[dict[str, Any]] = []
         self.executor = ToolExecutor(campaign)
@@ -452,6 +454,21 @@ class ConversationEngine:
         """
         if len(self.messages) <= self.max_history:
             return
+        if self.resume_on_trim and self.save_name:
+            # la conversazione e' lo stato (il costruttore di schede: la scheda non e' ancora salvata): si tolgono
+            # solo le letture, e al loro posto tornano i turni di testo gia' salvati su disco. Nulla si perde:
+            # il 2026-10-22 il taglio secco ha lasciato un solo messaggio e il costruttore ha dimenticato la scheda
+            last = len(self.messages) - 1
+            if self.messages[last]["role"] == "user" and not self._has_tool_results(self.messages[last]):
+                turns = self.campaign.read_turns(self.save_name, self.resume_turns)
+                resumed: list[dict[str, Any]] = []
+                for t in turns:
+                    resumed.append({"role": "user", "content": t["player"]})
+                    resumed.append({"role": "assistant", "content": t["master"]})
+                self.log.info("storico ridotto: tolti %d messaggi (letture comprese), ripresi %d turni di testo dal salvataggio", last, len(turns))
+                self.messages[:last] = resumed
+                self._system_snapshot = None
+                return
         start = len(self.messages) - max(2, self.max_history // 2)
         for i in range(start, len(self.messages)):
             m = self.messages[i]

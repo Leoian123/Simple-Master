@@ -68,7 +68,12 @@ class CharacterBuilder(ConversationEngine):
     """Il ciclo a conversazione, con prompt e strumenti da costruttore."""
 
     def __init__(self, campaign: Campaign, **kwargs):
-        # anche la creazione di una scheda si riprende: un personaggio a meta' non va rifatto da capo
+        # anche la creazione di una scheda si riprende: un personaggio a meta' non va rifatto da capo.
+        # Qui la conversazione E' lo stato finche' la scheda non e' salvata: lo storico si riduce di rado
+        # (max_history alto) e quando si riduce perde solo le letture, mai i turni (resume_on_trim)
+        kwargs.setdefault("max_history", 60)
+        kwargs.setdefault("resume_turns", 40)
+        kwargs.setdefault("resume_on_trim", True)
         super().__init__(
             campaign, prompt=BUILDER_PROMPT, tools=BUILDER_TOOLS, log_session=True,
             logger_name="master.scheda", save_name="_scheda", **kwargs,
