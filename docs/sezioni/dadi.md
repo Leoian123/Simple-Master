@@ -130,6 +130,8 @@ Uno per messaggio, su una riga sua, in coda alla narrazione. La pagina lo mostra
 ```
 
 `dadi` e' obbligatorio se il tipo non ha `dadi_fissi`; `difficolta` e' facoltativa (senza, nessun verdetto).
+Il tipo vale per nome, per alias, o scritto a meta' se e' uno solo a contenerlo (`nomi.risolvi`); due candidati
+fermano il tiro nominandoli; una notazione come `2d6+1` non si confonde mai con un tipo.
 I dadi speciali li conta il programma leggendo `quanti_da` dalla scheda del personaggio attivo.
 `/tira 2d6+1` nel campo di testo della pagina fa un tiro libero.
 

@@ -183,7 +183,16 @@ def _kind(profile: dict[str, Any] | None, name: str) -> dict[str, Any] | None:
     for k in profile["tiri"]:
         if any(str(a).strip().lower() == wanted for a in (k.get("alias") or []) if isinstance(k.get("alias"), list)):
             return k
-    return None
+    # il nome scritto a meta' ("prova" per "prova di abilita'"): solo se e' uno solo (nomi.risolvi); mai per "2d6+1"
+    if _NOTATION_RE.match(name):
+        return None
+    from . import nomi
+
+    names = [str(k.get("nome", "")) for k in profile["tiri"]]
+    chosen, near = nomi.risolvi(wanted, names)
+    if chosen is None and len(near) > 1:
+        raise ValueError(f"'{name.strip()}' puo' essere {' o '.join(repr(n) for n in near)}: scrivi il nome intero")
+    return next((k for k in profile["tiri"] if str(k.get("nome", "")) == chosen), None) if chosen else None
 
 
 # --- marcatore -----------------------------------------------------------------------------

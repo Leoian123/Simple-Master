@@ -278,6 +278,20 @@ class TestPlay(Base):
     def test_fresh_campaign_gets_no_play_recommendations(self) -> None:
         self.assertEqual(self.titles("recommendation"), [])
 
+    def test_a_marker_the_program_cannot_roll_is_a_warning(self) -> None:
+        slug = self.camp.active_sheet()["slug"]
+        self.camp.append_turn(slug, "Salpo.", "Il mare e' calmo.\n[[tabella: incontri in mare]]")
+        self.assertEqual([t for t in self.titles("warning") if "marcatore" in t], ["marcatore di tabella che non si tira"])
+        (self.camp.root / "meccanica" / "tabelle.json").write_text(json.dumps({"tabelle": [
+            {"nome": "incontri in mare", "uso": "", "dado": "1d6", "fonte": "", "righe": [{"da": 1, "a": 6, "risultato": "Calma"}]}]}), encoding="utf-8")
+        self.assertEqual([t for t in self.titles("warning") if "marcatore" in t], [])
+        self.camp.append_turn(slug, "Tiro.", "Prova.\n[[tabella: in mare | di notte]]")  # modificatore scritto male
+        self.assertEqual([t for t in self.titles("warning") if "marcatore" in t], ["marcatore di tabella che non si tira"])
+        self.camp.append_turn(slug, "Tiro.", "Prova.\n[[tiro: Scasso | furtivita' | dadi 3]]")  # tipo che il profilo non ha
+        self.assertEqual([t for t in self.titles("warning") if "marcatore" in t], ["marcatore di tiro che non si tira"])
+        self.camp.append_turn(slug, "Tiro.", "Prova.\n[[tiro: Scasso | d20 | bonus +2 | difficolta 15]]")
+        self.assertEqual([t for t in self.titles("warning") if "marcatore" in t], [])
+
     def test_missing_rules_is_a_recommendation(self) -> None:
         self.camp.file("meccanica/regole.md").write("# Regole\n")
         self.assertIn("campagna da preparare", self.titles("recommendation"))

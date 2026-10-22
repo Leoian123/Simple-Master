@@ -784,3 +784,35 @@ def _check_play(campaign: Campaign, report: ValidationReport) -> None:
     if not diary.exists():
         report.add("warning", DIARY, "diario assente", "lo scriba scrive qui a ogni turno: il file verra' creato, ma la cronaca passata manca",
                    "crea il file con un titolo `# Diario della campagna`")
+    _check_markers(campaign, slug, report)
+
+
+def _check_markers(campaign: Campaign, slug: str, report: ValidationReport) -> None:
+    """I marcatori dell'ultima narrazione: un `[[tabella: ...]]` o `[[tiro: ...]]` che il programma non saprebbe tirare
+    e' un pulsante che fallisce davanti al giocatore; meglio saperlo prima."""
+    from . import tabelle
+    from .dice import find_marker as roll_marker, load_profile, parse as parse_roll
+
+    last = campaign.read_turns(slug, 1)
+    if not last:
+        return
+    narration = str(last[-1].get("master", ""))
+    where = f"sessioni/{slug}.jsonl (ultimo turno)"
+    spec = tabelle.find_marker(narration)
+    if spec is not None:
+        try:
+            name, _ = tabelle.parse(spec)
+            table = tabelle.trova(tabelle.carica(campaign), name)
+            problem = None if table is not None else f"'{name}' non e' una tabella di meccanica/tabelle.json"
+        except ValueError as exc:
+            problem = str(exc)
+        if problem:
+            report.add("warning", where, "marcatore di tabella che non si tira", f"[[tabella: {spec}]]: {problem}",
+                       "il pulsante fallirebbe: ricava le tabelle, correggi il nome nel file, o rispondi al narratore con il nome giusto")
+    spec = roll_marker(narration)
+    if spec is not None:
+        try:
+            parse_roll(spec, load_profile(campaign))
+        except ValueError as exc:
+            report.add("warning", where, "marcatore di tiro che non si tira", f"[[tiro: {spec}]]: {exc}",
+                       "il pulsante fallirebbe: controlla il profilo dei dadi (python main.py --doc dadi) o rispondi al narratore")

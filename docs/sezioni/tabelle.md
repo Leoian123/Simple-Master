@@ -40,7 +40,9 @@ esistere nel file e non essere la tabella stessa (`problems`).
 
 Il narratore chiude la narrazione con `[[tabella: <nome>]]` (uno per messaggio, in alternativa a un tiro); la pagina
 lo mostra come pulsante; `POST /api/table {name}` tira il dado della tabella, trova la riga e manda l'esito al
-narratore come messaggio del giocatore:
+narratore come messaggio del giocatore. Il nome vale esatto, o scritto a meta' se e' uno solo a contenerlo
+(`nomi.risolvi`: 'incontri' per 'incontri nella palude'); due candidati fermano il tiro nominandoli. La verifica
+avvisa se l'ultima narrazione ha un marcatore che il programma non saprebbe tirare.
 
 ```
 [Tabella] incontri nella palude — 1d100: 37 -> 37: Un branco di cani selvatici

@@ -192,6 +192,34 @@ class TestInCampagna(Base):
         self.assertEqual(client.calls, [])
 
 
+class TestNomi(unittest.TestCase):
+    """Il nome scritto a meta' trova la tabella se e' una sola; due candidati fermano il tiro nominandoli."""
+
+    def test_half_names_resolve_only_when_unique(self) -> None:
+        from master import nomi
+
+        self.assertEqual(nomi.risolvi("Tesori", ["incontri nella palude", "tesori"]), ("tesori", ["tesori"]))
+        self.assertEqual(nomi.risolvi("palude", ["incontri nella palude", "tesori"]), ("incontri nella palude", ["incontri nella palude"]))
+        self.assertEqual(nomi.risolvi("incontri", ["incontri nella palude", "incontri in mare"]), (None, ["incontri nella palude", "incontri in mare"]))
+        self.assertEqual(nomi.risolvi("in", ["incontri nella palude"]), (None, []))  # troppo corto
+        self.assertEqual(nomi.risolvi("", ["x"]), (None, []))
+        self.assertEqual(tabelle.trova([INCONTRI, TESORI], "Palude")["nome"], "incontri nella palude")
+        self.assertIsNone(tabelle.trova([INCONTRI, TESORI], "draghi"))
+        with self.assertRaisesRegex(ValueError, "puo' essere 'incontri nella palude' o 'incontri in mare'"):
+            tabelle.trova([INCONTRI, {**TESORI, "nome": "incontri in mare"}], "incontri")
+        with fixed(6):
+            self.assertEqual(tabelle.tira("[[tabella: palude | +0]]", [INCONTRI, TESORI])["result"], "Un orso")
+        # i tipi di tiro, allo stesso modo; mai una notazione di dadi
+        from test_dice import POOL
+
+        profile = {"tiri": [{**POOL["tiri"][0], "speciali": None, "nome": "prova di abilita'"}, {**POOL["tiri"][0], "speciali": None, "nome": "prova di forza"}]}
+        with fixed(6, 6, 2):
+            self.assertEqual(dice.roll("x | abilita' | dadi 3 | difficolta 2", profile)["value"], 2)
+        with self.assertRaisesRegex(ValueError, "puo' essere"):
+            dice.parse("x | prova | dadi 3", profile)
+        self.assertEqual(dice.parse("x | 2d6+1", profile)["kind"], None)
+
+
 class TestAlias(unittest.TestCase):
     def test_marker_resolves_an_alias_and_the_prompt_shows_it(self) -> None:
         from test_dice import POOL

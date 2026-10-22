@@ -306,6 +306,14 @@ Nessun cambio al gioco. È la parte che migliora il lavoro con Claude Code da su
 > a ogni pulsante (`models.estimate_usd`), consigli della verifica per tabelle e trigger mancanti.
 > Il banco di prova giocato (un manuale a d100, uno a dado piu' alto) resta da fare con l'API.
 
+## Fase 14 — Nomi a meta' e marcatori verificati — FATTO (2026-10-22)
+> `master/nomi.py`: un nome scritto a meta' ("incontri" per "incontri nella palude", "abilita'"
+> per "prova di abilita'") vale se e' uno solo a contenerlo; due candidati fermano il tiro
+> nominandoli; mai per una notazione di dadi. Vale per `tabelle.trova` e per `dice._kind`.
+> La verifica legge i marcatori dell'ultima narrazione e avvisa se `[[tabella: ...]]` o
+> `[[tiro: ...]]` non si tirerebbero (tabella assente, modificatore scritto male, tipo che il
+> profilo non ha): il pulsante fallirebbe davanti al giocatore, meglio saperlo prima.
+
 ## Fase 13 — Il promemoria dove serve, i dati sulla carta — FATTO (2026-10-22)
 > Quando una sezione di regole entra nel contesto del turno e contiene una tabella del file
 > (nome nel titolo o titolo nella `fonte`), sotto la sezione va il promemoria "questa tabella la

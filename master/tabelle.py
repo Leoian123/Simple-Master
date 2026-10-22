@@ -150,8 +150,13 @@ def salva(campaign: Campaign, tables: list[dict[str, Any]]) -> None:
 
 
 def trova(tables: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
-    wanted = str(name or "").strip().lower()
-    return next((t for t in tables if str(t.get("nome", "")).strip().lower() == wanted), None)
+    """Per nome esatto, o per l'unico nome che lo contiene (`nomi.risolvi`); due candidati -> ValueError che li nomina."""
+    from . import nomi
+
+    chosen, near = nomi.risolvi(name, [str(t.get("nome", "")) for t in tables])
+    if chosen is None and len(near) > 1:
+        raise ValueError(f"'{name}' puo' essere {' o '.join(repr(n) for n in near)}: scrivi il nome intero")
+    return next((t for t in tables if str(t.get("nome", "")) == chosen), None) if chosen else None
 
 
 # --- il tiro --------------------------------------------------------------------------------------
